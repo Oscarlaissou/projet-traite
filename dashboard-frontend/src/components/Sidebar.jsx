@@ -6,7 +6,7 @@ import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit
 import MonImage from "../images/LOGO.png"
 import { useAuth } from "../hooks/useAuth" // Import du hook
 
-const Sidebar = ({ activeMenuItem, setActiveMenuItem }) => {
+const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSubItem }) => {
   const navigate = useNavigate()
   const { logout } = useAuth() // Utilisation du contexte auth
   const sidebarId = React.useRef(Math.random().toString(36).substr(2, 9)).current
@@ -65,7 +65,7 @@ const Sidebar = ({ activeMenuItem, setActiveMenuItem }) => {
           </button>
           {activeMenuItem === "Gestion Traites" && (
             <div className="subitems-group">
-              <button className="nav-subitem">
+              <button className={`nav-subitem ${activeSubItem === "Grille de saisie" ? "active" : ""}`} onClick={() => setActiveSubItem && setActiveSubItem("Grille de saisie") }>
                 <span className="nav-icon">
                   <Table size={16} />
                 </span>

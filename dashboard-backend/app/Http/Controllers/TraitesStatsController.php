@@ -58,6 +58,76 @@ class TraitesStatsController extends Controller
             ], 200);
         }
     }
+
+    public function monthly(Request $request)
+    {
+        try {
+            // Retourne 12 mois glissants: [{ name: '2025-01', traites: 10 }, ...]
+            $rows = Traite::query()
+                ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, COUNT(*) as total")
+                ->groupBy('ym')
+                ->orderBy('ym')
+                ->limit(12)
+                ->get();
+
+            $data = $rows->map(fn($r) => [
+                'name' => $r->ym,
+                'traites' => (int) $r->total,
+            ]);
+
+            return response()->json($data);
+        } catch (\Throwable $e) {
+            return response()->json([], 200);
+        }
+    }
+
+    public function statusBreakdown(Request $request)
+    {
+        try {
+            $today = Carbon::now()->toDateString();
+
+            // Comptages par catégories métier demandées
+            // Payé
+            $paid = Traite::query()
+                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['payee','payée','paye','payé'])
+                ->count();
+
+            // Impayé
+            $unpaid = Traite::query()
+                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['impaye','impayé'])
+                ->count();
+
+            // Rejeté (gérer variantes orthographiques)
+            $rejected = Traite::query()
+                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['rejete','rejeté','rejetee','rejetée','regeté'])
+                ->count();
+
+            // Échu (non payé/non rejeté/non marqué impayé) et date_echeance < today
+            $overdue = Traite::query()
+                ->whereDate('date_echeance', '<', $today)
+                ->whereNotIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['payee','payée','paye','payé','impaye','impayé','rejete','rejeté','rejetee','rejetée','regeté'])
+                ->count();
+
+            // Non échu (non payé/non rejeté/non impayé) et date_echeance >= today
+            $notDue = Traite::query()
+                ->whereDate('date_echeance', '>=', $today)
+                ->whereNotIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['payee','payée','paye','payé','impaye','impayé','rejete','rejeté','rejetee','rejetée','regeté'])
+                ->count();
+
+            // Ordre et couleurs fixes
+            $data = [
+                [ 'name' => 'Non échu', 'value' => (int) $notDue, 'color' => '#3b82f6' ],
+                [ 'name' => 'Échu', 'value' => (int) $overdue, 'color' => '#f59e0b' ],
+                [ 'name' => 'Impayé', 'value' => (int) $unpaid, 'color' => '#ef4444' ],
+                [ 'name' => 'Rejeté', 'value' => (int) $rejected, 'color' => '#8b5cf6' ],
+                [ 'name' => 'Payé', 'value' => (int) $paid, 'color' => '#10b981' ],
+            ];
+
+            return response()->json($data);
+        } catch (\Throwable $e) {
+            return response()->json([], 200);
+        }
+    }
 }
 
 

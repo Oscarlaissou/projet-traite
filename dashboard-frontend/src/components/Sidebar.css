@@ -153,6 +153,16 @@
   background-color: #eef1f4;
 }
 
+.nav-subitem.active {
+  background-color: #E8F0FE;
+  border: 1px solid #c7d2fe;
+}
+
+.nav-subitem.active .nav-icon,
+.nav-subitem.active .nav-text {
+  color: #3D3D5D;
+}
+
 /* Responsive: conserver la sidebar à gauche, réduire légèrement la largeur et les espacements */
 @media (max-width: 1200px) {
   .sidebar {

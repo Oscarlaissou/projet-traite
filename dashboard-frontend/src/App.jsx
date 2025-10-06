@@ -45,6 +45,22 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } 
             />
+            <Route 
+                path="/traites/new" 
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/traites/:id/edit" 
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             
             {/* Route pour les pages non trouvées */}
