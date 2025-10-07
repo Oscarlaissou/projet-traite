@@ -18,28 +18,18 @@ class TraitesStatsController extends Controller
             $monthStart = $now->copy()->startOfMonth()->toDateString();
 
             $total = Traite::query()->count();
+            // Comptes sur la date d'émission (fallback sur created_at si null)
             $perDay = Traite::query()
-                ->whereDate('created_at', $today)
+                ->whereDate(DB::raw('COALESCE(date_emission, created_at)'), $today)
                 ->count();
             $perMonth = Traite::query()
-                ->whereBetween('created_at', [$monthStart, $today])
+                ->whereBetween(DB::raw('COALESCE(date_emission, created_at)'), [$monthStart, $today])
                 ->count();
 
-            // Échues : date_echeance < aujourd'hui ET (statut != 'payee/payée/payé/paye' OU statut NULL)
-            $overdueQuery = Traite::query()
-                ->whereDate('date_echeance', '<', $today);
-
-            // Si une colonne "statut" existe, on tente d'exclure les traites payées
-            try {
-                $overdue = (clone $overdueQuery)
-                    ->where(function ($q) {
-                        $q->whereNull('statut')->orWhereNotIn('statut', ['payee', 'payée', 'paye', 'payé']);
-                    })
-                    ->count();
-            } catch (\Throwable $e) {
-                // Si la colonne "statut" n'existe pas, on compte uniquement sur la date d'échéance
-                $overdue = (clone $overdueQuery)->count();
-            }
+            // Échues basées sur le statut explicitement marqué "Échu"
+            $overdue = Traite::query()
+                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['échu','echu'])
+                ->count();
 
             return response()->json([
                 'total' => $total,
@@ -64,7 +54,7 @@ class TraitesStatsController extends Controller
         try {
             // Retourne 12 mois glissants: [{ name: '2025-01', traites: 10 }, ...]
             $rows = Traite::query()
-                ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, COUNT(*) as total")
+                ->selectRaw("DATE_FORMAT(COALESCE(date_emission, created_at), '%Y-%m') as ym, COUNT(*) as total")
                 ->groupBy('ym')
                 ->orderBy('ym')
                 ->limit(12)
@@ -84,46 +74,50 @@ class TraitesStatsController extends Controller
     public function statusBreakdown(Request $request)
     {
         try {
-            $today = Carbon::now()->toDateString();
+            // Compter réellement par valeur de statut en base, puis normaliser les libellés/couleurs
+            $rows = Traite::query()
+                ->selectRaw('LOWER(TRIM(COALESCE(statut, ""))) as s, COUNT(*) as c')
+                ->groupBy('s')
+                ->get();
 
-            // Comptages par catégories métier demandées
-            // Payé
-            $paid = Traite::query()
-                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['payee','payée','paye','payé'])
-                ->count();
+            $map = function(string $s): array {
+                $s = strtolower($s);
+                if (in_array($s, ['payé','payee','payée','paye'])) return ['Payé', '#10b981'];
+                if (in_array($s, ['rejeté','rejete','rejetee','rejetée'])) return ['Rejeté', '#8b5cf6'];
+                if (in_array($s, ['impayé','impaye'])) return ['Impayé', '#ef4444'];
+                if (in_array($s, ['échu','echu'])) return ['Échu', '#f59e0b'];
+                if (in_array($s, ['non échu','non echu','non-échu','non-echu'])) return ['Non échu', '#3b82f6'];
+                return ['Autres', '#94a3b8'];
+            };
 
-            // Impayé
-            $unpaid = Traite::query()
-                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['impaye','impayé'])
-                ->count();
+            $agg = [];
+            foreach ($rows as $r) {
+                [$label, $color] = $map((string) $r->s);
+                if (!isset($agg[$label])) $agg[$label] = ['name' => $label, 'value' => 0, 'color' => $color];
+                $agg[$label]['value'] += (int) $r->c;
+            }
 
-            // Rejeté (gérer variantes orthographiques)
-            $rejected = Traite::query()
-                ->whereIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['rejete','rejeté','rejetee','rejetée','regeté'])
-                ->count();
-
-            // Échu (non payé/non rejeté/non marqué impayé) et date_echeance < today
-            $overdue = Traite::query()
-                ->whereDate('date_echeance', '<', $today)
-                ->whereNotIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['payee','payée','paye','payé','impaye','impayé','rejete','rejeté','rejetee','rejetée','regeté'])
-                ->count();
-
-            // Non échu (non payé/non rejeté/non impayé) et date_echeance >= today
-            $notDue = Traite::query()
-                ->whereDate('date_echeance', '>=', $today)
-                ->whereNotIn(DB::raw('LOWER(COALESCE(statut, ""))'), ['payee','payée','paye','payé','impaye','impayé','rejete','rejeté','rejetee','rejetée','regeté'])
-                ->count();
-
-            // Ordre et couleurs fixes
-            $data = [
-                [ 'name' => 'Non échu', 'value' => (int) $notDue, 'color' => '#3b82f6' ],
-                [ 'name' => 'Échu', 'value' => (int) $overdue, 'color' => '#f59e0b' ],
-                [ 'name' => 'Impayé', 'value' => (int) $unpaid, 'color' => '#ef4444' ],
-                [ 'name' => 'Rejeté', 'value' => (int) $rejected, 'color' => '#8b5cf6' ],
-                [ 'name' => 'Payé', 'value' => (int) $paid, 'color' => '#10b981' ],
+            // Garantir la présence de toutes les catégories métier, même à 0
+            $defaults = [
+                'Non échu' => '#3b82f6',
+                'Échu' => '#f59e0b',
+                'Impayé' => '#ef4444',
+                'Rejeté' => '#8b5cf6',
+                'Payé' => '#10b981',
             ];
+            foreach ($defaults as $label => $color) {
+                if (!isset($agg[$label])) {
+                    $agg[$label] = ['name' => $label, 'value' => 0, 'color' => $color];
+                }
+            }
 
-            return response()->json($data);
+            // Ordonner selon logique métier
+            $order = ['Non échu','Échu','Impayé','Rejeté','Payé','Autres'];
+            usort($agg, function($a, $b) use ($order) {
+                return array_search($a['name'], $order) <=> array_search($b['name'], $order);
+            });
+
+            return response()->json(array_values($agg));
         } catch (\Throwable $e) {
             return response()->json([], 200);
         }

@@ -35,7 +35,7 @@ const TraiteFormPage = () => {
 
   return (
     <div className="dashboard-stats">
-      <button className="icon-button" onClick={() => navigate(-1)} aria-label="Retour" style={{ marginBottom: 8 }}>
+      <button className="icon-button" onClick={() => navigate(-1)} aria-label="Retour" style={{ marginBottom: 8 ,color:"red"}}>
         <ArrowLeft size={18} />
       </button>
       {/* Breadcrumb */}

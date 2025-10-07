@@ -62,21 +62,67 @@
   overflow-x: auto;
 }
 
+
 .table-basic {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate; /* allow radius */
+  border-spacing: 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
 }
+
+/* Removed expanded grid variants */
 
 .table-basic th {
   text-align: left;
   padding: 8px;
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
+  background: linear-gradient(#f8fafc, #f3f4f6);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-right: 1px solid #eef2f7; /* subtle column divider */
 }
 
 .table-basic td {
-  padding: 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #f1f5f9; /* subtle column divider */
+}
+
+/* remove last column right border */
+.table-basic th:last-child,
+.table-basic td:last-child {
+  border-right: none;
+}
+
+/* Alternate row color and hover */
+.table-basic tbody tr:nth-child(even) td {
+  background: #fafafa;
+}
+.table-basic tbody tr:hover td {
+  background: #f3f4f6;
+}
+
+/* Pagination buttons styling similar to your reference */
+.page-button {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.page-button:hover { background: #f9fafb; }
+.page-button.active {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+.page-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Status badges */

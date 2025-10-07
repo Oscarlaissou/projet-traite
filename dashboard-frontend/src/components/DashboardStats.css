@@ -37,6 +37,11 @@
     transition: all 0.2s ease;
     min-height: 70px;
   }
+
+/* Chart cards should stack content and allow full width for charts */
+.stat-card.chart-card {
+  display: block;
+}
   
   .stat-card:hover {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);

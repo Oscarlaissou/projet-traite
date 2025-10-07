@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts'
 import { 
   FileText, 
@@ -16,8 +16,23 @@ const DashboardStats = () => {
   const [monthlyData, setMonthlyData] = useState([])
   const [statusData, setStatusData] = useState([])
 
+  // Adapte les données au style souhaité
+  const monthlyDisplay = useMemo(() => {
+    // Convertir 'YYYY-MM' -> libellé court (Jan, Fév, ...)
+    const monthNames = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc']
+    return (monthlyData || []).map((d) => {
+      const [y, m] = String(d.name || '').split('-').map(Number)
+      const label = m ? monthNames[m-1] || d.name : d.name
+      return { ...d, label }
+    })
+  }, [monthlyData])
+
+  // Utiliser exactement les statuts renvoyés par l'API (Non échu, Échu, Impayé, Rejeté, Payé)
+  const statusTotal = useMemo(() => (statusData || []).reduce((sum, s) => sum + (s.value || 0), 0), [statusData])
+
   useEffect(() => {
     let isMounted = true
+    let intervalId
     const fetchStats = async () => {
       try {
         setLoading(true)
@@ -62,7 +77,8 @@ const DashboardStats = () => {
       }
     }
     fetchStats()
-    return () => { isMounted = false }
+    intervalId = setInterval(fetchStats, 10000) // refresh every 10s
+    return () => { isMounted = false; if (intervalId) clearInterval(intervalId) }
   }, [])
 
   const cardsData = [
@@ -130,40 +146,52 @@ const DashboardStats = () => {
 
       {/* Charts Section */}
       <div className="stats-grid" style={{ marginTop: '1rem' }}>
-        <div className="stat-card" style={{ padding: 0 }}>
+        <div className="stat-card chart-card" style={{ padding: 0 }}>
           <div style={{ padding: '1rem' }}>
             <h3 style={{ margin: 0, color: '#1a365d' }}>Évolution des Traites</h3>
           </div>
-          <div style={{ padding: '0 1rem 1rem' }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="traites" stroke="#e53e3e" strokeWidth={3} name="Nombre de traites" />
-              </LineChart>
-            </ResponsiveContainer>
+          <div style={{ padding: '0 1rem 1rem', minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {loading ? (
+              <Loader2 size={20} className="loading-spinner" />
+            ) : (monthlyDisplay && monthlyDisplay.length > 0) ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={monthlyDisplay}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="traites" stroke="#e11d48" strokeWidth={3} name="Nombre de traites" dot={{ r: 4, stroke: '#e11d48', fill: '#e11d48' }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ color: '#6b7280' }}>Aucune donnée à afficher</div>
+            )}
           </div>
         </div>
 
-        <div className="stat-card" style={{ padding: 0 }}>
+        <div className="stat-card chart-card" style={{ padding: 0 }}>
           <div style={{ padding: '1rem' }}>
             <h3 style={{ margin: 0, color: '#1a365d' }}>Répartition par Statut</h3>
           </div>
-          <div style={{ padding: '0 1rem 1rem' }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || '#3b82f6'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <div style={{ padding: '0 1rem 1rem', minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {loading ? (
+              <Loader2 size={20} className="loading-spinner" />
+            ) : (statusTotal > 0) ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || '#3b82f6'} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ color: '#6b7280' }}>Aucune donnée à afficher</div>
+            )}
           </div>
         </div>
       </div>

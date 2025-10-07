@@ -66,8 +66,8 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       {error && <div style={{ gridColumn: '1 / -1', color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 6, padding: 8 }}>{error}</div>}
 
       <div>
-        <label>Numéro de la traite</label>
-        <input name="numero" value={form.numero} onChange={handleChange} required className="form-input" />
+        <label>Numéro de la traite </label>
+        <input name="numero" value={form.numero} onChange={handleChange} className="form-input" placeholder="Auto" />
       </div>
       <div>
         <label>Nombre de traites</label>
@@ -106,7 +106,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         <textarea name="commentaires" value={form.commentaires} onChange={handleChange} rows={3} className="form-input" />
       </div>
 
-      <div>
+      {/* <div>
         <label>Statut de la traite</label>
         <select name="statut" value={form.statut} onChange={handleChange} className="form-input">
           <option>Non échu</option>
@@ -115,7 +115,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
           <option>Rejeté</option>
           <option>Payé</option>
         </select>
-      </div>
+      </div> */}
 
       <div style={{  display: 'flex', gap: 100, marginTop: 100,paddingLeft: 1000 }}>
         <button type="button" onClick={onCancel} disabled={submitting} className="logout-button">Annuler</button>

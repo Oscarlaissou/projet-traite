@@ -18,7 +18,7 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container">
       <div className="dashboard-wrapper">
-        <Sidebar activeMenuItem={activeMenuItem} activeSubItem={activeSubItem} setActiveMenuItem={(item) => { setActiveMenuItem(item); if (item !== "Gestion Traites") setActiveSubItem(null) }} setActiveSubItem={setActiveSubItem} />
+        <Sidebar activeMenuItem={activeMenuItem} activeSubItem={activeSubItem} setActiveMenuItem={(item) => { setActiveMenuItem(item); if (item === "Gestion Traites") setActiveSubItem("Grille de saisie"); else setActiveSubItem(null) }} setActiveSubItem={setActiveSubItem} />
         <div className="main-content">
           <Header />
           <div className="content-area">
@@ -27,13 +27,7 @@ const Dashboard = () => {
             ) : activeMenuItem === "Dashboard" ? (
               <DashboardStats />
             ) : activeMenuItem === "Gestion Traites" ? (
-              <>
-                {activeSubItem === "Grille de saisie" ? (
-                  <TraitesGrid />
-                ) : (
-                  <div>Module Gestion Traites (contenu à définir)</div>
-                )}
-              </>
+              <TraitesGrid />
             ) : activeMenuItem === "Credit compte" ? (
               <div>Module Credit compte (contenu à définir)</div>
             ) : null}

@@ -22,6 +22,14 @@ const TraitesGrid = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
+  const [statut, setStatut] = useState("")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
+  const [sort, setSort] = useState({ key: 'echeance', dir: 'asc' })
+  const [expanded, setExpanded] = useState(false)
   const navigate = useNavigate()
 
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
@@ -37,11 +45,26 @@ const TraitesGrid = () => {
     setLoading(true)
     setError("")
     try {
-      const q = search ? `?search=${encodeURIComponent(search)}` : ''
-      const res = await fetch(`${baseUrl}/api/traites${q}`, { headers: authHeaders() })
+      const params = new URLSearchParams()
+      if (search) params.append('search', search)
+      if (statut) params.append('statut', statut)
+      if (from) params.append('from', from)
+      if (to) params.append('to', to)
+      if (sort?.key) params.append('sort', sort.key)
+      if (sort?.dir) params.append('dir', sort.dir)
+      params.append('page', String(page))
+      params.append('per_page', String(perPage))
+      const qs = params.toString()
+      const res = await fetch(`${baseUrl}/api/traites${qs ? `?${qs}` : ''}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Erreur lors du chargement')
       const data = await res.json()
-      setItems(data.data || data || [])
+      const records = data.data || data || []
+      setItems(records)
+      if (data && typeof data === 'object' && data.current_page) {
+        setPagination({ current_page: data.current_page, last_page: data.last_page, total: data.total })
+      } else {
+        setPagination({ current_page: 1, last_page: 1, total: records.length })
+      }
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
     } finally {
@@ -49,7 +72,17 @@ const TraitesGrid = () => {
     }
   }
 
-  useEffect(() => { fetchItems() }, [])
+  useEffect(() => { fetchItems() }, [page, perPage, sort])
+
+  const handleHeaderSort = (key) => {
+    setPage(1)
+    setSort((s) => {
+      if (s.key === key) {
+        return { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, dir: 'asc' }
+    })
+  }
 
   const handleNew = () => { navigate('/traites/new') }
   const handleEdit = (it) => { navigate(`/traites/${it.id}/edit`) }
@@ -90,8 +123,22 @@ const TraitesGrid = () => {
       <h2 className="stats-title">Grille de saisie des traites</h2>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-        <input placeholder="Recherche..." value={search} onChange={(e) => setSearch(e.target.value)} className="search-input" style={{ maxWidth: 260 }} />
-        <button className="submit-button" onClick={fetchItems}>Rechercher</button>
+        <input placeholder="Rechercher par client..." value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); fetchItems() } }} className="search-input" style={{ maxWidth: 260 }} />
+        <select className="search-input" value={statut} onChange={(e) => setStatut(e.target.value)}>
+          <option value="">Tous les statuts</option>
+          <option>Non échu</option>
+          <option>Échu</option>
+          <option>Impayé</option>
+          <option>Rejeté</option>
+          <option>Payé</option>
+        </select>
+        De <input type="date" placeholder="jj/mm/aaaa" value={from} onChange={(e) => setFrom(e.target.value)} className="search-input" />
+        à <input type="date" placeholder="jj/mm/aaaa" value={to} onChange={(e) => setTo(e.target.value)} className="search-input" />
+        <button className="submit-button" onClick={() => { setPage(1); fetchItems() }}>Rechercher</button>
+        <button className="submit-button" onClick={() => { setPage(1); setSort((s) => ({ key: 'nom_raison_sociale', dir: s.key === 'nom_raison_sociale' && s.dir === 'asc' ? 'desc' : 'asc' })) }}>
+          Trier {sort.key === 'nom_raison_sociale' && sort.dir === 'desc' ? 'A→Z' : 'Z→A'} (Nom)
+        </button>
+        {/* Removed sort, alpha and expand controls as requested */}
         <button className="submit-button" onClick={handleNew}><Plus size={16} style={{ marginRight: 6 }} /> Nouvelle traite</button>
       </div>
 
@@ -100,13 +147,21 @@ const TraitesGrid = () => {
       {loading ? (
         <div>Chargement...</div>
       ) : (
-        <div className="table-wrap">
-          <table className="table-basic">
+        <div className={`table-wrap`}>
+          <table className={`table-basic`}>
             <thead>
               <tr>
-                {Columns.map(col => (
-                  <th key={col.key} style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{col.label}</th>
-                ))}
+                {Columns.map(col => {
+                  const sortableKeys = ['numero','nombre_traites','echeance','date_emission','montant','nom_raison_sociale','statut']
+                  const isSortable = sortableKeys.includes(col.key)
+                  const isActive = sort.key === col.key
+                  const arrow = isActive ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
+                  return (
+                    <th key={col.key} style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: isSortable ? 'pointer' : 'default' }} onClick={() => isSortable && handleHeaderSort(col.key)}>
+                      {col.label}{arrow}
+                    </th>
+                  )
+                })}
                 <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Actions</th>
               </tr>
             </thead>
@@ -151,6 +206,33 @@ const TraitesGrid = () => {
               ))}
             </tbody>
           </table>
+          <tfoot>
+            <tr>
+              <td colSpan={Columns.length + 1}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>Afficher</span>
+                    <select className="search-input" value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value || '10', 10)); setPage(1); }}>
+                      {[10,20,50,100].map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                    <span>lignes</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginLeft: 500, paddingTop: 10 }}>
+                    <button className="page-button" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Précédent</button>
+                    {Array.from({ length: pagination.last_page || 1 }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(p => (
+                      <button key={p} className={`page-button ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+                    ))}
+                    <button className="page-button" disabled={page >= (pagination.last_page || 1)} onClick={() => setPage(p => Math.min((pagination.last_page || 1), p + 1))}>Suivant</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tfoot>
         </div>
       )}
     </div>
