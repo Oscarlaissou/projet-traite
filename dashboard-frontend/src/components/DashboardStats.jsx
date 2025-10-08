@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts'
 import { 
   FileText, 
@@ -15,6 +16,7 @@ const DashboardStats = () => {
   const [stats, setStats] = useState({ total: 0, perDay: 0, perMonth: 0, overdue: 0 })
   const [monthlyData, setMonthlyData] = useState([])
   const [statusData, setStatusData] = useState([])
+  const navigate = useNavigate()
 
   // Adapte les données au style souhaité
   const monthlyDisplay = useMemo(() => {
@@ -87,28 +89,46 @@ const DashboardStats = () => {
       title: "Traites totales",
       value: stats.total,
       color: "#3B82F6",
-      bgColor: "#EFF6FF"
+      bgColor: "#EFF6FF",
+      onClick: () => navigate('/dashboard?tab=traites')
     },
     {
       icon: TrendingUp,
       title: "Traites/jour",
       value: stats.perDay,
       color: "#FFBB7F",
-      bgColor: "#FEF2F2"
+      bgColor: "#FEF2F2",
+      onClick: () => {
+        const today = new Date().toISOString().slice(0,10)
+        navigate(`/dashboard?tab=traites&from=${today}&to=${today}`)
+      }
     },
     {
       icon: Calendar,
       title: "Traites/mois",
       value: stats.perMonth,
       color: "#8B5CF6",
-      bgColor: "#F5F3FF"
+      bgColor: "#F5F3FF",
+      onClick: () => {
+        const d = new Date()
+        const yyyy = d.getFullYear()
+        const mm = String(d.getMonth()+1).padStart(2,'0')
+        const first = `${yyyy}-${mm}-01`
+        const last = new Date(yyyy, d.getMonth()+1, 0)
+        const lastStr = `${yyyy}-${mm}-${String(last.getDate()).padStart(2,'0')}`
+        navigate(`/dashboard?tab=traites&from=${first}&to=${lastStr}`)
+      }
     },
     {
       icon: CheckCircle,
       title: "Traites échues",
       value: stats.overdue,
       color: "#2AAD4D",
-      bgColor: "#ECFDF5"
+      bgColor: "#ECFDF5",
+      onClick: () => {
+        const statut = encodeURIComponent('Échu')
+        navigate(`/dashboard?tab=traites&statut=${statut}`)
+      }
     }
   ]
 
@@ -122,7 +142,7 @@ const DashboardStats = () => {
       
       <div className="stats-grid">
         {cardsData.map((card, index) => (
-          <div key={index} className="stat-card">
+          <div key={index} className="stat-card" onClick={card.onClick} style={{ cursor: 'pointer' }}>
             <div 
               className="card-icon-container"
               style={{ backgroundColor: card.bgColor }}
@@ -182,7 +202,15 @@ const DashboardStats = () => {
                 <PieChart>
                   <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
                     {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || '#3b82f6'} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color || '#3b82f6'} 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          const statut = encodeURIComponent(String(entry.name || '').trim())
+                          navigate(`/dashboard?tab=traites&statut=${statut}`)
+                        }}
+                      />
                     ))}
                   </Pie>
                   <Tooltip />

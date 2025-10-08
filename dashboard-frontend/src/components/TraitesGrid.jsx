@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Plus, ArrowLeft } from "lucide-react"
 import "./Traites.css"
 
@@ -29,8 +29,10 @@ const TraitesGrid = () => {
   const [perPage, setPerPage] = useState(10)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [sort, setSort] = useState({ key: 'echeance', dir: 'asc' })
+  const [initialized, setInitialized] = useState(false)
   // Navigation vers la page de détail au clic sur une ligne
   const navigate = useNavigate()
+  const location = useLocation()
 
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
 
@@ -99,7 +101,28 @@ const TraitesGrid = () => {
     }
   }
 
-  useEffect(() => { fetchItems() }, [page, perPage, sort])
+  useEffect(() => { if (initialized) fetchItems() }, [initialized, page, perPage, sort, from, to, statut])
+
+  // Appliquer les filtres depuis l'URL quand on arrive depuis le dashboard
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const tab = params.get('tab')
+    if (tab === 'traites') {
+      const urlFrom = params.get('from') || ''
+      const urlTo = params.get('to') || ''
+      const urlStatut = params.get('statut') || ''
+      let changed = false
+      if (urlFrom && urlFrom !== from) { setFrom(urlFrom); changed = true }
+      if (urlTo && urlTo !== to) { setTo(urlTo); changed = true }
+      if (urlStatut && urlStatut !== statut) { setStatut(urlStatut); changed = true }
+      if (changed) { setPage(1) }
+      setInitialized(true)
+    } else {
+      // If grid is rendered without query params, allow normal fetch
+      setInitialized(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search])
 
   const handleHeaderSort = (key) => {
     setPage(1)
@@ -148,7 +171,7 @@ const TraitesGrid = () => {
 
   return (
     <div className="dashboard-stats">
-      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'echeance', dir: 'asc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: '#1f2c49' }}>
+      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'echeance', dir: 'asc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
         <ArrowLeft size={18} />
       </button>
       

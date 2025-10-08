@@ -71,7 +71,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                 </span>
                 <span className="nav-text">Grille de saisie</span>
               </button>
-              <button className="nav-subitem">
+              <button className={`nav-subitem ${activeSubItem === "Edition" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Edition"); navigate('/dashboard') }}>
                 <span className="nav-icon">
                   <Edit size={16} />
                 </span>
