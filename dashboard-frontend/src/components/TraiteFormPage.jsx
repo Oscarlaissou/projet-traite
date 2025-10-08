@@ -35,14 +35,14 @@ const TraiteFormPage = () => {
 
   return (
     <div className="dashboard-stats">
-      <button className="icon-button" onClick={() => navigate(-1)} aria-label="Retour" style={{ marginBottom: 8 ,color:"red"}}>
+      <button className="icon-button" onClick={() => navigate('/dashboard?tab=traites')} aria-label="Retour" style={{ marginBottom: 8 ,color:"red"}}>
         <ArrowLeft size={18} />
       </button>
       {/* Breadcrumb */}
       <nav className="breadcrumb">
-        <span className="crumb" onClick={() => navigate('/dashboard')}>Gestion Traites</span>
+        <span className="crumb" onClick={() => navigate('/dashboard?tab=traites')}>Gestion Traites</span>
         <span> › </span>
-        <span className="crumb" onClick={() => navigate('/dashboard')}>Grille de saisie</span>
+        <span className="crumb" onClick={() => navigate('/dashboard?tab=traites')}>Grille de saisie</span>
         <span> › </span>
         <span className="crumb-current">{id ? 'Modifier' : 'Nouvelle traite'}</span>
       </nav>
@@ -52,8 +52,8 @@ const TraiteFormPage = () => {
         <TraiteForm
           initialValue={initialValue}
           submitLabel={id ? 'Modifier' : 'Créer'}
-          onCancel={() => navigate(-1)}
-          onSaved={() => navigate(-1)}
+          onCancel={() => navigate('/dashboard?tab=traites')}
+          onSaved={() => navigate('/dashboard?tab=traites')}
         />
       </div>
     </div>

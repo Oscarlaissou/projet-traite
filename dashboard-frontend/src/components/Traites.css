@@ -64,12 +64,14 @@
 
 
 .table-basic {
+  margin-top: 20px;
   width: 100%;
   border-collapse: separate; /* allow radius */
   border-spacing: 0;
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+  border: 1px solid #94a3b8; 
 }
 
 /* Removed expanded grid variants */
@@ -77,19 +79,19 @@
 .table-basic th {
   text-align: left;
   padding: 8px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #94a3b8; /* darker header bottom border */
   white-space: nowrap;
   background: linear-gradient(#f8fafc, #f3f4f6);
   position: sticky;
   top: 0;
   z-index: 1;
-  border-right: 1px solid #eef2f7; /* subtle column divider */
+  border-right: 1px solid #94a3b8; /* darker column divider */
 }
 
 .table-basic td {
   padding: 10px 12px;
-  border-bottom: 1px solid #f3f4f6;
-  border-right: 1px solid #f1f5f9; /* subtle column divider */
+  border-bottom: 1px solid #cbd5e1; /* darker row divider */
+  border-right: 1px solid #cbd5e1; /* darker column divider */
 }
 
 /* remove last column right border */
@@ -100,10 +102,10 @@
 
 /* Alternate row color and hover */
 .table-basic tbody tr:nth-child(even) td {
-  background: #fafafa;
+  background: #f1f5f9; /* stronger zebra */
 }
 .table-basic tbody tr:hover td {
-  background: #f3f4f6;
+  background: #e2e8f0; /* stronger hover */
 }
 
 /* Pagination buttons styling similar to your reference */
@@ -116,7 +118,7 @@
 }
 .page-button:hover { background: #f9fafb; }
 .page-button.active {
-  background: #111827;
+  background: #1f2c49;
   color: #fff;
   border-color: #111827;
 }
@@ -162,4 +164,58 @@
   }
 }
 
+
+/* --------- Detail page professional layout --------- */
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.detail-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+.detail-status-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px 16px;
+}
+.detail-field {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+.detail-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+.detail-value {
+  font-size: 14px;
+  color: #111827;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
 

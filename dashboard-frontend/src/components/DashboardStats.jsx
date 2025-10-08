@@ -77,7 +77,7 @@ const DashboardStats = () => {
       }
     }
     fetchStats()
-    intervalId = setInterval(fetchStats, 10000) // refresh every 10s
+    intervalId = setInterval(fetchStats, 300000) // refresh every 5 mins
     return () => { isMounted = false; if (intervalId) clearInterval(intervalId) }
   }, [])
 

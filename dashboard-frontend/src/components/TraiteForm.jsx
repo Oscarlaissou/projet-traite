@@ -63,7 +63,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-      {error && <div style={{ gridColumn: '1 / -1', color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 6, padding: 8 }}>{error}</div>}
+      {error && <div style={{ gridColumn: '1 / -1', color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', borderRadius:6, padding: 8 }}>{error}</div>}
 
       <div>
         <label>Numéro de la traite </label>
@@ -117,7 +117,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         </select>
       </div> */}
 
-      <div style={{  display: 'flex', gap: 100, marginTop: 100,paddingLeft: 1000 }}>
+      <div style={{  display: 'flex', gap: 100, marginTop: 10, marginLeft: '700px' }}>
         <button type="button" onClick={onCancel} disabled={submitting} className="logout-button">Annuler</button>
         <button type="submit" disabled={submitting} className="submit-button">{submitting ? 'Enregistrement...' : (submitLabel || (initialValue?.id ? 'Modifier' : 'Créer'))}</button>
       </div>

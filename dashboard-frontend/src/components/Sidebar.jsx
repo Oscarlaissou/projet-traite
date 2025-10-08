@@ -47,7 +47,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
         <div className="nav-section">
           <button
             className={`nav-item ${activeMenuItem === "Dashboard" ? "active" : ""}`}
-            onClick={() => setActiveMenuItem("Dashboard")}
+            onClick={() => { setActiveMenuItem("Dashboard"); setActiveSubItem && setActiveSubItem(null); navigate('/dashboard') }}
           >
             <span className="nav-icon">
               <Home size={16} />
@@ -56,7 +56,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           </button>
           <button
             className={`nav-item ${activeMenuItem === "Gestion Traites" ? "active" : ""}`}
-            onClick={() => setActiveMenuItem("Gestion Traites")}
+            onClick={() => { setActiveMenuItem("Gestion Traites"); setActiveSubItem && setActiveSubItem("Grille de saisie"); navigate('/dashboard') }}
           >
             <span className="nav-icon">
               <Briefcase size={16} />
@@ -65,7 +65,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           </button>
           {activeMenuItem === "Gestion Traites" && (
             <div className="subitems-group">
-              <button className={`nav-subitem ${activeSubItem === "Grille de saisie" ? "active" : ""}`} onClick={() => setActiveSubItem && setActiveSubItem("Grille de saisie") }>
+              <button className={`nav-subitem ${activeSubItem === "Grille de saisie" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Grille de saisie"); navigate('/dashboard') }}>
                 <span className="nav-icon">
                   <Table size={16} />
                 </span>

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
 import PageLoader from './components/BrandedLoader'
+import TraiteDetailPage from './components/TraiteDetailPage'
 
 // Composant pour les routes protégées
 function ProtectedRoute({ children }) {
@@ -55,6 +56,14 @@ function AppRoutes() {
             />
             <Route 
                 path="/traites/:id/edit" 
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/traites/:id" 
                 element={
                     <ProtectedRoute>
                         <Dashboard />

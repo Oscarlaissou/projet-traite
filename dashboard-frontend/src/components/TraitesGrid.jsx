@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Edit3, Trash2, Printer, Plus } from "lucide-react"
+import { Plus, ArrowLeft } from "lucide-react"
 import "./Traites.css"
 
 const Columns = [
@@ -29,10 +29,20 @@ const TraitesGrid = () => {
   const [perPage, setPerPage] = useState(10)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [sort, setSort] = useState({ key: 'echeance', dir: 'asc' })
-  const [expanded, setExpanded] = useState(false)
+  // Navigation vers la page de détail au clic sur une ligne
   const navigate = useNavigate()
 
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
+
+  const formatDateDDMMYYYY = (value) => {
+    if (!value) return ''
+    const d = new Date(value)
+    if (isNaN(d)) return value
+    const dd = String(d.getDate()).padStart(2, '0')
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const yyyy = d.getFullYear()
+    return `${dd}-${mm}-${yyyy}`
+  }
 
   const authHeaders = () => {
     const token = localStorage.getItem('auth_token')
@@ -59,7 +69,24 @@ const TraitesGrid = () => {
       if (!res.ok) throw new Error('Erreur lors du chargement')
       const data = await res.json()
       const records = data.data || data || []
-      setItems(records)
+      // Auto-coerce status if due date reached
+      const today = new Date()
+      const normalized = Array.isArray(records) ? records.map((it) => {
+        const echeanceDate = it?.echeance ? new Date(it.echeance) : null
+        const isNonEchu = String(it?.statut || '').toLowerCase().includes('non')
+        if (echeanceDate && !isNaN(echeanceDate) && isNonEchu && echeanceDate <= today) {
+          // fire-and-forget API update; ignore errors silently
+          try {
+            const token = localStorage.getItem('auth_token')
+            const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+            if (token) headers['Authorization'] = `Bearer ${token}`
+            fetch(`${baseUrl}/api/traites/${it.id}/statut`, { method: 'PATCH', headers, body: JSON.stringify({ statut: 'Échu' }) }).catch(() => {})
+          } catch (_) {}
+          return { ...it, statut: 'Échu' }
+        }
+        return it
+      }) : records
+      setItems(normalized)
       if (data && typeof data === 'object' && data.current_page) {
         setPagination({ current_page: data.current_page, last_page: data.last_page, total: data.total })
       } else {
@@ -113,13 +140,18 @@ const TraitesGrid = () => {
     }
   }
 
-  const handlePrint = (it) => {
-    // Placeholder impression
-    window.print()
+  const handleRowClick = (it, e) => {
+    const interactive = e.target.closest && e.target.closest('button, select, a, input, textarea, [role="button"], svg')
+    if (interactive) return
+    navigate(`/traites/${it.id}`)
   }
 
   return (
     <div className="dashboard-stats">
+      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'echeance', dir: 'asc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: '#1f2c49' }}>
+        <ArrowLeft size={18} />
+      </button>
+      
       <h2 className="stats-title">Grille de saisie des traites</h2>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
@@ -135,6 +167,7 @@ const TraitesGrid = () => {
         De <input type="date" placeholder="jj/mm/aaaa" value={from} onChange={(e) => setFrom(e.target.value)} className="search-input" />
         à <input type="date" placeholder="jj/mm/aaaa" value={to} onChange={(e) => setTo(e.target.value)} className="search-input" />
         <button className="submit-button" onClick={() => { setPage(1); fetchItems() }}>Rechercher</button>
+        
         <button className="submit-button" onClick={() => { setPage(1); setSort((s) => ({ key: 'nom_raison_sociale', dir: s.key === 'nom_raison_sociale' && s.dir === 'asc' ? 'desc' : 'asc' })) }}>
           Trier {sort.key === 'nom_raison_sociale' && sort.dir === 'desc' ? 'A→Z' : 'Z→A'} (Nom)
         </button>
@@ -162,12 +195,11 @@ const TraitesGrid = () => {
                     </th>
                   )
                 })}
-                <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map(it => (
-                <tr key={it.id}>
+                <tr key={it.id} onClick={(e) => handleRowClick(it, e)} style={{ cursor: 'pointer' }}>
                   {Columns.map(col => {
                     const val = it[col.key]
                     if (col.key === 'statut') {
@@ -183,32 +215,19 @@ const TraitesGrid = () => {
                         </td>
                       )
                     }
+                    const isDate = col.key === 'echeance' || col.key === 'date_emission'
+                    const displayVal = isDate ? formatDateDDMMYYYY(val) : (val ?? '')
                     return (
-                      <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>{val ?? ''}</td>
+                      <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>{displayVal}</td>
                     )
                   })}
-                  <td>
-                    <div className="actions-inline">
-                      <button title="Modifier" className="icon-button primary" onClick={() => handleEdit(it)}><Edit3 size={16} /></button>
-                      <button title="Supprimer" className="icon-button danger" onClick={() => handleDelete(it)}><Trash2 size={16} /></button>
-                      <button title="Imprimer" className="icon-button print" onClick={() => handlePrint(it)}><Printer size={16} /></button>
-                    <select className="search-input" value={it.statut || 'Non échu'} onChange={(e) => handleUpdateStatus(it, e.target.value)}>
-                      <option>Non échu</option>
-                      <option>Échu</option>
-                      <option>Impayé</option>
-                      <option>Rejeté</option>
-                      <option>Payé</option>
-                    </select>{' '}
-                    
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <tfoot>
             <tr>
-              <td colSpan={Columns.length + 1}>
+              <td colSpan={Columns.length}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
                   <div>
                     Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
@@ -222,7 +241,7 @@ const TraitesGrid = () => {
                     </select>
                     <span>lignes</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, marginLeft: 500, paddingTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap',marginLeft:200}}>
                     <button className="page-button" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Précédent</button>
                     {Array.from({ length: pagination.last_page || 1 }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(p => (
                       <button key={p} className={`page-button ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>

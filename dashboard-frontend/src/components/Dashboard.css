@@ -20,6 +20,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0; /* allow content to shrink next to sidebar */
 }
 
 .content-area {
@@ -32,6 +33,16 @@
 @media (max-width: 1200px) {
   .dashboard-wrapper {
     max-width: 100%;
+  }
+}
+
+/* Compact paddings for 1366x768 screens */
+@media (max-width: 1400px) {
+  .dashboard-container {
+    padding: 12px;
+  }
+  .content-area {
+    padding: 12px;
   }
 }
 

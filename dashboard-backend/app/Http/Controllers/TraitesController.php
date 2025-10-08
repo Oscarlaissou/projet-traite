@@ -23,8 +23,8 @@ class TraitesController extends Controller
                   ->orWhere('commentaires', 'like', "%$s%")
                   ->orWhere('statut', 'like', "%$s%")
                   ->orWhereRaw('CAST(montant AS CHAR) like ?', ["%$s%"])
-                  ->orWhereRaw('DATE_FORMAT(echeance, "%Y-%m-%d") like ?', ["%$s%"])
-                  ->orWhereRaw('DATE_FORMAT(date_emission, "%Y-%m-%d") like ?', ["%$s%"]);
+                  ->orWhereRaw('DATE_FORMAT(echeance, "%d-%m-%Y") like ?', ["%$s%"])
+                  ->orWhereRaw('DATE_FORMAT(date_emission, "%d-%m-%Y") like ?', ["%$s%"]);
             });
         }
 
