@@ -117,7 +117,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         </select>
       </div> */}
 
-      <div style={{  display: 'flex', gap: 100, marginTop: 10, marginLeft: '700px' }}>
+      <div style={{  display: 'flex', gap: 100, marginTop: 10, marginLeft: '500px' }}>
         <button type="button" onClick={onCancel} disabled={submitting} className="logout-button">Annuler</button>
         <button type="submit" disabled={submitting} className="submit-button">{submitting ? 'Enregistrement...' : (submitLabel || (initialValue?.id ? 'Modifier' : 'Créer'))}</button>
       </div>

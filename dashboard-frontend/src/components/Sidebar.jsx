@@ -77,7 +77,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                 </span>
                 <span className="nav-text">Edition</span>
               </button>
-              <button className="nav-subitem">
+              <button className={`nav-subitem ${activeSubItem === "Historique" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique"); navigate('/dashboard') }}>
                 <span className="nav-icon">
                   <History size={16} />
                 </span>

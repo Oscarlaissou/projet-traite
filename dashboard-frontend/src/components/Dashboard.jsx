@@ -7,6 +7,7 @@ import DashboardStats from "./DashboardStats"
 import Header from "./Header"
 import TraitesGrid from "./TraitesGrid"
 import EditionPage from "./EditionPage"
+import HistoriquePage from "./HistoriquePage"
 import TraiteFormPage from "./TraiteFormPage"
 import TraiteDetailPage from "./TraiteDetailPage"
 import { useLocation } from "react-router-dom"
@@ -39,7 +40,9 @@ const Dashboard = () => {
             ) : activeMenuItem === "Dashboard" ? (
               <DashboardStats />
             ) : activeMenuItem === "Gestion Traites" ? (
-              activeSubItem === "Edition" ? <EditionPage /> : <TraitesGrid />
+              activeSubItem === "Edition" ? <EditionPage /> : 
+              activeSubItem === "Historique" ? <HistoriquePage /> : 
+              <TraitesGrid />
             ) : activeMenuItem === "Credit compte" ? (
               <div>Module Credit compte (contenu à définir)</div>
             ) : null}

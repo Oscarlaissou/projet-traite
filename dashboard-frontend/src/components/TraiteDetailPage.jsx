@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Edit3, Trash2, Printer } from "lucide-react"
 import "./Traites.css"
+import MonImage from "../images/image4.png"
 
 const TraiteDetailPage = () => {
   const navigate = useNavigate()
@@ -103,44 +104,58 @@ const TraiteDetailPage = () => {
         <span className="crumb-current">Détail</span>
       </div>
 
-      <div className="detail-header">
-        <div className="detail-title">Détail de la traite</div>
-        <div className="detail-status-actions">
-          <span className={`status-badge ${statusClass}`}>{item?.statut || 'Non échu'}</span>
-          {(() => {
-            const current = String(item?.statut || '').toLowerCase()
-            const isManual = ['impayé','impaye','rejeté','rejete','payé','paye'].some(k => current.includes(k))
-            const manualValue = isManual ? (item?.statut || '') : ''
-            return (
-              <select className="search-input" value={manualValue} onChange={(e) => e.target.value && handleUpdateStatus(e.target.value)}>
-                <option value="">Choisir un statut</option>
-                <option>Impayé</option>
-                <option>Rejeté</option>
-                <option>Payé</option>
-              </select>
-            )
-          })()}
-        </div>
-      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr', gap: 16, height: 'calc(100vh - 120px)' }}>
+        <div style={{
+          backgroundImage: `url(${MonImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          // border: '1px solid #e5e7eb',
+          borderRadius: 10,
+          minHeight: 480
+        }} />
 
-      <div className="detail-card">
-        <div className="detail-grid">
-          <Detail label="Numéro" value={item?.numero} />
-          <Detail label="Nb traites" value={item?.nombre_traites} />
-          <Detail label="Échéance" value={formatDateDDMMYYYY(item?.echeance)} />
-          <Detail label="Émission" value={formatDateDDMMYYYY(item?.date_emission)} />
-          <Detail label="Montant" value={item?.montant} />
-          <Detail label="Nom/Raison sociale" value={item?.nom_raison_sociale} />
-          <Detail label="Domiciliation" value={item?.domiciliation_bancaire} />
-          <Detail label="RIB" value={item?.rib} />
-          <Detail label="Motif" value={item?.motif} />
-          <Detail label="Commentaires" value={item?.commentaires} />
-        </div>
+        <div>
+          <div className="detail-header">
+            <div className="detail-title">Détail de la traite</div>
+            <div className="detail-status-actions">
+              <span className={`status-badge ${statusClass}`}>{item?.statut || 'Non échu'}</span>
+              {(() => {
+                const current = String(item?.statut || '').toLowerCase()
+                const isManual = ['impayé','impaye','rejeté','rejete','payé','paye'].some(k => current.includes(k))
+                const manualValue = isManual ? (item?.statut || '') : ''
+                return (
+                  <select className="search-input" value={manualValue} onChange={(e) => e.target.value && handleUpdateStatus(e.target.value)}>
+                    <option value="">Choisir un statut</option>
+                    <option>Impayé</option>
+                    <option>Rejeté</option>
+                    <option>Payé</option>
+                  </select>
+                )
+              })()}
+            </div>
+          </div>
 
-        <div className="detail-actions">
-          <button className="submit-button" onClick={() => navigate(`/traites/${id}/edit`)}><Edit3 size={16} style={{ marginRight: 6 }} /> Modifier</button>
-          <button className="submit-button" onClick={handlePrint}><Printer size={16} style={{ marginRight: 6 }} /> Imprimer</button>
-          <button className="submit-button" onClick={handleDelete}><Trash2 size={16} style={{ marginRight: 6 }} /> Supprimer</button>
+          <div className="detail-card">
+            <div className="detail-grid">
+              <Detail label="Numéro" value={item?.numero} />
+              <Detail label="Nb traites" value={item?.nombre_traites} />
+              <Detail label="Échéance" value={formatDateDDMMYYYY(item?.echeance)} />
+              <Detail label="Émission" value={formatDateDDMMYYYY(item?.date_emission)} />
+              <Detail label="Montant" value={item?.montant} />
+              <Detail label="Nom/Raison sociale" value={item?.nom_raison_sociale} />
+              <Detail label="Domiciliation" value={item?.domiciliation_bancaire} />
+              <Detail label="RIB" value={item?.rib} />
+              <Detail label="Motif" value={item?.motif} />
+              <Detail label="Commentaires" value={item?.commentaires} />
+            </div>
+
+            <div className="detail-actions">
+              <button className="submit-button" onClick={() => navigate(`/traites/${id}/edit`)}><Edit3 size={16} style={{ marginRight: 6 }} /> Modifier</button>
+              <button className="submit-button" onClick={handlePrint}><Printer size={16} style={{ marginRight: 6 }} /> Imprimer</button>
+              <button className="submit-button" onClick={handleDelete}><Trash2 size={16} style={{ marginRight: 6 }} /> Supprimer</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

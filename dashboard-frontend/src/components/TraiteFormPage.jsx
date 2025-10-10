@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import TraiteForm from "./TraiteForm"
 import "./Traites.css"
+import MonImage from "../images/image5.png"
 
 const TraiteFormPage = () => {
   const navigate = useNavigate()
@@ -47,14 +48,29 @@ const TraiteFormPage = () => {
         <span className="crumb-current">{id ? 'Modifier' : 'Nouvelle traite'}</span>
       </nav>
 
-      <h2 className="stats-title">{id ? 'Modifier une traite' : 'Nouvelle traite'}</h2>
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
-        <TraiteForm
-          initialValue={initialValue}
-          submitLabel={id ? 'Modifier' : 'Créer'}
-          onCancel={() => navigate('/dashboard?tab=traites')}
-          onSaved={() => navigate('/dashboard?tab=traites')}
-        />
+      
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.5fr', gap: 16, height: 'calc(100vh - 120px)' }}>
+        <div style={{
+          backgroundImage: `url(${MonImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          // border: '1px solid #e5e7eb',
+          borderRadius: 10,
+          minHeight: 480
+        }} />
+
+        <div style={{ background: '#fff', borderRadius: 8, padding: 12 }}>
+       
+        <h2 style={{ marginTop: 10 ,fontWeight: 'bold'}} className="stats-title">{id ? 'Modifier une traite :' : 'Nouvelle traite'}</h2>
+          <TraiteForm
+            initialValue={initialValue}
+            submitLabel={id ? 'Modifier' : 'Créer'}
+            onCancel={() => navigate('/dashboard?tab=traites')}
+            onSaved={() => navigate('/dashboard?tab=traites')}
+          />
+        </div>
       </div>
     </div>
   )
