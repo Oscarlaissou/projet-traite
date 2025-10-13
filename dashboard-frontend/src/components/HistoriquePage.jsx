@@ -4,9 +4,10 @@ import { Users, Calendar, ArrowLeft, Search, Download } from "lucide-react"
 import "./Traites.css"
 import MonImage from "../images/image6.png"
 
+
 const HistoriquePage = () => {
   const navigate = useNavigate()
-  const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
+  const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000', [])
   const [mode, setMode] = useState("client")
   const [searchClient, setSearchClient] = useState("")
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -16,9 +17,12 @@ const HistoriquePage = () => {
   const [historiqueData, setHistoriqueData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
 
   const authHeaders = () => {
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem('token')
     const headers = { 'Accept': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers
@@ -29,30 +33,20 @@ const HistoriquePage = () => {
     setError("")
     try {
       const params = new URLSearchParams()
+      params.append('type', mode)
       if (mode === 'client' && searchClient) {
-        params.append('search', searchClient)
+        params.append('nom_raison_sociale', searchClient)
       } else if (mode === 'mois' && selectedMonth) {
-        const [yyyy, mm] = selectedMonth.split('-')
-        const first = `${yyyy}-${mm}-01`
-        const lastDate = new Date(Number(yyyy), Number(mm), 0).getDate()
-        const last = `${yyyy}-${mm}-${String(lastDate).padStart(2,'0')}`
-        params.append('from', first)
-        params.append('to', last)
+        params.append('month', selectedMonth)
       }
 
-      const res = await fetch(`${baseUrl}/api/traites?${params.toString()}`, { headers: authHeaders() })
+      const res = await fetch(`${baseUrl}/api/traites/historique?${params.toString()}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Erreur lors du chargement de l\'historique')
       const data = await res.json()
-      const records = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
-      const mapped = records.map((it) => ({
-        date: it.date_emission || it.echeance,
-        nom_raison_sociale: it.nom_raison_sociale,
-        numero_traite: it.numero,
-        montant: it.montant,
-        action: '',
-        statut: it.statut
-      }))
-      setHistoriqueData(mapped)
+      const rows = Array.isArray(data) ? data : []
+      setHistoriqueData(rows)
+      setPage(1)
+      setPagination({ current_page: 1, last_page: Math.max(1, Math.ceil(rows.length / perPage)), total: rows.length })
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
     } finally {
@@ -83,7 +77,7 @@ const HistoriquePage = () => {
       </button>
       <h2 className="stats-title">Historique des traites</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr', gap: 16, height: 'calc(100vh - 120px)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr', gap: 16, height: 'calc(80vh - 120px)' }}>
         <div className="frame-card" style={{
           backgroundImage: `url(${MonImage})`,
           backgroundSize: 'cover',
@@ -160,18 +154,24 @@ const HistoriquePage = () => {
                     <th>Nom/Raison sociale</th>
                     <th>Numéro Traite</th>
                     <th>Montant</th>
+                    <th>Action</th>
+                    <th>Utilisateur</th>
   
                     <th>Statut</th>
                   </tr>
                 </thead>
                 <tbody>
                   {historiqueData.length > 0 ? (
-                    historiqueData.map((item, index) => (
+                    historiqueData
+                      .slice((page - 1) * perPage, (page - 1) * perPage + perPage)
+                      .map((item, index) => (
                       <tr key={index}>
                         <td>{new Date(item.date).toLocaleDateString('fr-FR')}</td>
                         <td>{item.nom_raison_sociale}</td>
                         <td>{item.numero_traite}</td>
                         <td>{item.montant}</td>
+                        <td>{item.action }</td>
+                        <td>{item.username || item.user_name || item.user_email || ''}</td>
                        
                         <td>
                           <span className={`status-badge ${
@@ -189,12 +189,39 @@ const HistoriquePage = () => {
                   ) : (
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#6b7280' }}>
-                        Aucun historique trouvé
+                        Aucun historique trouvé. Assurez-vous d'être connecté lors de la création/modification,
+                        que les migrations sont appliquées, et ajustez les filtres puis cliquez sur Rechercher.
                       </td>
                     </tr>
                   )}
                 </tbody>
-              </table>
+              </table> <tfoot>
+                <tr>
+                  <td colSpan={5}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
+                      <div>
+                        Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>Afficher</span>
+                        <select className="search-input" value={perPage} onChange={(e) => { const newPer = parseInt(e.target.value || '10', 10); setPerPage(newPer); setPage(1); setPagination(p => ({ ...p, current_page: 1, last_page: Math.max(1, Math.ceil(historiqueData.length / newPer)), total: historiqueData.length })); }}>
+                          {[10,20,50,100].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                        <span>lignes</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap', marginLeft: 200 }}>
+                        <button className="page-button" disabled={page <= 1} onClick={() => { const np = Math.max(1, page - 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Précédent</button>
+                        {Array.from({ length: pagination.last_page || 1 }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(pn => (
+                          <button key={pn} className={`page-button ${pn === page ? 'active' : ''}`} onClick={() => { setPage(pn); setPagination(ps => ({ ...ps, current_page: pn })); }}>{pn}</button>
+                        ))}
+                        <button className="page-button" disabled={page >= (pagination.last_page || 1)} onClick={() => { const np = Math.min((pagination.last_page || 1), page + 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Suivant</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
             </div>
           )}
         </div>

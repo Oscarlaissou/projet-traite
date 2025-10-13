@@ -17,6 +17,16 @@ class Traite extends Model
     protected $attributes = [
         'statut' => 'Non échu',
     ];
+
+    public function activities()
+    {
+        return $this->hasMany(TraiteActivity::class);
+    }
+
+    public function latestActivity()
+    {
+        return $this->hasOne(TraiteActivity::class)->latestOfMany();
+    }
 }
 
 

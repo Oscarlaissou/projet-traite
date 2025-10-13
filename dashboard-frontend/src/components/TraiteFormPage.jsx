@@ -17,7 +17,7 @@ const TraiteFormPage = () => {
     const load = async () => {
       if (!id) return
       try {
-        const token = localStorage.getItem('auth_token')
+        const token = localStorage.getItem('token')
         const headers = { 'Accept': 'application/json' }
         if (token) headers['Authorization'] = `Bearer ${token}`
         const res = await fetch(`${baseUrl}/api/traites/${id}`, { headers })

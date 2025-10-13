@@ -6,7 +6,7 @@ import MonImage from "../images/image3.png"
 
 const EditionPage = () => {
   const navigate = useNavigate()
-  const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
+  const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000', [])
   const [mode, setMode] = useState("jour")
   const [dateJour, setDateJour] = useState(() => new Date().toISOString().slice(0,10))
   const [mois, setMois] = useState(() => {
@@ -22,7 +22,7 @@ const EditionPage = () => {
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
 
   const authHeaders = () => {
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem('token')
     const headers = { 'Accept': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers

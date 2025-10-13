@@ -35,8 +35,8 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
     setSubmitting(true)
     setError("")
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || ''
-      const token = localStorage.getItem('auth_token')
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000'
+      const token = localStorage.getItem('token')
       const headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json'

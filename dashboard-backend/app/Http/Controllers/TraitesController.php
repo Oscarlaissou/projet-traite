@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Traite;
+use App\Models\TraiteActivity;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -91,6 +93,19 @@ class TraitesController extends Controller
         }
 
         $traite = Traite::create($data);
+
+        // Log activity: Création
+        try {
+            TraiteActivity::create([
+                'traite_id' => $traite->id,
+                'user_id' => optional(Auth::user())->id,
+                'action' => 'Création',
+                'changes' => null,
+            ]);
+        } catch (\Throwable $e) {
+            // ignore logging failures
+        }
+
         return response()->json($traite, 201);
     }
 
@@ -102,12 +117,50 @@ class TraitesController extends Controller
     public function update(Request $request, Traite $traite)
     {
         $data = $this->validateData($request, $traite->id);
+
+        $original = $traite->only(array_keys($data));
         $traite->update($data);
+        $updated = $traite->only(array_keys($data));
+
+        // Compute minimal diff
+        $changes = [];
+        foreach ($updated as $key => $val) {
+            $before = $original[$key] ?? null;
+            if ($before !== $val) {
+                $changes[$key] = ['from' => $before, 'to' => $val];
+            }
+        }
+
+        if (!empty($changes)) {
+            try {
+                TraiteActivity::create([
+                    'traite_id' => $traite->id,
+                    'user_id' => optional(Auth::user())->id,
+                    'action' => 'Modification',
+                    'changes' => $changes,
+                ]);
+            } catch (\Throwable $e) {
+                // ignore logging failures
+            }
+        }
+
         return response()->json($traite);
     }
 
     public function destroy(Traite $traite)
     {
+        $id = $traite->id;
+        try {
+            TraiteActivity::create([
+                'traite_id' => $id,
+                'user_id' => optional(Auth::user())->id,
+                'action' => 'Suppression',
+                'changes' => null,
+            ]);
+        } catch (\Throwable $e) {
+            // ignore logging failures
+        }
+
         $traite->delete();
         return response()->json(['deleted' => true]);
     }
@@ -147,6 +200,57 @@ class TraitesController extends Controller
         $nextId = (int) (Traite::max('id') ?? 0) + 1;
         $prefix = 'TR-'.date('Ym').'-';
         return $prefix . str_pad((string)$nextId, 6, '0', STR_PAD_LEFT);
+    }
+
+    public function historique(Request $request)
+    {
+        $type = $request->get('type'); // 'client' or 'mois'
+        $nom = $request->get('nom_raison_sociale');
+        $month = $request->get('month'); // YYYY-MM
+
+        // Objectif: retourner TOUTES les traites, avec la dernière action et l'utilisateur s'ils existent
+        $query = Traite::query()
+            ->with(['latestActivity.user:id,username'])
+            ->select(['id','numero','nom_raison_sociale','montant','statut','echeance','date_emission','created_at']);
+
+        if ($type === 'client' && $nom) {
+            $query->where('nom_raison_sociale', 'like', "%$nom%");
+        }
+
+        if ($type === 'mois' && $month && preg_match('/^\\d{4}-\\d{2}$/', $month)) {
+            // Filtrer par mois sur la date d'émission (ou created_at si vous préférez)
+            $parts = explode('-', $month);
+            $yyyy = (int)($parts[0] ?? date('Y'));
+            $mm = (int)($parts[1] ?? date('m'));
+            $lastDay = cal_days_in_month(CAL_GREGORIAN, $mm, $yyyy);
+            $start = sprintf('%04d-%02d-01', $yyyy, $mm);
+            $end = sprintf('%04d-%02d-%02d', $yyyy, $mm, $lastDay);
+            $query->whereBetween('date_emission', [$start, $end]);
+        }
+
+        $traites = $query->orderByDesc('date_emission')->limit(1000)->get();
+
+        $mapped = $traites->map(function($t) {
+            $act = $t->latestActivity;
+            $action = $act?->action ?? 'Création';
+            $user = $act?->user;
+            $displayUser = $user?->username;
+            // Choisir une date sûre: priorité à la date de l'activité, sinon date_emission, sinon echeance, sinon created_at de la traite
+            $date = $act && $act->created_at ? $act->created_at->toDateTimeString() : (
+                ($t->date_emission ?: ($t->echeance ?: ($t->created_at ?? '')))
+            );
+            return [
+                'date' => (string)$date,
+                'nom_raison_sociale' => $t->nom_raison_sociale,
+                'numero_traite' => $t->numero,
+                'montant' => $t->montant,
+                'action' => $action,
+                'statut' => $t->statut,
+                'username' => $displayUser,
+            ];
+        });
+
+        return response()->json($mapped);
     }
 }
 

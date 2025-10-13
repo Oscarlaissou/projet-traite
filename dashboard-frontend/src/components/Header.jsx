@@ -19,7 +19,7 @@ const Header = () => {
       <div className="header-right">
         <div className="user-profile">
           <div className="user-avatar">
-            <img src="/api/placeholder/32/32" alt="User Avatar" />
+            <img src="/logo512.png" alt="User Avatar" />
           </div>
           <span className="user-name">Aiden Max</span>
           <ChevronDown className="dropdown-arrow" size={12} />

@@ -25,7 +25,7 @@ const TraiteDetailPage = () => {
     let mounted = true
     const run = async () => {
       try {
-        const token = localStorage.getItem('auth_token')
+        const token = localStorage.getItem('token')
         const headers = { 'Accept': 'application/json' }
         if (token) headers['Authorization'] = `Bearer ${token}`
         const res = await fetch(`${baseUrl}/api/traites/${id}`, { headers })
@@ -36,7 +36,7 @@ const TraiteDetailPage = () => {
           const echeanceDate = data?.echeance ? new Date(data.echeance) : null
           const isNonEchu = String(data?.statut || '').toLowerCase().includes('non')
           if (echeanceDate && !isNaN(echeanceDate) && isNonEchu && echeanceDate <= new Date()) {
-            const token2 = localStorage.getItem('auth_token')
+            const token2 = localStorage.getItem('token')
             const headers2 = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
             if (token2) headers2['Authorization'] = `Bearer ${token2}`
             fetch(`${baseUrl}/api/traites/${data.id}/statut`, { method: 'PATCH', headers: headers2, body: JSON.stringify({ statut: 'Échu' }) }).catch(() => {})
@@ -72,7 +72,7 @@ const TraiteDetailPage = () => {
 
   const handleUpdateStatus = async (newStatut) => {
     try {
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('token')
       const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch(`${baseUrl}/api/traites/${id}/statut`, { method: 'PATCH', headers, body: JSON.stringify({ statut: newStatut }) })

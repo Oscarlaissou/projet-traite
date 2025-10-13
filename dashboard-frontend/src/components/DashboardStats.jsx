@@ -39,7 +39,7 @@ const DashboardStats = () => {
       try {
         setLoading(true)
         const baseUrl = process.env.REACT_APP_API_URL || ''
-        const token = localStorage.getItem('auth_token')
+        const token = localStorage.getItem('token')
         const res = await fetch(`${baseUrl}/api/traites/stats`, {
           headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
         })

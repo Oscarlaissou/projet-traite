@@ -47,7 +47,7 @@ const TraitesGrid = () => {
   }
 
   const authHeaders = () => {
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem('token')
     const headers = { 'Accept': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers
@@ -79,7 +79,7 @@ const TraitesGrid = () => {
         if (echeanceDate && !isNaN(echeanceDate) && isNonEchu && echeanceDate <= today) {
           // fire-and-forget API update; ignore errors silently
           try {
-            const token = localStorage.getItem('auth_token')
+            const token = localStorage.getItem('token')
             const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
             if (token) headers['Authorization'] = `Bearer ${token}`
             fetch(`${baseUrl}/api/traites/${it.id}/statut`, { method: 'PATCH', headers, body: JSON.stringify({ statut: 'Échu' }) }).catch(() => {})
