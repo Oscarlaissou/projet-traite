@@ -83,7 +83,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                 </span>
                 <span className="nav-text">Historique</span>
               </button>
-              <button className="nav-subitem">
+              <button className={`nav-subitem ${activeSubItem === "Notification" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Notification"); navigate('/notifications') }}>
                 <span className="nav-icon">
                   <Bell size={16} />
                 </span>

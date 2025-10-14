@@ -18,8 +18,9 @@ const HistoriquePage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
+  const [perPage, setPerPage] = useState(6)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440)
 
   const authHeaders = () => {
     const token = localStorage.getItem('token')
@@ -55,6 +56,11 @@ const HistoriquePage = () => {
   }
 
   useEffect(() => { fetchHistorique() }, [mode, searchClient, selectedMonth])
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const handleExport = () => {
     // Simulate export functionality
@@ -77,15 +83,18 @@ const HistoriquePage = () => {
       </button>
       <h2 className="stats-title">Historique des traites</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr', gap: 16, height: 'calc(80vh - 120px)' }}>
-        <div className="frame-card" style={{
-          backgroundImage: `url(${MonImage})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }} />
+      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '1.5fr 1.5fr' : '1fr', gap: 16, minHeight: 'calc(88vh - 120px)' }}>
+        <div style={{ position: viewportWidth >= 992 ? 'sticky' : 'static', top: 8 }}>
+          <div className="frame-card" style={{
+            backgroundImage: `url(${MonImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            minHeight: viewportWidth >= 992 ? 480 : '40vh'
+          }} />
+        </div>
 
-        <div>
+        <div style={{ maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', overflowY: viewportWidth >= 992 ? 'auto' : 'visible' }}>
           {/* Mode Selection */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
             <button onClick={() => setMode('client')} className="stat-card" style={{ border: mode==='client' ? '2px solid #1f2c49' : undefined }}>
@@ -166,7 +175,7 @@ const HistoriquePage = () => {
                       .slice((page - 1) * perPage, (page - 1) * perPage + perPage)
                       .map((item, index) => (
                       <tr key={index}>
-                        <td>{new Date(item.date).toLocaleDateString('fr-FR')}</td>
+                        <td>{new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td>
                         <td>{item.nom_raison_sociale}</td>
                         <td>{item.numero_traite}</td>
                         <td>{item.montant}</td>
@@ -195,17 +204,17 @@ const HistoriquePage = () => {
                     </tr>
                   )}
                 </tbody>
-              </table> <tfoot>
+                <tfoot>
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={7}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
                       <div>
                         Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>Afficher</span>
-                        <select className="search-input" value={perPage} onChange={(e) => { const newPer = parseInt(e.target.value || '10', 10); setPerPage(newPer); setPage(1); setPagination(p => ({ ...p, current_page: 1, last_page: Math.max(1, Math.ceil(historiqueData.length / newPer)), total: historiqueData.length })); }}>
-                          {[10,20,50,100].map(n => (
+                        <select className="search-input" value={perPage} onChange={(e) => { const newPer = parseInt(e.target.value || '6', 10); setPerPage(newPer); setPage(1); setPagination(p => ({ ...p, current_page: 1, last_page: Math.max(1, Math.ceil(historiqueData.length / newPer)), total: historiqueData.length })); }}>
+                          {[6,12,18,24].map(n => (
                             <option key={n} value={n}>{n}</option>
                           ))}
                         </select>
@@ -222,6 +231,7 @@ const HistoriquePage = () => {
                   </td>
                 </tr>
               </tfoot>
+              </table>
             </div>
           )}
         </div>

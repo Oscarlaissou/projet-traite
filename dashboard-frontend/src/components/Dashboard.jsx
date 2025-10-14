@@ -10,6 +10,7 @@ import EditionPage from "./EditionPage"
 import HistoriquePage from "./HistoriquePage"
 import TraiteFormPage from "./TraiteFormPage"
 import TraiteDetailPage from "./TraiteDetailPage"
+import NotificationsPage from "./NotificationsPage"
 import { useLocation } from "react-router-dom"
 import "./Dashboard.css"
 
@@ -23,6 +24,9 @@ const Dashboard = () => {
     if (tab === 'traites') {
       setActiveMenuItem('Gestion Traites')
       setActiveSubItem('Grille de saisie')
+    } else if (location.pathname.startsWith('/notifications')) {
+      setActiveMenuItem('Gestion Traites')
+      setActiveSubItem('Notification')
     }
   }, [location.search])
 
@@ -37,12 +41,14 @@ const Dashboard = () => {
               <TraiteFormPage />
             ) : location.pathname.match(/^\/traites\/\d+$/) ? (
               <TraiteDetailPage />
+            ) : location.pathname.startsWith('/notifications') ? (
+              <NotificationsPage />
             ) : activeMenuItem === "Dashboard" ? (
               <DashboardStats />
             ) : activeMenuItem === "Gestion Traites" ? (
               activeSubItem === "Edition" ? <EditionPage /> : 
               activeSubItem === "Historique" ? <HistoriquePage /> : 
-              <TraitesGrid />
+              activeSubItem === "Notification" ? <NotificationsPage /> : <TraitesGrid />
             ) : activeMenuItem === "Credit compte" ? (
               <div>Module Credit compte (contenu à définir)</div>
             ) : null}

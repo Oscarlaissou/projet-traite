@@ -60,6 +60,7 @@
 
 .table-wrap {
   overflow-x: auto;
+  padding-bottom: 8px; /* espace pour la pagination */
 }
 
 
@@ -72,6 +73,13 @@
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
   border: 1px solid #94a3b8; 
+}
+
+.table-basic tfoot td {
+  background: #f8fafc;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 
 /* Removed expanded grid variants */
@@ -127,6 +135,12 @@
   cursor: not-allowed;
 }
 
+.pagination-wrap {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* Status badges */
 .status-badge {
   display: inline-block;
@@ -161,6 +175,35 @@
   .table-basic th,
   .table-basic td {
     padding: 6px;
+  }
+  .two-frames {
+    display: block !important;
+  }
+  .frame-card {
+    display: none;
+  }
+  .search-input {
+    width: 100%;
+    min-width: unset !important;
+  }
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .stat-card {
+    width: 100%;
+  }
+  .pagination-wrap {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-basic th,
+  .table-basic td {
+    font-size: 12px;
+  }
+  .page-button {
+    padding: 4px 8px;
   }
 }
 

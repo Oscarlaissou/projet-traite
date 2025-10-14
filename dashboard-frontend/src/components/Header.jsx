@@ -1,10 +1,13 @@
 import React from "react"
 import "./Header.css"
 import { Search, ChevronDown } from "lucide-react"
+import NotificationsMenu from "./NotificationsMenu"
+import NotificationsBanner from "./NotificationsBanner"
 
 const Header = () => {
   return (
     <header className="header">
+      <NotificationsBanner />
       <div className="header-left">
         <h1 className="page-title">Dashboard</h1>
       </div>
@@ -17,6 +20,7 @@ const Header = () => {
         </div>
       </div>
       <div className="header-right">
+        <NotificationsMenu />
         <div className="user-profile">
           <div className="user-avatar">
             <img src="/logo512.png" alt="User Avatar" />

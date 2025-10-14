@@ -20,6 +20,7 @@ const EditionPage = () => {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440)
 
   const authHeaders = () => {
     const token = localStorage.getItem('token')
@@ -68,6 +69,11 @@ const EditionPage = () => {
   }
 
   useEffect(() => { fetchItems() }, [mode, dateJour, mois, page, perPage])
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Mass action removed
 
@@ -80,18 +86,19 @@ const EditionPage = () => {
       </button>
       <h2 className="stats-title">Édition des traites</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.5fr', gap: 16, height: 'calc(100vh - 120px)' }}>
-        <div style={{
-          backgroundImage: `url(${MonImage})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          // border: '1px solid #e5e7eb',
-          borderRadius: 10,
-          minHeight: 480
-        }} />
+      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '1.3fr 1.5fr' : '1fr', gap: 16, height: viewportWidth >= 992 ? 'calc(100vh - 120px)' : 'auto' }}>
+        <div style={{ position: viewportWidth >= 992 ? 'sticky' : 'static', top: 8 }}>
+          <div style={{
+            backgroundImage: `url(${MonImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            borderRadius: 10,
+            minHeight: viewportWidth >= 992 ? 480 : '40vh'
+          }} />
+        </div>
 
-        <div>
+        <div style={{ maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', overflowY: viewportWidth >= 992 ? 'auto' : 'visible' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginBottom: 12 }}>
             <button onClick={() => setMode('jour')} className="stat-card" style={{ border: mode==='jour' ? '2px solid #1f2c49' : undefined }}>
               <div className="card-icon-container" style={{ background: '#eef2ff' }}>

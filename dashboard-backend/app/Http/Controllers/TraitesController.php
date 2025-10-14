@@ -70,6 +70,41 @@ class TraitesController extends Controller
             });
         }
 
+        // Nouvelle plage sur la colonne 'echeance'
+        $echeanceFrom = $request->get('echeance_from');
+        $echeanceTo = $request->get('echeance_to');
+        if ($echeanceFrom || $echeanceTo) {
+            if ($echeanceFrom && $echeanceTo) {
+                $fromTs = strtotime($echeanceFrom);
+                $toTs = strtotime($echeanceTo);
+                if ($fromTs !== false && $toTs !== false && $fromTs > $toTs) {
+                    [$echeanceFrom, $echeanceTo] = [$echeanceTo, $echeanceFrom];
+                }
+            }
+            $query->where(function($qq) use ($echeanceFrom, $echeanceTo) {
+                if ($echeanceFrom) {
+                    $qq->whereDate('echeance', '>=', $echeanceFrom);
+                }
+                if ($echeanceTo) {
+                    $qq->whereDate('echeance', '<=', $echeanceTo);
+                }
+            });
+        }
+
+        // Raccourci: upcoming_days = N => statut=Non échu + echeance in [today, today + (N-1)]
+        if ($request->has('upcoming_days')) {
+            $n = (int) $request->get('upcoming_days');
+            if ($n > 0) {
+                $today = date('Y-m-d');
+                $end = date('Y-m-d', strtotime("+$n days")); // exclusive upper bound alternative
+                // Utiliser bornes inclusives J..J+(N-1)
+                $inclusiveEnd = date('Y-m-d', strtotime("+".($n-1)." days"));
+                $query->where('statut', 'Non échu')
+                      ->whereDate('echeance', '>=', $today)
+                      ->whereDate('echeance', '<=', $inclusiveEnd);
+            }
+        }
+
         // Tri: par défaut par nom A->Z si alpha, sinon par échéance croissante; personnalisable via query params
         $sort = $request->get('sort', 'echeance');
         $dir = strtolower($request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
@@ -79,7 +114,7 @@ class TraitesController extends Controller
         }
 
         $perPage = (int) $request->get('per_page', 10);
-        if ($perPage < 1 || $perPage > 100) { $perPage = 10; }
+        if ($perPage < 1 || $perPage > 200) { $perPage = 10; }
         return response()->json($query->orderBy($sort, $dir)->paginate($perPage));
     }
 

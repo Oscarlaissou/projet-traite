@@ -47,6 +47,14 @@ function AppRoutes() {
                 } 
             />
             <Route 
+                path="/notifications" 
+                element={
+                <ProtectedRoute>
+                    <Dashboard />
+                </ProtectedRoute>
+                } 
+            />
+            <Route 
                 path="/traites/new" 
                 element={
                     <ProtectedRoute>
