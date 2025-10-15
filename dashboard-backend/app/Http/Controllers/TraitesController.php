@@ -7,6 +7,7 @@ use App\Models\TraiteActivity;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Carbon;
 
 class TraitesController extends Controller
 {
@@ -118,6 +119,152 @@ class TraitesController extends Controller
         return response()->json($query->orderBy($sort, $dir)->paginate($perPage));
     }
 
+    /**
+     * Render printable HTML for a specific traite and tranche index (1-based)
+     */
+    public function print(Traite $traite, ?int $index = 1)
+    {
+        $totalTranches = max(1, (int) ($traite->nombre_traites ?? 1));
+        $currentIndex = min(max(1, (int) ($index ?? 1)), $totalTranches);
+
+        // Base dates
+        $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
+        $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
+
+        // Compute tranche due date: monthly increments from first échéance
+        $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($currentIndex - 1) : null;
+
+        // Amount per tranche (rounded to nearest franc); last tranche carries remainder
+        $total = (int) round($traite->montant ?? 0);
+        $base = (int) floor($total / $totalTranches);
+        $remainder = $total - ($base * $totalTranches);
+        $amountForThisTranche = $base + (($currentIndex === $totalTranches) ? $remainder : 0);
+
+        // French number to words (basic, integers)
+        $amountInWords = $this->numberToFrenchWords($amountForThisTranche);
+
+        $data = [
+            'rangeText' => $currentIndex . ' | ' . $totalTranches,
+            'ville' => 'Douala',
+            'date_emission' => $emission ? $emission->format('d/m/Y') : '',
+            'echeance' => $dueDate ? $dueDate->format('d/m/Y') : '',
+            'montant_tranche' => number_format($amountForThisTranche, 0, ',', ' '),
+            'montant_tranche_words' => strtoupper($amountInWords),
+            'nom_raison_sociale' => $traite->nom_raison_sociale ?? '',
+            'domiciliation' => $traite->domiciliation_bancaire ?? '',
+            'rib' => $traite->rib ?? '',
+            'numero' => $traite->numero ?? '',
+            'date_emission_text_long' => $emission ? $emission->locale('fr')->translatedFormat('d F Y') : '',
+        ];
+
+        return response()->view('traites.print', $data);
+    }
+
+    /**
+     * Aperçu multi-pages pour toutes les traites (toutes tranches)
+     */
+    public function preview(Traite $traite)
+    {
+        $totalTranches = max(1, (int) ($traite->nombre_traites ?? 1));
+        $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
+        $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
+
+        $total = (int) round($traite->montant ?? 0);
+        $base = (int) floor($total / $totalTranches);
+        $remainder = $total - ($base * $totalTranches);
+
+        $pages = [];
+        for ($i = 1; $i <= $totalTranches; $i++) {
+            $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
+            $amountForThisTranche = $base + (($i === $totalTranches) ? $remainder : 0);
+            $pages[] = [
+                'rangeText' => $i . ' | ' . $totalTranches,
+                'ville' => 'Douala',
+                'date_emission' => $emission ? $emission->format('d/m/Y') : '',
+                'echeance' => $dueDate ? $dueDate->format('d/m/Y') : '',
+                'montant_tranche' => number_format($amountForThisTranche, 0, ',', ' '),
+                'montant_tranche_words' => strtoupper($this->numberToFrenchWords($amountForThisTranche)),
+                'nom_raison_sociale' => $traite->nom_raison_sociale ?? '',
+                'domiciliation' => $traite->domiciliation_bancaire ?? '',
+                'rib' => $traite->rib ?? '',
+                'numero' => $traite->numero ?? '',
+                'date_emission_text_long' => $emission ? $emission->locale('fr')->translatedFormat('d F Y') : '',
+            ];
+        }
+
+        return response()->view('traites.preview', [ 'pages' => $pages ]);
+    }
+
+    private function numberToFrenchWords(int $number): string
+    {
+        if ($number === 0) return 'zéro';
+        $units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize'];
+        $tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante'];
+        $words = [];
+
+        $appendBelowHundred = function(int $n) use (&$words, $units, $tens, &$appendBelowHundred) {
+            if ($n <= 16) { $words[] = $units[$n]; return; }
+            if ($n < 20) { $words[] = 'dix-' . $units[$n - 10]; return; }
+            if ($n < 70) {
+                $t = intdiv($n, 10);
+                $u = $n % 10;
+                if ($u === 1) $words[] = $tens[$t] . ' et un';
+                else if ($u > 0) $words[] = $tens[$t] . '-' . $units[$u];
+                else $words[] = $tens[$t];
+                return;
+            }
+            if ($n < 80) { // 70-79: soixante + 10-19
+                $rest = $n - 60;
+                if ($rest === 11) $words[] = 'soixante et onze';
+                else {
+                    $words[] = 'soixante';
+                    $appendBelowHundred($rest);
+                }
+                return;
+            }
+            // 80-99: quatre-vingt(s) + 0-19
+            $rest = $n - 80;
+            $words[] = 'quatre-vingt' . ($rest === 0 ? 's' : '');
+            if ($rest > 0) $appendBelowHundred($rest);
+        };
+
+        $appendBelowThousand = function(int $n) use (&$words, $units, &$appendBelowHundred, &$appendBelowThousand) {
+            if ($n >= 100) {
+                $hundreds = intdiv($n, 100);
+                $rest = $n % 100;
+                if ($hundreds === 1) {
+                    $words[] = 'cent' . ($rest === 0 ? 's' : '');
+                } else {
+                    $words[] = $units[$hundreds] . ' cent' . ($rest === 0 ? 's' : '');
+                }
+                if ($rest > 0) $appendBelowHundred($rest);
+                return;
+            }
+            $appendBelowHundred($n);
+        };
+
+        $chunks = [1000000000 => 'milliard', 1000000 => 'million', 1000 => 'mille'];
+        $n = $number;
+        foreach ($chunks as $value => $label) {
+            if ($n >= $value) {
+                $q = intdiv($n, $value);
+                $n %= $value;
+                if ($value === 1000 && $q === 1) {
+                    $words[] = 'mille';
+                } else {
+                    $segment = [];
+                    $saveRef = &$words; $words = &$segment;
+                    $appendBelowThousand($q);
+                    $built = trim(preg_replace('/\s+/', ' ', implode(' ', $segment)));
+                    $words = &$saveRef;
+                    $words[] = $built . ' ' . ($q > 1 ? $label . 's' : $label);
+                }
+            }
+        }
+        if ($n > 0) $appendBelowThousand($n);
+
+        return trim(preg_replace('/\s+/', ' ', implode(' ', $words)));
+    }
     public function store(Request $request)
     {
         $data = $this->validateData($request);

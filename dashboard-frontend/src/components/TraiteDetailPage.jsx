@@ -68,7 +68,12 @@ const TraiteDetailPage = () => {
     }
   }
 
-  const handlePrint = () => window.print()
+  const handlePrint = () => {
+    if (!item) return
+    const base = (process.env.REACT_APP_API_URL || '')
+    const url = `${base}/print/traites/${item.id}/preview`
+    window.open(url, '_blank')
+  }
 
   const handleUpdateStatus = async (newStatut) => {
     try {

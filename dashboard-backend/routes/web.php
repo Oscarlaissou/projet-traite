@@ -3,6 +3,7 @@
 // Dans routes/web.php
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\TraitesController;
 
 Route::get('/test-db', function () {
     try {
@@ -30,4 +31,13 @@ Route::get('/test-db', function () {
         ], 500);
     }
 });
+
+// Impression d'une traite (vue HTML imprimable)
+Route::get('/print/traites/{traite}/{index?}', [TraitesController::class, 'print'])
+    ->whereNumber('index')
+    ->name('traites.print');
+
+// Aperçu multi-pages: afficher toutes les traites et bouton Imprimer
+Route::get('/print/traites/{traite}/preview', [TraitesController::class, 'preview'])
+    ->name('traites.preview');
 

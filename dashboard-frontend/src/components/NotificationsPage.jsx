@@ -225,7 +225,7 @@ const NotificationsPage = () => {
         <button className="icon-button" onClick={() => navigate('/dashboard?tab=traites')} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
         <ArrowLeft size={18} />
       </button>
-          <div className="detail-title">Notifications</div>
+        <div className="detail-title">Notifications</div>
         </div>
         <div className="detail-status-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="icon-button" onClick={fetchRows}><RefreshCcw size={16} />&nbsp;Rafraîchir</button>
