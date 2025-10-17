@@ -61,7 +61,7 @@ const TraiteFormPage = () => {
           minHeight: 480
         }} />
 
-        <div style={{ background: '#fff', borderRadius: 8, padding: 12 }}>
+        <div style={{ background: '#fff', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
        
         <h2 style={{ marginTop: 10 ,fontWeight: 'bold'}} className="stats-title">{id ? 'Modifier une traite :' : 'Nouvelle traite'}</h2>
           <TraiteForm

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Users, Calendar, ArrowLeft, Search, Download } from "lucide-react"
+import { formatMoney } from "../utils/format"
 import "./Traites.css"
 import MonImage from "../images/image6.png"
 
@@ -21,6 +22,7 @@ const HistoriquePage = () => {
   const [perPage, setPerPage] = useState(6)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440)
+  const [globalQuery, setGlobalQuery] = useState("")
 
   const authHeaders = () => {
     const token = localStorage.getItem('token')
@@ -56,6 +58,7 @@ const HistoriquePage = () => {
   }
 
   useEffect(() => { fetchHistorique() }, [mode, searchClient, selectedMonth])
+  useEffect(() => { setPage(1); setPagination(p => ({ ...p, current_page: 1 })) }, [globalQuery])
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth)
     window.addEventListener('resize', onResize)
@@ -76,6 +79,8 @@ const HistoriquePage = () => {
     URL.revokeObjectURL(url)
   }
 
+  
+
   return (
     <div className="dashboard-stats two-frames">
       <button className="icon-button" onClick={() => navigate('/dashboard?tab=traites')} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
@@ -83,7 +88,7 @@ const HistoriquePage = () => {
       </button>
       <h2 className="stats-title">Historique des traites</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '1.5fr 1.5fr' : '1fr', gap: 16, minHeight: 'calc(88vh - 120px)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '1.2fr 1.8fr' : '1fr', gap: 16, minHeight: 'calc(88vh - 120px)' }}>
         <div style={{ position: viewportWidth >= 992 ? 'sticky' : 'static', top: 8 }}>
           <div className="frame-card" style={{
             backgroundImage: `url(${MonImage})`,
@@ -146,6 +151,17 @@ const HistoriquePage = () => {
             <button className="submit-button" onClick={handleExport} disabled={!historiqueData.length}>
               <Download size={16} style={{ marginRight: 6 }} /> Exporter
             </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Search size={16} color="#6b7280" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Recherche globale (date, client, numéro, montant, statut, action, utilisateur)"
+                value={globalQuery}
+                onChange={(e) => setGlobalQuery(e.target.value)}
+                style={{ minWidth: 220 }}
+              />
+            </div>
           </div>
 
           {/* Results */}
@@ -170,15 +186,30 @@ const HistoriquePage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {historiqueData.length > 0 ? (
-                    historiqueData
-                      .slice((page - 1) * perPage, (page - 1) * perPage + perPage)
-                      .map((item, index) => (
+                  {(() => {
+                    const q = globalQuery.trim().toLowerCase()
+                    const filtered = q ? historiqueData.filter(item => {
+                      const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+                      const user = item.username || item.user_name || item.user_email || ''
+                      const fields = [
+                        dateStr,
+                        item.nom_raison_sociale,
+                        item.numero_traite,
+                        String(item.montant ?? ''),
+                        item.action,
+                        user,
+                        item.statut,
+                      ].join(' \u2002 ')
+                      return fields.toLowerCase().includes(q)
+                    }) : historiqueData
+                    const pageRows = filtered.slice((page - 1) * perPage, (page - 1) * perPage + perPage)
+                    return filtered.length > 0 ? (
+                      pageRows.map((item, index) => (
                       <tr key={index}>
                         <td>{new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td>
                         <td>{item.nom_raison_sociale}</td>
                         <td>{item.numero_traite}</td>
-                        <td>{item.montant}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{formatMoney(item.montant)}</td>
                         <td>{item.action }</td>
                         <td>{item.username || item.user_name || item.user_email || ''}</td>
                        
@@ -194,23 +225,36 @@ const HistoriquePage = () => {
                           </span>
                         </td>
                       </tr>
-                    ))
-                  ) : (
+                      ))
+                    ) : (
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#6b7280' }}>
                         Aucun historique trouvé. Assurez-vous d'être connecté lors de la création/modification,
                         que les migrations sont appliquées, et ajustez les filtres puis cliquez sur Rechercher.
                       </td>
                     </tr>
-                  )}
+                    )
+                  })()}
                 </tbody>
                 <tfoot>
                 <tr>
                   <td colSpan={7}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
-                      <div>
-                        Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
-                      </div>
+                      {(() => {
+                        const q = globalQuery.trim().toLowerCase()
+                        const filteredCount = (q ? historiqueData.filter(item => {
+                          const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+                          const user = item.username || item.user_name || item.user_email || ''
+                          const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, item.statut].join(' ')
+                          return fields.toLowerCase().includes(q)
+                        }) : historiqueData).length
+                        const lastPage = Math.max(1, Math.ceil(filteredCount / perPage))
+                        return (
+                          <div>
+                            Page {Math.min(page, lastPage)} / {lastPage} • {filteredCount} résultats
+                          </div>
+                        )
+                      })()}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>Afficher</span>
                         <select className="search-input" value={perPage} onChange={(e) => { const newPer = parseInt(e.target.value || '6', 10); setPerPage(newPer); setPage(1); setPagination(p => ({ ...p, current_page: 1, last_page: Math.max(1, Math.ceil(historiqueData.length / newPer)), total: historiqueData.length })); }}>
@@ -220,13 +264,25 @@ const HistoriquePage = () => {
                         </select>
                         <span>lignes</span>
                       </div>
-                      <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap', marginLeft: 200 }}>
-                        <button className="page-button" disabled={page <= 1} onClick={() => { const np = Math.max(1, page - 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Précédent</button>
-                        {Array.from({ length: pagination.last_page || 1 }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(pn => (
-                          <button key={pn} className={`page-button ${pn === page ? 'active' : ''}`} onClick={() => { setPage(pn); setPagination(ps => ({ ...ps, current_page: pn })); }}>{pn}</button>
-                        ))}
-                        <button className="page-button" disabled={page >= (pagination.last_page || 1)} onClick={() => { const np = Math.min((pagination.last_page || 1), page + 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Suivant</button>
-                      </div>
+                      {(() => {
+                        const q = globalQuery.trim().toLowerCase()
+                        const filteredCount = (q ? historiqueData.filter(item => {
+                          const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+                          const user = item.username || item.user_name || item.user_email || ''
+                          const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, item.statut].join(' ')
+                          return fields.toLowerCase().includes(q)
+                        }) : historiqueData).length
+                        const lastPage = Math.max(1, Math.ceil(filteredCount / perPage))
+                        return (
+                          <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap', marginLeft: 200 }}>
+                            <button className="page-button" disabled={page <= 1} onClick={() => { const np = Math.max(1, page - 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Précédent</button>
+                            {Array.from({ length: lastPage }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(pn => (
+                              <button key={pn} className={`page-button ${pn === page ? 'active' : ''}`} onClick={() => { setPage(pn); setPagination(ps => ({ ...ps, current_page: pn })); }}>{pn}</button>
+                            ))}
+                            <button className="page-button" disabled={page >= lastPage} onClick={() => { const np = Math.min(lastPage, page + 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Suivant</button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </td>
                 </tr>

@@ -11,7 +11,9 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.2",
         "laravel/tinker": "^2.10.1",
-        "phiki/phiki": "^2.0"
+        "mikehaertl/phpwkhtmltopdf": "^2.5",
+        "phiki/phiki": "^2.0",
+        "spatie/browsershot": "^5.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

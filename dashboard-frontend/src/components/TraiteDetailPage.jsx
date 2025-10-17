@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Edit3, Trash2, Printer } from "lucide-react"
+import { formatMoney } from "../utils/format"
 import "./Traites.css"
 import MonImage from "../images/image4.png"
 
@@ -20,6 +21,8 @@ const TraiteDetailPage = () => {
     const yyyy = d.getFullYear()
     return `${dd}-${mm}-${yyyy}`
   }
+
+  
 
   useEffect(() => {
     let mounted = true
@@ -120,7 +123,7 @@ const TraiteDetailPage = () => {
           minHeight: 480
         }} />
 
-        <div>
+        <div style={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
           <div className="detail-header">
             <div className="detail-title">Détail de la traite</div>
             <div className="detail-status-actions">
@@ -147,7 +150,7 @@ const TraiteDetailPage = () => {
               <Detail label="Nb traites" value={item?.nombre_traites} />
               <Detail label="Échéance" value={formatDateDDMMYYYY(item?.echeance)} />
               <Detail label="Émission" value={formatDateDDMMYYYY(item?.date_emission)} />
-              <Detail label="Montant" value={item?.montant} />
+              <Detail label="Montant" value={formatMoney(item?.montant)} />
               <Detail label="Nom/Raison sociale" value={item?.nom_raison_sociale} />
               <Detail label="Domiciliation" value={item?.domiciliation_bancaire} />
               <Detail label="RIB" value={item?.rib} />
@@ -155,7 +158,7 @@ const TraiteDetailPage = () => {
               <Detail label="Commentaires" value={item?.commentaires} />
             </div>
 
-            <div className="detail-actions">
+            <div className="detail-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
               <button className="submit-button" onClick={() => navigate(`/traites/${id}/edit`)}><Edit3 size={16} style={{ marginRight: 6 }} /> Modifier</button>
               <button className="submit-button" onClick={handlePrint}><Printer size={16} style={{ marginRight: 6 }} /> Imprimer</button>
               <button className="submit-button" onClick={handleDelete}><Trash2 size={16} style={{ marginRight: 6 }} /> Supprimer</button>

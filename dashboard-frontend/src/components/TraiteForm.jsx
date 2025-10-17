@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
+import { formatMoney } from "../utils/format"
 
 const defaultForm = {
   numero: "",
@@ -25,8 +26,40 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
     }
   }, [initialValue])
 
+  const montantRef = useRef(null)
+
   const handleChange = (e) => {
     const { name, value } = e.target
+    if (name === 'montant') {
+      const inputEl = montantRef.current || e.target
+      const selectionStart = inputEl.selectionStart ?? value.length
+      const leftPart = value.slice(0, selectionStart)
+      const leftDigitsCount = leftPart.replace(/\D+/g, '').length
+
+      const digitsOnly = value.replace(/\D+/g, '')
+      const formatted = digitsOnly ? formatMoney(digitsOnly) : ''
+
+      setForm((f) => ({ ...f, [name]: formatted }))
+
+      // Restore caret based on number of digits to the left of the caret
+      requestAnimationFrame(() => {
+        const el = montantRef.current
+        if (!el) return
+        let seenDigits = 0
+        let newPos = formatted.length
+        for (let i = 0; i < formatted.length; i++) {
+          if (/\d/.test(formatted[i])) {
+            seenDigits++
+          }
+          if (seenDigits >= leftDigitsCount) {
+            newPos = i + 1
+            break
+          }
+        }
+        try { el.setSelectionRange(newPos, newPos) } catch {}
+      })
+      return
+    }
     setForm((f) => ({ ...f, [name]: value }))
   }
 
@@ -47,7 +80,9 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       const url = isEdit ? `${baseUrl}/api/traites/${initialValue.id}` : `${baseUrl}/api/traites`
       const method = isEdit ? 'PUT' : 'POST'
 
-      const res = await fetch(url, { method, headers, body: JSON.stringify(form) })
+      const amountDigits = String(form.montant || '').replace(/\D+/g, '')
+      const payload = { ...form, montant: amountDigits === '' ? 0 : Number(amountDigits) }
+      const res = await fetch(url, { method, headers, body: JSON.stringify(payload) })
       if (!res.ok) {
         const msg = await res.text()
         throw new Error(msg || 'Erreur lors de la sauvegarde')
@@ -83,7 +118,17 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       </div>
       <div>
         <label>Montant de la traite</label>
-        <input type="number" step="0.01" name="montant" value={form.montant} onChange={handleChange} required className="form-input" />
+        <input
+          type="text"
+          inputMode="numeric"
+          name="montant"
+          value={form.montant}
+          onChange={handleChange}
+          required
+          className="form-input"
+          placeholder="Montant en chiffres"
+          ref={montantRef}
+        />
       </div>
       <div>
         <label>Nom et prénom ou raison sociale</label>
@@ -117,7 +162,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         </select>
       </div> */}
 
-      <div style={{  display: 'flex', gap: 100, marginTop: 10, marginLeft: '500px' }}>
+      <div style={{ display: 'flex', gap: 12, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
         <button type="button" onClick={onCancel} disabled={submitting} className="logout-button">Annuler</button>
         <button type="submit" disabled={submitting} className="submit-button">{submitting ? 'Enregistrement...' : (submitLabel || (initialValue?.id ? 'Modifier' : 'Créer'))}</button>
       </div>

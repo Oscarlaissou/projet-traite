@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Plus, ArrowLeft } from "lucide-react"
+import { formatMoney } from "../utils/format"
 import "./Traites.css"
 
 const Columns = [
@@ -30,6 +31,7 @@ const TraitesGrid = () => {
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [sort, setSort] = useState({ key: 'echeance', dir: 'asc' })
   const [initialized, setInitialized] = useState(false)
+  const importInputRef = useRef(null)
   // Navigation vers la page de détail au clic sur une ligne
   const navigate = useNavigate()
   const location = useLocation()
@@ -46,11 +48,131 @@ const TraitesGrid = () => {
     return `${dd}-${mm}-${yyyy}`
   }
 
+  
+
   const authHeaders = () => {
     const token = localStorage.getItem('token')
     const headers = { 'Accept': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers
+  }
+
+  const exportCSV = () => {
+    try {
+      const headerKeys = Columns.map(c => c.key)
+      const headerLabels = Columns.map(c => c.label)
+      const rows = items.map(it => headerKeys.map(k => {
+        let v = it[k]
+        if (k === 'echeance' || k === 'date_emission') {
+          if (v) {
+            const d = new Date(v)
+            if (!isNaN(d)) {
+              const dd = String(d.getDate()).padStart(2,'0')
+              const mm = String(d.getMonth()+1).padStart(2,'0')
+              const yyyy = d.getFullYear()
+              v = `${dd}-${mm}-${yyyy}`
+            }
+          }
+        }
+        if (k === 'montant') {
+          v = Number(it[k] || 0)
+        }
+        const s = v == null ? '' : String(v)
+        // escape quotes and wrap
+        return '"' + s.replace(/"/g, '""') + '"'
+      }).join(','))
+      const csv = [headerLabels.join(','), ...rows].join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `traites_${new Date().toISOString().slice(0,10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert(e.message || 'Export CSV échoué')
+    }
+  }
+
+  const handleImportClick = () => {
+    importInputRef.current?.click()
+  }
+
+  const parseCSV = (text) => {
+    // Simple CSV parser supporting quotes
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0)
+    if (!lines.length) return { headers: [], records: [] }
+    const parseLine = (line) => {
+      const out = []
+      let cur = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inQuotes) {
+          if (ch === '"') {
+            if (line[i+1] === '"') { cur += '"'; i++ } else { inQuotes = false }
+          } else { cur += ch }
+        } else {
+          if (ch === '"') { inQuotes = true }
+          else if (ch === ',') { out.push(cur); cur = '' }
+          else { cur += ch }
+        }
+      }
+      out.push(cur)
+      return out
+    }
+    const headers = parseLine(lines[0]).map(h => h.trim())
+    const records = lines.slice(1).map(l => parseLine(l))
+    return { headers, records }
+  }
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const { headers, records } = parseCSV(text)
+      if (!headers.length || !records.length) throw new Error('CSV vide ou invalide')
+
+      // Map CSV headers to payload fields
+      const headerToIndex = headers.reduce((acc, h, i) => { acc[h.toLowerCase()] = i; return acc }, {})
+      const toVal = (row, key) => {
+        const idx = headerToIndex[key]
+        return idx != null ? row[idx] : ''
+      }
+
+      const token = localStorage.getItem('token')
+      const headersReq = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+      if (token) headersReq['Authorization'] = `Bearer ${token}`
+
+      for (const row of records) {
+        // Accept common French headers; fallback to our column keys
+        const payload = {
+          numero: toVal(row, 'numero') || toVal(row, 'numéro') || toVal(row, 'Numéro'.toLowerCase()),
+          nombre_traites: Number((toVal(row, 'nombre_traites') || '1').replace(/\D+/g, '')) || 1,
+          echeance: toVal(row, 'echeance') || toVal(row, 'échéance') || '',
+          date_emission: toVal(row, 'date_emission') || toVal(row, 'émission') || '',
+          montant: Number(String(toVal(row, 'montant') || '').replace(/\D+/g, '')) || 0,
+          nom_raison_sociale: toVal(row, 'nom_raison_sociale') || toVal(row, 'nom/raison sociale'.toLowerCase()) || '',
+          domiciliation_bancaire: toVal(row, 'domiciliation_bancaire') || toVal(row, 'domiciliation') || '',
+          rib: toVal(row, 'rib') || '',
+          motif: toVal(row, 'motif') || '',
+          commentaires: toVal(row, 'commentaires') || '',
+          statut: toVal(row, 'statut') || 'Non échu',
+        }
+        const res = await fetch(`${baseUrl}/api/traites`, { method: 'POST', headers: headersReq, body: JSON.stringify(payload) })
+        if (!res.ok) {
+          const msg = await res.text()
+          throw new Error(msg || 'Import échoué pour une ligne')
+        }
+      }
+      alert('Import CSV terminé')
+      fetchItems()
+    } catch (err) {
+      alert(err.message || 'Import CSV échoué')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
   }
 
   const fetchItems = async () => {
@@ -108,10 +230,12 @@ const TraitesGrid = () => {
     const params = new URLSearchParams(location.search)
     const tab = params.get('tab')
     if (tab === 'traites') {
+      const urlSearch = params.get('search') || ''
       const urlFrom = params.get('from') || ''
       const urlTo = params.get('to') || ''
       const urlStatut = params.get('statut') || ''
       let changed = false
+      if (urlSearch && urlSearch !== search) { setSearch(urlSearch); changed = true }
       if (urlFrom && urlFrom !== from) { setFrom(urlFrom); changed = true }
       if (urlTo && urlTo !== to) { setTo(urlTo); changed = true }
       if (urlStatut && urlStatut !== statut) { setStatut(urlStatut); changed = true }
@@ -196,6 +320,11 @@ const TraitesGrid = () => {
         </button>
         {/* Removed sort, alpha and expand controls as requested */}
         <button className="submit-button" onClick={handleNew}><Plus size={16} style={{ marginRight: 6 }} /> Nouvelle traite</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="submit-button" onClick={exportCSV}>Exporter CSV</button>
+          <button className="submit-button" onClick={handleImportClick}>Importer CSV</button>
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileChange} />
+        </div>
       </div>
 
 
@@ -239,9 +368,10 @@ const TraitesGrid = () => {
                       )
                     }
                     const isDate = col.key === 'echeance' || col.key === 'date_emission'
-                    const displayVal = isDate ? formatDateDDMMYYYY(val) : (val ?? '')
+                    const isMoney = col.key === 'montant'
+                    const displayVal = isDate ? formatDateDDMMYYYY(val) : isMoney ? formatMoney(val) : (val ?? '')
                     return (
-                      <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>{displayVal}</td>
+                      <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6', whiteSpace: isMoney ? 'nowrap' : undefined }}>{displayVal}</td>
                     )
                   })}
                 </tr>

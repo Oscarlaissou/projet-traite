@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { formatMoney } from "../utils/format"
 import { Calendar, CalendarClock, ArrowLeft } from "lucide-react"
 import "./Traites.css"
 import MonImage from "../images/image3.png"
@@ -162,7 +163,7 @@ const EditionPage = () => {
                       <tr key={it.id} onClick={() => handleEdit(it)} style={{ cursor: 'pointer' }}>
                         <td>{it.numero}</td>
                         <td>{it.echeance?.slice(0,10)}</td>
-                        <td>{it.montant}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{formatMoney(it.montant)}</td>
                         <td>{it.nom_raison_sociale}</td>
                         <td><span className={`status-badge ${cls}`}>{it.statut || 'Non échu'}</span></td>
                       </tr>

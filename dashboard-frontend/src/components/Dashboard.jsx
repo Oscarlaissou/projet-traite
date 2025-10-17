@@ -21,9 +21,13 @@ const Dashboard = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const tab = params.get('tab')
+    const view = params.get('view')
     if (tab === 'traites') {
       setActiveMenuItem('Gestion Traites')
-      setActiveSubItem('Grille de saisie')
+      if (view === 'Edition') setActiveSubItem('Edition')
+      else if (view === 'Historique') setActiveSubItem('Historique')
+      else if (view === 'Notification') setActiveSubItem('Notification')
+      else setActiveSubItem('Grille de saisie')
     } else if (location.pathname.startsWith('/notifications')) {
       setActiveMenuItem('Gestion Traites')
       setActiveSubItem('Notification')

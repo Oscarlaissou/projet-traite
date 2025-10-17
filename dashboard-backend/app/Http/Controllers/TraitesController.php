@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
+use Barryvdh\DomPDF\Facade\Pdf;
+// Browsershot (optionnel, pour rendu navigateur pixel-perfect)
+// Installer le package spatie/browsershot pour activer cet import
+// et avoir Node + Chrome/Chromium disponibles sur la machine
+use Spatie\Browsershot\Browsershot;
 
 class TraitesController extends Controller
 {
@@ -134,11 +140,10 @@ class TraitesController extends Controller
         // Compute tranche due date: monthly increments from first échéance
         $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($currentIndex - 1) : null;
 
-        // Amount per tranche (rounded to nearest franc); last tranche carries remainder
+        // Amount per tranche using currency-friendly rounding and preserved total
         $total = (int) round($traite->montant ?? 0);
-        $base = (int) floor($total / $totalTranches);
-        $remainder = $total - ($base * $totalTranches);
-        $amountForThisTranche = $base + (($currentIndex === $totalTranches) ? $remainder : 0);
+        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
+        $amountForThisTranche = $tranches[$currentIndex - 1] ?? 0;
 
         // French number to words (basic, integers)
         $amountInWords = $this->numberToFrenchWords($amountForThisTranche);
@@ -170,13 +175,12 @@ class TraitesController extends Controller
         $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
 
         $total = (int) round($traite->montant ?? 0);
-        $base = (int) floor($total / $totalTranches);
-        $remainder = $total - ($base * $totalTranches);
+        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
 
         $pages = [];
         for ($i = 1; $i <= $totalTranches; $i++) {
             $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
-            $amountForThisTranche = $base + (($i === $totalTranches) ? $remainder : 0);
+            $amountForThisTranche = $tranches[$i - 1] ?? 0;
             $pages[] = [
                 'rangeText' => $i . ' | ' . $totalTranches,
                 'ville' => 'Douala',
@@ -192,7 +196,249 @@ class TraitesController extends Controller
             ];
         }
 
-        return response()->view('traites.preview', [ 'pages' => $pages ]);
+        return response()->view('traites.preview', [ 'pages' => $pages, 'traiteId' => $traite->id, 'traiteNumero' => $traite->numero ]);
+    }
+
+    /**
+     * Retourne le PDF multi-pages (aperçu) en téléchargement
+     */
+    public function previewPdf(Traite $traite)
+    {
+        $totalTranches = max(1, (int) ($traite->nombre_traites ?? 1));
+        $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
+        $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
+        $total = (int) round($traite->montant ?? 0);
+        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
+
+        // Construire un HTML "pur impression" en utilisant traites.print, sans toolbar/footer
+        $htmlParts = [];
+        for ($i = 1; $i <= $totalTranches; $i++) {
+            $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
+            $amountForThisTranche = $tranches[$i - 1] ?? 0;
+            $data = [
+                'rangeText' => $i . ' | ' . $totalTranches,
+                'ville' => 'Douala',
+                'date_emission' => $emission ? $emission->format('d/m/Y') : '',
+                'echeance' => $dueDate ? $dueDate->format('d/m/Y') : '',
+                'montant_tranche' => number_format($amountForThisTranche, 0, ',', ' '),
+                'montant_tranche_words' => strtoupper($this->numberToFrenchWords($amountForThisTranche)),
+                'nom_raison_sociale' => $traite->nom_raison_sociale ?? '',
+                'domiciliation' => $traite->domiciliation_bancaire ?? '',
+                'rib' => $traite->rib ?? '',
+                'numero' => $traite->numero ?? '',
+                'date_emission_text_long' => $emission ? $emission->locale('fr')->translatedFormat('d F Y') : '',
+            ];
+            $htmlParts[] = view('traites.print', $data)->render();
+            if ($i < $totalTranches) {
+                $htmlParts[] = '<div style="page-break-after: always;"></div>';
+            }
+        }
+        $html = implode("\n", $htmlParts);
+        $pdf = Pdf::loadHTML($html)->setPaper('a4');
+        return $pdf->download('traites_'.$traite->id.'.pdf');
+    }
+
+    /**
+     * Capture "impression" via navigateur (Browsershot) sans interaction utilisateur
+     */
+    public function previewPdfCapture(Traite $traite)
+    {
+        $totalTranches = max(1, (int) ($traite->nombre_traites ?? 1));
+        $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
+        $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
+        $total = (int) round($traite->montant ?? 0);
+        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
+
+        $htmlParts = [];
+        for ($i = 1; $i <= $totalTranches; $i++) {
+            $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
+            $amountForThisTranche = $tranches[$i - 1] ?? 0;
+            $data = [
+                'rangeText' => $i . ' | ' . $totalTranches,
+                'ville' => 'Douala',
+                'date_emission' => $emission ? $emission->format('d/m/Y') : '',
+                'echeance' => $dueDate ? $dueDate->format('d/m/Y') : '',
+                'montant_tranche' => number_format($amountForThisTranche, 0, ',', ' '),
+                'montant_tranche_words' => strtoupper($this->numberToFrenchWords($amountForThisTranche)),
+                'nom_raison_sociale' => $traite->nom_raison_sociale ?? '',
+                'domiciliation' => $traite->domiciliation_bancaire ?? '',
+                'rib' => $traite->rib ?? '',
+                'numero' => $traite->numero ?? '',
+                'date_emission_text_long' => $emission ? $emission->locale('fr')->translatedFormat('d F Y') : '',
+            ];
+            $htmlParts[] = view('traites.print', $data)->render();
+            if ($i < $totalTranches) {
+                $htmlParts[] = '<div style="page-break-after: always;"></div>';
+            }
+        }
+        $html = implode("\n", $htmlParts);
+
+        // Utilise Browsershot si présent pour un rendu fidèle de la page preview (toolbar/footer masqués en print)
+        if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
+            try {
+                $previewUrl = route('traites.preview', ['traite' => $traite->id]);
+                $binary = Browsershot::url($previewUrl)
+                    ->emulateMedia('print')
+                    ->showBackground()
+                    ->format('A4')
+                    ->margins(5, 5, 5, 5)
+                    ->windowSize(1024, 1448)
+                    ->timeout(120)
+                    ->setOption('waitUntil', 'networkidle0')
+                    ->setOption('preferCSSPageSize', true)
+                    ->pdf();
+                return response($binary, 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="traites_'.$traite->id.'.pdf"',
+                ]);
+            } catch (\Throwable $e) {
+                // ignore, fallback DomPDF
+            }
+        }
+
+        // Fallback DomPDF
+        $pdf = Pdf::loadHTML($html)->setPaper('a4');
+        return $pdf->download('traites_'.$traite->id.'.pdf');
+    }
+
+    // wkhtmltopdf retiré: retour au flux DomPDF uniquement
+
+    /**
+     * Envoie un PDF multi-pages par email en pièce jointe avec objet "Traites"
+     */
+    public function emailPreview(Request $request, Traite $traite)
+    {
+        $validated = $request->validate([
+            'to' => ['required','email'],
+            'subject' => ['nullable','string','max:255'],
+            'body' => ['nullable','string','max:5000'],
+        ]);
+
+        $totalTranches = max(1, (int) ($traite->nombre_traites ?? 1));
+        $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
+        $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
+        $total = (int) round($traite->montant ?? 0);
+        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
+
+        // Construire un HTML à partir de la vue print.blade.php pour chaque tranche
+        $htmlParts = [];
+        for ($i = 1; $i <= $totalTranches; $i++) {
+            $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
+            $amountForThisTranche = $tranches[$i - 1] ?? 0;
+            $amountWords = strtoupper($this->numberToFrenchWords($amountForThisTranche));
+            $data = [
+                'rangeText' => $i . ' | ' . $totalTranches,
+                'ville' => 'Douala',
+                'date_emission' => $emission ? $emission->format('d/m/Y') : '',
+                'echeance' => $dueDate ? $dueDate->format('d/m/Y') : '',
+                'montant_tranche' => number_format($amountForThisTranche, 0, ',', ' '),
+                'montant_tranche_words' => $amountWords,
+                'nom_raison_sociale' => $traite->nom_raison_sociale ?? '',
+                'domiciliation' => $traite->domiciliation_bancaire ?? '',
+                'rib' => $traite->rib ?? '',
+                'numero' => $traite->numero ?? '',
+                'date_emission_text_long' => $emission ? $emission->locale('fr')->translatedFormat('d F Y') : '',
+            ];
+            $htmlParts[] = view('traites.print', $data)->render();
+            // Ajoute une rupture de page entre les tranches (sauf la dernière)
+            if ($i < $totalTranches) {
+                $htmlParts[] = '<div style="page-break-after: always;"></div>';
+            }
+        }
+        $html = implode("\n", $htmlParts);
+
+        // Tentative 1: Générer un PDF fidèle via un moteur navigateur (Browsershot) depuis la page preview (sans toolbar/footer en media print)
+        $pdfBinary = null;
+        try {
+            if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
+                $previewUrl = route('traites.preview', ['traite' => $traite->id]);
+                $pdfBinary = Browsershot::url($previewUrl)
+                    ->emulateMedia('print')
+                    ->showBackground()
+                    ->format('A4')
+                    ->margins(5, 5, 5, 5)
+                    ->windowSize(1024, 1448)
+                    ->timeout(120)
+                    ->setOption('waitUntil', 'networkidle0')
+                    ->setOption('preferCSSPageSize', true)
+                    ->pdf();
+            }
+        } catch (\Throwable $e) {
+            $pdfBinary = null; // Fallback DomPDF plus bas
+        }
+
+        // Fallback: DomPDF à partir du HTML assemblé si Browsershot indisponible
+        $pdf = null;
+        if ($pdfBinary === null) {
+            $pdf = Pdf::loadHTML($html)->setPaper('a4');
+        }
+
+        $to = $validated['to'];
+        $subject = 'Traites';
+        $numero = (string)($traite->numero ?? '');
+        $body = "Bonjour,\n\nVeuillez trouver ci-joint la traite " . $numero . ".\n\nCordialement.";
+
+        Mail::raw($body, function ($message) use ($to, $subject, $pdf, $pdfBinary, $traite) {
+            $message->to($to)
+                    ->subject($subject);
+            if ($pdfBinary !== null) {
+                $message->attachData($pdfBinary, 'traites_'.$traite->id.'.pdf', ['mime' => 'application/pdf']);
+            } else if ($pdf !== null) {
+                $message->attachData($pdf->output(), 'traites_'.$traite->id.'.pdf', ['mime' => 'application/pdf']);
+            }
+        });
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Envoie une capture d'image (PNG) de la page d'aperçu multi-pages
+     */
+    public function emailPreviewImage(Request $request, Traite $traite)
+    {
+        $validated = $request->validate([
+            'to' => ['required','email'],
+            'subject' => ['nullable','string','max:255'],
+            'body' => ['nullable','string','max:5000'],
+        ]);
+
+        $to = $validated['to'];
+        $subject = $validated['subject'] ?? 'Traites (image)';
+        $numero = (string)($traite->numero ?? '');
+        $body = $validated['body'] ?? ("Bonjour,\n\nVeuillez trouver ci-joint l'image de la traite " . $numero . ".\n\nCordialement.");
+
+        $imgBinary = null;
+        try {
+            if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
+                $previewUrl = route('traites.preview', ['traite' => $traite->id]);
+                $base64 = Browsershot::url($previewUrl)
+                    ->emulateMedia('print') // masque toolbar/footer
+                    ->showBackground()
+                    ->windowSize(1280, 2000)
+                    ->fullPage()
+                    ->timeout(120)
+                    ->setOption('waitUntil', 'networkidle0')
+                    ->base64Screenshot();
+                $imgBinary = base64_decode($base64);
+            }
+        } catch (\Throwable $e) {
+            $imgBinary = null;
+        }
+
+        if ($imgBinary === null) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "La capture d'image requiert Browsershot/Puppeteer installé."
+            ], 500);
+        }
+
+        Mail::raw($body, function ($message) use ($to, $subject, $imgBinary, $traite) {
+            $message->to($to)
+                    ->subject($subject)
+                    ->attachData($imgBinary, 'traites_'.$traite->id.'.png', ['mime' => 'image/png']);
+        });
+
+        return response()->json(['status' => 'ok']);
     }
 
     private function numberToFrenchWords(int $number): string
@@ -264,6 +510,50 @@ class TraitesController extends Controller
         if ($n > 0) $appendBelowThousand($n);
 
         return trim(preg_replace('/\s+/', ' ', implode(' ', $words)));
+    }
+
+    /**
+     * Split a total amount into N tranches with friendly rounding while preserving the sum.
+     * Strategy: choose a rounding step based on total magnitude (1,000,000; 1,000; or 1).
+     * Then distribute remainder by adding one step to the first K tranches.
+     */
+    private function splitAmountIntoTranches(int $total, int $n): array
+    {
+        $n = max(1, $n);
+        if ($total <= 0) return array_fill(0, $n, 0);
+
+        // Choose rounding step
+        $step = 1;
+        if ($total >= 10000000) { // >= 10 millions
+            $step = 1000000;      // arrondir au million
+        } else if ($total >= 100000) { // >= 100 mille
+            $step = 1000;         // arrondir au millier
+        }
+
+        // Equal share in steps, floored to step
+        $equal = intdiv($total, $n);
+        $equalRounded = intdiv($equal, $step) * $step;
+
+        $parts = array_fill(0, $n, $equalRounded);
+        $currentSum = $equalRounded * $n;
+        $remaining = $total - $currentSum;
+
+        // Convert remaining to steps and distribute to earliest tranches
+        $stepsToDistribute = intdiv($remaining + ($step - 1), $step); // ceiling to steps
+        for ($i = 0; $i < $n && $stepsToDistribute > 0; $i++) {
+            $parts[$i] += $step;
+            $stepsToDistribute--;
+        }
+
+        // Fix exact total if off due to ceiling
+        $diff = array_sum($parts) - $total;
+        for ($i = $n - 1; $i >= 0 && $diff > 0; $i--) {
+            $reduce = min($diff, $step);
+            $parts[$i] -= $reduce;
+            $diff -= $reduce;
+        }
+
+        return $parts;
     }
     public function store(Request $request)
     {

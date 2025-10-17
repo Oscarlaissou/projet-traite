@@ -41,3 +41,20 @@ Route::get('/print/traites/{traite}/{index?}', [TraitesController::class, 'print
 Route::get('/print/traites/{traite}/preview', [TraitesController::class, 'preview'])
     ->name('traites.preview');
 
+// Télécharger le PDF de l'aperçu (multi-pages)
+Route::get('/print/traites/{traite}/preview.pdf', [TraitesController::class, 'previewPdf'])
+    ->name('traites.preview_pdf');
+
+// Capture d'impression (navigateur headless) sans interaction utilisateur
+Route::get('/print/traites/{traite}/capture.pdf', [TraitesController::class, 'previewPdfCapture'])
+    ->name('traites.preview_capture_pdf');
+
+
+// Envoi par email du PDF d'aperçu
+Route::post('/print/traites/{traite}/email', [TraitesController::class, 'emailPreview'])
+    ->name('traites.email');
+
+// Envoi par email d'une image (PNG) capturée de l'aperçu
+Route::post('/print/traites/{traite}/email-image', [TraitesController::class, 'emailPreviewImage'])
+    ->name('traites.email_image');
+

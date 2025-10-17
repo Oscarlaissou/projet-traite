@@ -9,18 +9,16 @@
     .container { width: 850px; height: 900px; background-color: #fff; padding: 28px 20px; }
     .flex-container { display: flex; justify-content: space-between; gap: 0; }
     .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; position: relative; }
-    .header-left { font-family: 'Roboto', sans-serif; z-index: 10; position: relative; padding-right: 50px; }
-    .header-center { position: relative; flex-grow: 1; }
+    .header-left { font-family: 'Roboto', sans-serif; z-index: 10; position: relative; padding-right: 50px; text-align: center; }
+    .header-center { position: relative; flex-grow: 1; text-align: center; }
     .header-right { display: flex; gap: 7px; width: 65%; z-index: 1; }
-    .header-right .boxed-info { border: 1px solid #000; padding: 2px 8px; display: flex; justify-content: space-between; gap: 10px; white-space: nowrap; font-size: 13px; }
-    .highlight-green { background-color: #ccffcc; padding: 1px 3px; font-weight: bold; }
-    .highlight-yellow { background-color: #ffff99; padding: 1px 3px; }
-    .highlight-pink { background-color: #ffccff; padding: 1px 3px; }
+    .header-right .boxed-info { border: 1px solid #000; padding: 8px 12px; display: flex;  gap: 12px; white-space: nowrap; font-size: 14px; min-width: 200px; align-items: center; text-align: center;}
+ 
     .double-line-container { position: absolute; top: 20px; left: 0; height: 14px; }
-    .double-line { width: 200px; height: 5px; border-top: 1px solid black; border-bottom: 1px solid black; margin: 15px; margin-left: 5px; }
-    .double-line-spacer { position: absolute; top: 7px; left: 0; width: 180px; height: 1px; border-top: 1px solid transparent; margin: 0; }
+    .double-line { width: 250px; height: 5px; border-top: 1px solid black; border-bottom: 1px solid black; margin: 15px; margin-left: 5px; }
+    .double-line-spacer { position: absolute; top: 7px; left: 0; width: 200px; height: 1px; border-top: 1px solid transparent; margin: 0; }
     .main-content { align-items: flex-start; }
-    .left-column { width: 55%; padding-right: 8px; text-align: center; margin-top: 20px; }
+    .left-column { width: 55%; padding-right: 30px; text-align: center; margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
     .right-column { width: 100%; margin-top: 20px; }
     h2 { font-family: 'Roboto', sans-serif; font-size: 15px; font-weight: 700; margin-top: 12px; margin-bottom: 6px; letter-spacing: 1px; }
     .section-line { border-bottom: 1px solid #000; margin: 7px 0 4px 0; width: 82%; padding-top: 30px; padding-bottom: 25px; }
@@ -29,10 +27,10 @@
     .avaliste-line div { flex-grow: 1; border-bottom: 1px solid black; margin-top: 20px; padding-bottom: 10px; }
     .boxed-area { border: 1px solid #000; padding: 7px 2px; height: 108px; margin-top: 5px; position: relative; text-align: center; }
     .boxed-area .label { font-weight: bold; font-family: 'Roboto', sans-serif; font-size: 14px; margin-top: 0; }
-    .boxed-area .value { margin-top: 4px; font-family: 'Courier New', Courier, monospace; font-weight: bold; color: #008080; font-size: 13px; }
+    .boxed-area .value { margin-top: 4px;  font-weight: bold;font-size: 13px; }
     .signature-area { text-align: left; margin-top: 0; margin-left: 4px; }
     .signature-box { border: 1px solid #000; width: 90px; height: 17px; line-height: 17px; margin-top: 5px; padding: 0; text-align: center; font-size: 13px; }
-    .signature-caption { font-size: 11px; margin-top: 1px; width: 200px; line-height: 1.2; padding-top: 8px; }
+    .signature-caption { font-size: 11px; margin-top: 1px; width: 90%; max-width: 360px; line-height: 1.2; padding-top: 8px; text-align: center; margin-left: auto; margin-right: auto; }
     hr.dotted-separator { border: none; border-top: 2px dotted #000; margin: 20px 0 7px 0; }
     .domiciliation-left-column { width: 62%; }
     .correspondence-section { width: 35%; border-left: 1px dotted #000; padding-left: 10px; font-size: 12px; }
@@ -44,7 +42,9 @@
     .payment-text-block { text-align: left; margin-bottom: 12px; }
     .single-line { border: none; border-top: 1px solid black; margin-right: 40px; margin-left: 45px; height: 0; }
     .footer-line { border: none; border-top: 1px solid black; margin-top: 6px; margin-left: 30px; width: 250px; }
-    @media print { body { background: #fff; } .container { box-shadow: none; } }
+    .money { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  
+       
 </style>
 </head>
 <body>
@@ -65,7 +65,7 @@
             </div>
             <div class="boxed-info">
                 <span>B.P.F.</span>
-                <span class="highlight-green">{{ $montant_tranche }}</span>
+                <span class="highlight-green money">{{ $montant_tranche }}</span>
             </div>
         </div>
     </div>
@@ -75,7 +75,7 @@
             <p>Accepté, somme, date et agios</p>
             <div class="section-line"></div>
             <h2 style="margin-top: 10px;">AVAL</h2>
-            <p class="signature-caption" style="margin-top: 60px;font-size: 8.5px;">Signature de l'avaliste précédée de la mention - bon pour Aval en garantie de ... (nom du tiré) - écrite de sa main</p>
+            <p class="signature-caption" style="margin-top: 60px;font-size: 8.5px;">Signature de l'avaliste précédée de la mention - bon pour<br> Aval en garantie de ... (nom du tiré) - écrite de sa main</p>
         </div>
         <div class="right-column">
             <div class="payment-text-block">
@@ -92,13 +92,13 @@
                     <div class="value">{{ $domiciliation }}</div>
                 </div>
                 <div class="signature-area">
-                    <p style="text-align: left;padding-right: 10px;">SIGNATURE DU TIREUR</p>
+                    <p style="text-align: left;padding-right: 25px;">SIGNATURE DU TIREUR</p>
                     <div class="signature-box" style="text-align: center; padding-bottom:4px;">Timbre</div>
                 </div>
             </div>
         </div>
     </div>
-    <div><p style="font-weight: bold; margin: 2px 0;">N° : {{ $numero }}</p></div>
+    <div><p style="font-weight: bold; margin: 2px 0;">N° : </p></div>
     <hr class="dotted-separator" />
     <h2 style="padding-left: 48px;">AVIS DE DOMICILIATION</h2>
     <div class="flex-container" style="margin-top: 7px;">
@@ -130,9 +130,9 @@
                     </tr>
                     <tr>
                         <td></td>
-                        <td style="height:16px;">{{ $numero }}</td>
+                        <td style="height:16px;"></td>
                         <td class="center-text highlight-yellow">{{ $echeance }}</td>
-                        <td class="center-text highlight-green">{{ $montant_tranche }}</td>
+                        <td class="center-text highlight-green money">{{ $montant_tranche }}</td>
                     </tr>
                 </tbody>
             </table>
