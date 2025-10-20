@@ -88,18 +88,31 @@ const HistoriquePage = () => {
       </button>
       <h2 className="stats-title">Historique des traites</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '1.2fr 1.8fr' : '1fr', gap: 16, minHeight: 'calc(88vh - 120px)' }}>
-        <div style={{ position: viewportWidth >= 992 ? 'sticky' : 'static', top: 8 }}>
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: viewportWidth >= 992 ? '1.2fr 1.8fr' : '1fr', 
+        gap: viewportWidth >= 768 ? 16 : 8, 
+        minHeight: viewportWidth >= 768 ? 'calc(88vh - 120px)' : 'auto'
+      }}>
+        <div style={{ 
+          position: viewportWidth >= 992 ? 'sticky' : 'static', 
+          top: 8,
+          display: viewportWidth < 768 ? 'none' : 'block'
+        }}>
           <div className="frame-card" style={{
             backgroundImage: `url(${MonImage})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
-            minHeight: viewportWidth >= 992 ? 480 : '40vh'
+            minHeight: viewportWidth >= 992 ? 480 : '30vh'
           }} />
         </div>
 
-        <div style={{ maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', overflowY: viewportWidth >= 992 ? 'auto' : 'visible' }}>
+        <div style={{ 
+          maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', 
+          overflowY: viewportWidth >= 992 ? 'auto' : 'visible',
+          padding: viewportWidth < 768 ? '0 4px' : '0'
+        }}>
           {/* Mode Selection */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
             <button onClick={() => setMode('client')} className="stat-card" style={{ border: mode==='client' ? '2px solid #1f2c49' : undefined }}>
@@ -123,7 +136,15 @@ const HistoriquePage = () => {
           </div>
 
           {/* Search Controls */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+          <div style={{ 
+            display: 'flex', 
+            gap: 8, 
+            alignItems: 'center', 
+            flexWrap: 'wrap', 
+            marginBottom: 16,
+            flexDirection: viewportWidth < 480 ? 'column' : 'row',
+            alignItems: viewportWidth < 480 ? 'stretch' : 'center'
+          }}>
             {mode === 'client' ? (
               <>
                 <Search size={16} color="#6b7280" />
@@ -133,7 +154,11 @@ const HistoriquePage = () => {
                   className="search-input" 
                   value={searchClient} 
                   onChange={(e) => setSearchClient(e.target.value)}
-                  style={{ flex: 1, minWidth: 200 }}
+                  style={{ 
+                    flex: viewportWidth < 480 ? 'none' : 1, 
+                    minWidth: viewportWidth < 480 ? '100%' : 200,
+                    width: viewportWidth < 480 ? '100%' : 'auto'
+                  }}
                 />
               </>
             ) : (
@@ -147,21 +172,28 @@ const HistoriquePage = () => {
                 />
               </>
             )}
-            <button className="submit-button" onClick={fetchHistorique}>Rechercher</button>
-            <button className="submit-button" onClick={handleExport} disabled={!historiqueData.length}>
+            <button 
+              className="submit-button" 
+              onClick={fetchHistorique}
+              style={{ 
+                width: viewportWidth < 480 ? '100%' : 'auto',
+                marginBottom: viewportWidth < 480 ? 8 : 0
+              }}
+            >
+              Rechercher
+            </button>
+            <button 
+              className="submit-button" 
+              onClick={handleExport} 
+              disabled={!historiqueData.length}
+              style={{ 
+                width: viewportWidth < 480 ? '100%' : 'auto',
+                marginBottom: viewportWidth < 480 ? 8 : 0
+              }}
+            >
               <Download size={16} style={{ marginRight: 6 }} /> Exporter
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Search size={16} color="#6b7280" />
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Recherche globale (date, client, numéro, montant, statut, action, utilisateur)"
-                value={globalQuery}
-                onChange={(e) => setGlobalQuery(e.target.value)}
-                style={{ minWidth: 220 }}
-              />
-            </div>
+            
           </div>
 
           {/* Results */}

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Lettre de Change</title>
 <style>
-    body { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #000; background-color: #f4f4f4; display: flex; justify-content: center; padding: 10px; }
-    .container { width: 850px; height: 900px; background-color: #fff; padding: 28px 20px; }
+    body { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #000; background-color: #fff; display: flex; justify-content: center; padding: 0; margin: 0; }
+    .container { width: 100%; max-width: 850px; min-height: 900px; background-color: #fff; padding: 28px 20px; box-sizing: border-box; }
     .flex-container { display: flex; justify-content: space-between; gap: 0; }
     .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; position: relative; }
     .header-left { font-family: 'Roboto', sans-serif; z-index: 10; position: relative; padding-right: 50px; text-align: center; }
@@ -43,8 +43,59 @@
     .single-line { border: none; border-top: 1px solid black; margin-right: 40px; margin-left: 45px; height: 0; }
     .footer-line { border: none; border-top: 1px solid black; margin-top: 6px; margin-left: 30px; width: 250px; }
     .money { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  
-       
+
+    /* Media queries pour responsive design */
+    @media (max-width: 768px) {
+        body { padding: 5px; }
+        .container { padding: 15px 10px; }
+        .header { flex-direction: column; align-items: center; gap: 10px; }
+        .header-left { padding-right: 0; }
+        .header-right { width: 100%; justify-content: center; flex-wrap: wrap; }
+        .header-right .boxed-info { min-width: 150px; font-size: 12px; }
+        .main-content { flex-direction: column; }
+        .left-column { width: 100%; padding-right: 0; }
+        .right-column { width: 100%; }
+        .flex-container { flex-direction: column; gap: 10px; }
+        .domiciliation-left-column { width: 100%; }
+        .correspondence-section { width: 100%; border-left: none; border-top: 1px dotted #000; padding-left: 0; padding-top: 10px; }
+        .lettre-de-change { font-size: 11px; }
+        .lettre-de-change td { padding: 1px 2px; font-size: 11px; }
+        .boxed-area { width: 100% !important; margin-bottom: 10px; }
+        .signature-area { width: 100%; text-align: center; }
+    }
+
+    @media (max-width: 480px) {
+        .container { padding: 10px 5px; }
+        .header-right .boxed-info { min-width: 120px; font-size: 11px; padding: 6px 8px; }
+        .lettre-de-change { font-size: 10px; }
+        .lettre-de-change td { padding: 1px; font-size: 10px; }
+        .boxed-area { height: auto; padding: 5px; }
+        .signature-box { width: 70px; height: 15px; font-size: 11px; }
+        .signature-caption { font-size: 8px; }
+        .double-line { width: 200px; }
+        .single-line { margin-right: 20px; margin-left: 25px; }
+        .footer-line { width: 200px; }
+    }
+
+    @media print {
+        body { padding: 0; background-color: #fff; margin: 0; }
+        .container { width: 100%; max-width: none; box-shadow: none; padding: 0; margin: 0; }
+    }
+
+    /* Styles pour capture d'écran optimisée */
+    @media screen {
+        body { 
+            background-color: #fff; 
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+        }
+        .container { 
+            background-color: #fff; 
+            margin: 0 auto;
+            box-shadow: none;
+        }
+    }
 </style>
 </head>
 <body>
@@ -79,7 +130,7 @@
         </div>
         <div class="right-column">
             <div class="payment-text-block">
-                <p>VEUILLEZ PAYER CONTRE CETTE LETTRE DE CHANGE A L'ORDRE DE <br> <strong>CAMI TOYOTA</strong></p>
+                <p>VEUILLEZ PAYER CONTRE CETTE LETTRE DE CHANGE A L'ORDRE DE <br> <strong>CFAO MOBILITY CAMEROON</strong></p>
                 <p>LA SOMME DE FRANCS &nbsp;&nbsp; <span class="highlight-green">{{ $montant_tranche_words }}</span></p>
             </div>
             <div class="avaliste-line"><span></span><div></div></div>
@@ -137,7 +188,7 @@
                 </tbody>
             </table>
             <div class="long-text" style="margin-top: 10px;">
-                <p>Tiré par &nbsp; <span class="highlight-pink">CAMI TOYOTA</span></p>
+                <p>Tiré par &nbsp; <span class="highlight-pink">CFAO MOBILITY CAMEROON</span></p>
                 <hr class="single-line" />
                 <p>Messieurs</p>
                 <p>Nous avons domicilié à vos guichets l'effet ci-dessus désigné et nous prions de bien vouloir à son échéance, le payer à vue par le débit de notre compte.</p>

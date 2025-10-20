@@ -7,6 +7,8 @@
   <meta name="csrf-token" content="{{ csrf_token() }}" />
   <style>
     body { background: #f3f4f6; margin: 0; font-family: Arial, sans-serif; }
+    /* Marges d'impression pour navigateur et moteurs PDF */
+    @page { size: A4; margin: 12mm; }
   
     .toolbar {
       top: 0;
@@ -37,6 +39,7 @@
     .toolbar-left img {
       height: 40px;
       object-fit: contain;
+      max-width: 100%;
     }
     .toolbar-left .message { color: #4b5563; font-size: 12px; }
 
@@ -107,6 +110,54 @@
     .pager-footer .print:hover { background: #374151; }
     .pager-footer .cancel:hover { background: #f3f4f6; }
 
+
+    /* Media queries pour responsive design */
+    @media (max-width: 768px) {
+      .toolbar {
+        padding: 8px 12px;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .toolbar-left img {
+        height: 40px;
+      }
+      .toolbar-left .message {
+        font-size: 11px;
+      }
+      .preview-wrapper {
+        padding: 10px;
+      }
+      .pager-footer {
+        padding: 8px 12px;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pager-footer .pager {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .pager-footer .btn {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .toolbar-left img {
+        height: 30px;
+      }
+      .toolbar-left .message {
+        font-size: 10px;
+      }
+      .preview-wrapper {
+        padding: 5px;
+      }
+      .pager-footer .btn {
+        padding: 3px 6px;
+        font-size: 11px;
+      }
+    }
+
     @media print {
       .toolbar { display: none; }
       .pager-footer { display: none; }
@@ -118,11 +169,12 @@
 <body>
   <div class="toolbar">
     <div class="toolbar-left">
-      <img src="{{ asset('LOGO.png') }}" alt="Logo" style="height: 100px; object-fit: contain;" />
+      <img src="{{ asset('LOGO.png') }}" alt="Logo" style="height: 60px; object-fit: contain; max-width: 100%;" />
       <span class="message">Aperçu de toutes les traites</span>
     </div>
     <div class="toolbar-right"></div>
   </div>
+
 
   <div class="preview-wrapper">
     @foreach ($pages as $idx => $p)
@@ -143,7 +195,8 @@
     <div style="display:flex; gap:8px; align-items:center;">
       <button class="cancel" onclick="cancelPreview()">Annuler</button>
       <button class="print" onclick="window.print()">Imprimer</button>
-      <button class="print" onclick="transferByMail()">Transférer par mail</button>
+     
+      <button class="print" id="emailBtn" onclick="downloadAndEmail()">Transférer par mail</button>
     </div>
   </div>
 
@@ -193,12 +246,18 @@
       }, 100);
     }
 
-    async function transferByMail(){
-      const pdfUrl = '/print/traites/{{ $traiteId }}/preview.pdf';
-      const numero = '{{ $traiteNumero ?? '' }}';
-      // 1) Télécharger le PDF localement pour permettre la pièce jointe dans l'email
+    async function downloadScreenshotPdf(){
+      const downloadBtn = document.getElementById('downloadBtn');
+      const originalText = downloadBtn.textContent;
+      
+      // Afficher l'état de chargement
+      downloadBtn.textContent = 'Génération en cours...';
+      downloadBtn.disabled = true;
+      downloadBtn.style.opacity = '0.7';
+      
+      const url = '/print/traites/{{ $traiteId }}/screenshot.pdf';
       try {
-        const response = await fetch(pdfUrl, { credentials: 'same-origin' });
+        const response = await fetch(url, { credentials: 'same-origin' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const blob = await response.blob();
         const link = document.createElement('a');
@@ -209,16 +268,111 @@
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(objectUrl);
+        
+        // Succès
+        downloadBtn.textContent = 'Téléchargé !';
+        setTimeout(() => {
+          downloadBtn.textContent = originalText;
+          downloadBtn.disabled = false;
+          downloadBtn.style.opacity = '1';
+        }, 2000);
       } catch (e) {
-        // On continue quand même à ouvrir le client email
+        // Erreur
+        downloadBtn.textContent = 'Erreur - Réessayer';
+        setTimeout(() => {
+          downloadBtn.textContent = originalText;
+          downloadBtn.disabled = false;
+          downloadBtn.style.opacity = '1';
+        }, 3000);
+        
+        // Message d'erreur plus informatif
+        let errorMessage = 'Téléchargement du PDF impossible: ' + e.message;
+        if (e.message.includes('HTTP 500')) {
+          errorMessage = 'Erreur serveur: Le service de génération PDF est temporairement indisponible. Veuillez réessayer dans quelques minutes.';
+        } else if (e.message.includes('HTTP 404')) {
+          errorMessage = 'Erreur: Le fichier PDF demandé n\'a pas été trouvé.';
+        } else if (e.message.includes('Failed to fetch')) {
+          errorMessage = 'Erreur de connexion: Impossible de contacter le serveur. Vérifiez votre connexion internet.';
+        }
+        
+        alert(errorMessage);
       }
-
-      // 2) Ouvrir le client mail avec objet et message de courtoisie pré-remplis
-      const subject = encodeURIComponent('Traite n° ' + numero);
-      const body = encodeURIComponent('Bonjour,\n\nVeuillez trouver ci-joint la traite n° ' + numero + '.\n\nCordialement.');
-      const mailto = 'mailto:?subject=' + subject + '&body=' + body;
-      window.location.href = mailto;
     }
+
+    // Fonction pour télécharger et ouvrir l'application de messagerie externe
+    async function downloadAndEmail() {
+      const emailBtn = document.getElementById('emailBtn');
+      const originalText = emailBtn.textContent;
+      
+      // Afficher l'état de chargement
+      emailBtn.textContent = 'Génération PDF...';
+      emailBtn.disabled = true;
+      emailBtn.style.opacity = '0.7';
+      
+      try {
+        // D'abord télécharger le PDF
+        const url = '/print/traites/{{ $traiteId }}/screenshot.pdf';
+        const response = await fetch(url, { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const blob = await response.blob();
+        
+        // Créer le lien de téléchargement et déclencher le téléchargement
+        const link = document.createElement('a');
+        const objectUrl = URL.createObjectURL(blob);
+        link.href = objectUrl;
+        link.download = 'traites_{{ $traiteId }}.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+        
+        // Attendre un court délai puis ouvrir l'application de messagerie
+        setTimeout(() => {
+          emailBtn.textContent = 'Ouverture application mail...';
+          
+          // Créer le lien mailto avec le PDF en pièce jointe
+          const subject = encodeURIComponent('Traites {{ $traiteNumero ?? "" }}');
+          const body = encodeURIComponent(`Bonjour,
+
+Veuillez trouver ci-joint la traite {{ $traiteNumero ?? "" }}.
+
+Cordialement.`);
+          
+          // Ouvrir l'application de messagerie externe
+          const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+          window.open(mailtoLink, '_blank');
+          
+          // Restaurer le bouton
+          setTimeout(() => {
+            emailBtn.textContent = originalText;
+            emailBtn.disabled = false;
+            emailBtn.style.opacity = '1';
+          }, 1000);
+          
+        }, 1000);
+        
+      } catch (e) {
+        // Erreur
+        emailBtn.textContent = 'Erreur - Réessayer';
+        setTimeout(() => {
+          emailBtn.textContent = originalText;
+          emailBtn.disabled = false;
+          emailBtn.style.opacity = '1';
+        }, 3000);
+        
+        let errorMessage = 'Téléchargement du PDF impossible: ' + e.message;
+        if (e.message.includes('HTTP 500')) {
+          errorMessage = 'Erreur serveur: Le service de génération PDF est temporairement indisponible.';
+        } else if (e.message.includes('HTTP 404')) {
+          errorMessage = 'Erreur: Le fichier PDF demandé n\'a pas été trouvé.';
+        } else if (e.message.includes('Failed to fetch')) {
+          errorMessage = 'Erreur de connexion: Impossible de contacter le serveur.';
+        }
+        
+        alert(errorMessage);
+      }
+    }
+
   </script>
 </body>
 </html>

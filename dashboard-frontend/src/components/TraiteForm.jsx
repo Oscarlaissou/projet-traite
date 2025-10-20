@@ -117,7 +117,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         <input type="date" name="date_emission" value={form.date_emission} onChange={handleChange} required className="form-input" />
       </div>
       <div>
-        <label>Montant de la traite</label>
+        <label>Montant de crédit</label>
         <input
           type="text"
           inputMode="numeric"

@@ -11,7 +11,7 @@ const NotificationsPage = () => {
   const [sections, setSections] = useState([])
   const [todayItems, setTodayItems] = useState([])
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
+  const [perPage, setPerPage] = useState(6)
   const [total, setTotal] = useState(0)
   const [lastPage, setLastPage] = useState(1)
   const navigate = useNavigate()
@@ -184,7 +184,9 @@ const NotificationsPage = () => {
       ? '480px 1fr 320px'
       : viewportWidth >= 992
         ? '380px 1fr 300px'
-        : '1fr'
+        : viewportWidth >= 768
+          ? '1fr'
+          : '1fr'
 
   const imageHeight = viewportWidth < 992 ? '40vh' : 'calc(100vh - 140px)'
   const rightAsideSticky = viewportWidth >= 992
@@ -219,8 +221,22 @@ const NotificationsPage = () => {
   }
 
   return (
-    <div className="dashboard-stats">
-      <div className="detail-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+    <div className="dashboard-stats" style={{ 
+      maxWidth: '100vw', 
+      overflowX: 'hidden',
+      boxSizing: 'border-box',
+      width: '100%',
+      position: 'relative'
+    }}>
+      <div className="detail-header" style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        gap: 12, 
+        flexWrap: 'wrap',
+        maxWidth: '100%',
+        overflowX: 'hidden'
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button className="icon-button" onClick={() => navigate('/dashboard?tab=traites')} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
         <ArrowLeft size={18} />
@@ -235,35 +251,126 @@ const NotificationsPage = () => {
       {loading ? (
         <div>Chargement...</div>
       ) : (
-      <div className="detail-card" style={{ display: 'grid', gridTemplateColumns, gap: 16 }}>
+      <div className="detail-card" style={{ 
+        display: viewportWidth >= 768 ? 'grid' : 'block', 
+        gridTemplateColumns: viewportWidth >= 768 ? gridTemplateColumns : '1fr', 
+        gap: viewportWidth >= 768 ? 16 : 8,
+        maxWidth: '100vw',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
+        width: '100%',
+        position: 'relative'
+      }}>
           {/* Colonne gauche: frame image (remplit sa frame uniquement) */}
-          <aside>
+          <aside style={{ display: viewportWidth < 768 ? 'none' : 'block' }}>
             <div style={{ position: viewportWidth < 992 ? 'static' : 'sticky', top: 8 }}>
               <div style={{ background: '#ffffff', borderRadius: 12, overflow: 'hidden' }}>
                 <img src={Logo} alt="Visuel notifications" style={{ display: 'block', width: '100%', height: imageHeight, objectFit: 'cover' }} />
               </div>
             </div>
           </aside>
-          <div style={{ paddingRight: 2 }}>
+          <div style={{ 
+            paddingRight: viewportWidth >= 768 ? 2 : 0,
+            paddingLeft: viewportWidth < 768 ? 0 : 0,
+            overflow: 'hidden',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            width: '100%',
+            position: 'relative'
+          }}>
           {sections.map(sec => (
-            <div key={sec.key} style={{ marginBottom: 16 }}>
+            <div key={sec.key} className="notification-frame">
               <div className="notif-section-title">{sec.icon} <span style={{ marginLeft: 6 }}>{sec.title}</span> <span style={{ marginLeft: 8, color: '#6b7280' }}>({sec.items.length})</span></div>
               {sec.items.length === 0 ? (
                 <div className="notif-empty">Aucune</div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: viewportWidth >= 768 
+                    ? 'repeat(auto-fill, minmax(300px, 1fr))' 
+                    : '1fr', 
+                  gap: viewportWidth >= 768 ? 12 : 8,
+                  maxWidth: '100%',
+                  overflow: 'hidden'
+                }}>
                   {sec.items.map(it => (
-                    <div key={it.id} onClick={() => handleClick(it.id)} style={{ cursor: 'pointer', border: '1px solid #e5e7eb', background: '#ffffff', borderRadius: 12, padding: 14, display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'flex-start', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'box-shadow .2s, transform .2s', minHeight: 96 }} onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 14px rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'translateY(-1px)' }} onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                    <div key={it.id} onClick={() => handleClick(it.id)} style={{ 
+                      cursor: 'pointer', 
+                      border: '1px solid #e5e7eb', 
+                      background: '#ffffff', 
+                      borderRadius: 12, 
+                      padding: 12, 
+                      display: 'grid', 
+                      gridTemplateColumns: '1fr auto', 
+                      gap: 8, 
+                      alignItems: 'flex-start', 
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.04)', 
+                      transition: 'box-shadow .2s, transform .2s', 
+                      minHeight: 80,
+                      maxWidth: '100%',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }} onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 14px rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'translateY(-1px)' }} onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'translateY(0)' }}>
                       {/* Frame gauche: Contenu notification (sans image) */}
-                      <div style={{ minWidth: 0 }}>
+                      <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                           <CheckCircle2 size={18} color="#0ea5e9" />
-                          <div style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Traite {it.numero} à échéance sous 3 jours</div>
+                          <div style={{ 
+                            fontWeight: 700, 
+                            color: '#0f172a', 
+                            whiteSpace: 'nowrap', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%'
+                          }}>
+                            Traite {it.numero} à échéance sous 3 jours
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, rowGap: 6, color: '#6b7280', fontSize: 13 }}>
-                          <span style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 999, padding: '2px 8px' }}>Par {it.nom_raison_sociale}</span>
-                          <span style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 999, padding: '2px 8px' }}>{new Date(it.echeance).toLocaleDateString('fr-FR')}</span>
-                          <span style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 999, padding: '2px 8px' }}>{it.numero}</span>
+                        <div style={{ 
+                          display: 'flex', 
+                          flexWrap: 'wrap', 
+                          gap: 8, 
+                          rowGap: 6, 
+                          color: '#6b7280', 
+                          fontSize: 13,
+                          maxWidth: '100%',
+                          overflow: 'hidden'
+                        }}>
+                          <span style={{ 
+                            background: '#f3f4f6', 
+                            border: '1px solid #e5e7eb', 
+                            borderRadius: 999, 
+                            padding: '2px 8px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%'
+                          }}>
+                            Par {it.nom_raison_sociale}
+                          </span>
+                          <span style={{ 
+                            background: '#f3f4f6', 
+                            border: '1px solid #e5e7eb', 
+                            borderRadius: 999, 
+                            padding: '2px 8px',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {new Date(it.echeance).toLocaleDateString('fr-FR')}
+                          </span>
+                          <span style={{ 
+                            background: '#f3f4f6', 
+                            border: '1px solid #e5e7eb', 
+                            borderRadius: 999, 
+                            padding: '2px 8px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%'
+                          }}>
+                            {it.numero}
+                          </span>
                         </div>
                       </div>
                       {/* Frame droite: Badge Notifications */}
@@ -289,7 +396,7 @@ const NotificationsPage = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#111827', fontSize: 14 }}>
                 <span>Afficher</span>
                 <select value={perPage} onChange={(e) => { setPage(1); setPerPage(Number(e.target.value)) }} style={{ padding: '4px 8px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
-                  {[10,12,24,48].map(n => <option key={n} value={n}>{n}</option>)}
+                  {[6,12,18,24].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <span>lignes</span>
               </div>
@@ -310,16 +417,42 @@ const NotificationsPage = () => {
           </div>
           </div>
           {/* Colonne droite: frame secondaire pour notifications du jour */}
-          <aside>
-            <div style={{ position: rightAsideSticky ? 'sticky' : 'static', top: 8, maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', overflowY: rightAsideSticky ? 'auto' : 'visible', paddingRight: 2 }}>
+          <aside style={{ display: viewportWidth < 768 ? 'none' : 'block' }}>
+            <div className="notification-frame" style={{ 
+              position: rightAsideSticky ? 'sticky' : 'static', 
+              top: 8, 
+              maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', 
+              overflowY: rightAsideSticky ? 'auto' : 'visible', 
+              paddingRight: 2,
+              width: '100%',
+              boxSizing: 'border-box'
+            }}>
               <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>Échéance aujourd'hui</div>
               {todayItems.length === 0 ? (
                 <div className="notif-empty">Aucune aujourd'hui</div>
               ) : (
                 <div style={{ display: 'grid', gap: 10 }}>
                   {todayItems.map(it => (
-                    <div key={it.id} className="card" onClick={() => handleClick(it.id)} style={{ border: '1px solid #f59e0b', background: '#fff7ed', borderRadius: 8, padding: 12, cursor: 'pointer' }}>
-                      <div style={{ fontWeight: 700, color: '#9a3412', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.numero} • {it.nom_raison_sociale}</div>
+                    <div key={it.id} className="card" onClick={() => handleClick(it.id)} style={{ 
+                      border: '1px solid #f59e0b', 
+                      background: '#fff7ed', 
+                      borderRadius: 8, 
+                      padding: 12, 
+                      cursor: 'pointer',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{ 
+                        fontWeight: 700, 
+                        color: '#9a3412', 
+                        whiteSpace: 'nowrap', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        maxWidth: '100%'
+                      }}>
+                        {it.numero} • {it.nom_raison_sociale}
+                      </div>
                       <div style={{ color: '#92400e' }}>{new Date(it.echeance).toLocaleDateString('fr-FR')}</div>
                     </div>
                   ))}

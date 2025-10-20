@@ -9,7 +9,7 @@ const Columns = [
   { key: 'nombre_traites', label: 'Nb traites' },
   { key: 'echeance', label: 'Échéance' },
   { key: 'date_emission', label: 'Émission' },
-  { key: 'montant', label: 'Montant' },
+  { key: 'montant', label: 'Montant de crédit' },
   { key: 'nom_raison_sociale', label: 'Nom/Raison sociale' },
   { key: 'domiciliation_bancaire', label: 'Domiciliation' },
   { key: 'rib', label: 'RIB' },

@@ -273,7 +273,7 @@ class TraitesController extends Controller
         }
         $html = implode("\n", $htmlParts);
 
-        // Utilise Browsershot si présent pour un rendu fidèle de la page preview (toolbar/footer masqués en print)
+        // Utilise Browsershot uniquement (rendu print CSS). Si indisponible, renvoie une erreur explicite.
         if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
             try {
                 $previewUrl = route('traites.preview', ['traite' => $traite->id]);
@@ -292,16 +292,18 @@ class TraitesController extends Controller
                     'Content-Disposition' => 'attachment; filename="traites_'.$traite->id.'.pdf"',
                 ]);
             } catch (\Throwable $e) {
-                // ignore, fallback DomPDF
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'La génération PDF de capture requiert Browsershot/Chrome headless.',
+                ], 500);
             }
         }
 
-        // Fallback DomPDF
-        $pdf = Pdf::loadHTML($html)->setPaper('a4');
-        return $pdf->download('traites_'.$traite->id.'.pdf');
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Browsershot non installé. Installez spatie/browsershot + Chrome/Chromium.',
+        ], 500);
     }
-
-    // wkhtmltopdf retiré: retour au flux DomPDF uniquement
 
     /**
      * Envoie un PDF multi-pages par email en pièce jointe avec objet "Traites"
@@ -347,30 +349,30 @@ class TraitesController extends Controller
         }
         $html = implode("\n", $htmlParts);
 
-        // Tentative 1: Générer un PDF fidèle via un moteur navigateur (Browsershot) depuis la page preview (sans toolbar/footer en media print)
-        $pdfBinary = null;
+        // Générer une capture PNG via BrowsershotController (obligatoire)
+        $pngBinary = null;
         try {
-            if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
-                $previewUrl = route('traites.preview', ['traite' => $traite->id]);
-                $pdfBinary = Browsershot::url($previewUrl)
-                    ->emulateMedia('print')
-                    ->showBackground()
-                    ->format('A4')
-                    ->margins(5, 5, 5, 5)
-                    ->windowSize(1024, 1448)
-                    ->timeout(120)
-                    ->setOption('waitUntil', 'networkidle0')
-                    ->setOption('preferCSSPageSize', true)
-                    ->pdf();
+            if (!class_exists(\Spatie\Browsershot\Browsershot::class)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Browsershot requis: installez spatie/browsershot + Puppeteer/Chromium.'
+                ], 500);
             }
+            $controller = app(\App\Http\Controllers\BrowsershotController::class);
+            $response = $controller->screenshotForTraite($traite);
+            if (!($response->status() === 200 && str_contains($response->headers->get('Content-Type', ''), 'image/png'))) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Echec capture PNG via Browsershot.'
+                ], 500);
+            }
+            $pngBinary = $response->getContent();
         } catch (\Throwable $e) {
-            $pdfBinary = null; // Fallback DomPDF plus bas
-        }
-
-        // Fallback: DomPDF à partir du HTML assemblé si Browsershot indisponible
-        $pdf = null;
-        if ($pdfBinary === null) {
-            $pdf = Pdf::loadHTML($html)->setPaper('a4');
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Echec capture PNG via Browsershot.',
+                'error' => $e->getMessage(),
+            ], 500);
         }
 
         $to = $validated['to'];
@@ -378,14 +380,10 @@ class TraitesController extends Controller
         $numero = (string)($traite->numero ?? '');
         $body = "Bonjour,\n\nVeuillez trouver ci-joint la traite " . $numero . ".\n\nCordialement.";
 
-        Mail::raw($body, function ($message) use ($to, $subject, $pdf, $pdfBinary, $traite) {
+        Mail::raw($body, function ($message) use ($to, $subject, $pngBinary, $traite) {
             $message->to($to)
                     ->subject($subject);
-            if ($pdfBinary !== null) {
-                $message->attachData($pdfBinary, 'traites_'.$traite->id.'.pdf', ['mime' => 'application/pdf']);
-            } else if ($pdf !== null) {
-                $message->attachData($pdf->output(), 'traites_'.$traite->id.'.pdf', ['mime' => 'application/pdf']);
-            }
+            $message->attachData($pngBinary, 'traites_'.$traite->id.'.png', ['mime' => 'image/png']);
         });
 
         return response()->json(['status' => 'ok']);

@@ -150,7 +150,7 @@ const TraiteDetailPage = () => {
               <Detail label="Nb traites" value={item?.nombre_traites} />
               <Detail label="Échéance" value={formatDateDDMMYYYY(item?.echeance)} />
               <Detail label="Émission" value={formatDateDDMMYYYY(item?.date_emission)} />
-              <Detail label="Montant" value={formatMoney(item?.montant)} />
+              <Detail label="Montant de crédit" value={formatMoney(item?.montant)} />
               <Detail label="Nom/Raison sociale" value={item?.nom_raison_sociale} />
               <Detail label="Domiciliation" value={item?.domiciliation_bancaire} />
               <Detail label="RIB" value={item?.rib} />
