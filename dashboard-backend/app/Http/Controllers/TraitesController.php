@@ -112,12 +112,13 @@ class TraitesController extends Controller
             }
         }
 
-        // Tri: par défaut par nom A->Z si alpha, sinon par échéance croissante; personnalisable via query params
-        $sort = $request->get('sort', 'echeance');
-        $dir = strtolower($request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
-        $allowedSorts = ['echeance','date_emission','montant','numero','nom_raison_sociale','statut','id'];
+        // Tri: par défaut par nom A->Z si alpha, sinon par date d'émission décroissante (plus récent en premier);
+        // personnalisable via query params
+        $sort = $request->get('sort');
+        $dir = strtolower($request->get('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $allowedSorts = ['echeance','date_emission','created_at','montant','numero','nom_raison_sociale','statut','id'];
         if (!in_array($sort, $allowedSorts, true)) {
-            $sort = $request->has('alpha') ? 'nom_raison_sociale' : 'echeance';
+            $sort = $request->has('alpha') ? 'nom_raison_sociale' : 'date_emission';
         }
 
         $perPage = (int) $request->get('per_page', 10);
@@ -718,7 +719,12 @@ class TraitesController extends Controller
                 'statut' => $t->statut,
                 'username' => $displayUser,
             ];
-        });
+        })
+        // trier par la date calculée décroissante (plus récent en premier)
+        ->sortByDesc(function($row) {
+            return $row['date'] ?? '';
+        })
+        ->values();
 
         return response()->json($mapped);
     }

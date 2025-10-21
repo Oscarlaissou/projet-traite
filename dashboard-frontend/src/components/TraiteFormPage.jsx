@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import Toast from "./Toast"
 import { ArrowLeft } from "lucide-react"
 import TraiteForm from "./TraiteForm"
 import "./Traites.css"
 import MonImage from "../images/image5.png"
-
+import SuccessDialog from "./SuccessDialog"
 const TraiteFormPage = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const [initialValue, setInitialValue] = useState(null)
   const [loading, setLoading] = useState(Boolean(id))
+  const [toast, setToast] = useState(null)
   const baseUrl = process.env.REACT_APP_API_URL || ''
 
   useEffect(() => {
@@ -50,10 +52,10 @@ const TraiteFormPage = () => {
 
       
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.5fr', gap: 16, height: 'calc(100vh - 120px)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 2.2fr', gap: 16, height: 'calc(100vh - 120px)' }}>
         <div style={{
           backgroundImage: `url(${MonImage})`,
-          backgroundSize: 'cover',
+          backgroundSize: 'contain',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           // border: '1px solid #e5e7eb',
@@ -68,8 +70,17 @@ const TraiteFormPage = () => {
             initialValue={initialValue}
             submitLabel={id ? 'Modifier' : 'Créer'}
             onCancel={() => navigate('/dashboard?tab=traites')}
-            onSaved={() => navigate('/dashboard?tab=traites')}
+            onSaved={(saved) => {
+              if (saved && saved.id) {
+                navigate(`/traites/${saved.id}`)
+              } else {
+                navigate('/dashboard?tab=traites')
+              }
+            }}
           />
+          {toast && (
+            <Toast title={toast.title} message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+          )}
         </div>
       </div>
     </div>

@@ -24,15 +24,29 @@ const NotificationsBanner = () => {
   const fetchToday = async () => {
     setLoading(true); setError("")
     try {
+      // Charger toutes les traites à échéance aujourd'hui (tous statuts), puis filtrer côté client (exclure Payé)
+      const today = new Date()
+      const yyyy = today.getFullYear()
+      const mm = String(today.getMonth() + 1).padStart(2, '0')
+      const dd = String(today.getDate()).padStart(2, '0')
+      const todayStr = `${yyyy}-${mm}-${dd}`
       const params = new URLSearchParams()
       params.append('per_page', '200')
-      params.append('upcoming_days', '1') // Jour J uniquement (Non échu + échéance aujourd'hui)
+      params.append('page', '1')
+      params.append('echeance_from', todayStr)
+      params.append('echeance_to', todayStr)
+      params.append('sort', 'numero')
+      params.append('dir', 'desc')
       const res = await fetch(`${baseUrl}/api/traites?${params.toString()}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Erreur chargement notifications')
       const data = await res.json()
       const rows = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
       const dismissed = new Set(getDismissed())
-      const filtered = rows.filter(it => !dismissed.has(it.id))
+      const notPaid = (s) => {
+        const v = String(s || '').toLowerCase()
+        return !(v.includes('payé') || v.includes('paye'))
+      }
+      const filtered = rows.filter(it => notPaid(it.statut) && !dismissed.has(it.id))
       setItems(filtered)
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
@@ -44,6 +58,20 @@ const NotificationsBanner = () => {
 
   useEffect(() => {
     fetchToday()
+    const id = setInterval(fetchToday, 5000) // refresh chaque 5s
+    return () => clearInterval(id)
+  }, [])
+
+  // Se synchroniser même si le bandeau est vide/fermé: écouter les dismiss externes et la visibilité onglet
+  useEffect(() => {
+    const onDismissChanged = () => fetchToday()
+    const onVisibility = () => { if (!document.hidden) fetchToday() }
+    window.addEventListener('dismissed_notifs_changed', onDismissChanged)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('dismissed_notifs_changed', onDismissChanged)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [])
 
   if (loading || error || items.length === 0) return null
@@ -96,7 +124,7 @@ const NotificationsBanner = () => {
         {items.map(it => (
           <div key={it.id} style={cardStyle}>
             <button aria-label="Fermer" onClick={() => handleDismiss(it.id)} style={closeBtnStyle}>×</button>
-            <div style={{ fontWeight: 700, color: '#9a3412' }}>Échéance aujourd'hui</div>
+            <div style={{ fontWeight: 700, color: '#9a3412' }}>Échéance aujourd'hui — passe/échue</div>
             <div style={{ color: '#b45309', marginTop: 2 }}>{it.numero} • {it.nom_raison_sociale}</div>
             <div style={{ color: '#b45309', marginTop: 4 }}>{new Date(it.echeance).toLocaleDateString('fr-FR')}</div>
           </div>

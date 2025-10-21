@@ -29,7 +29,7 @@ const TraitesGrid = () => {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
-  const [sort, setSort] = useState({ key: 'echeance', dir: 'asc' })
+  const [sort, setSort] = useState({ key: 'numero', dir: 'desc' })
   const [initialized, setInitialized] = useState(false)
   const importInputRef = useRef(null)
   // Navigation vers la page de détail au clic sur une ligne
@@ -295,7 +295,7 @@ const TraitesGrid = () => {
 
   return (
     <div className="dashboard-stats">
-      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'echeance', dir: 'asc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
+      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'numero', dir: 'desc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
         <ArrowLeft size={18} />
       </button>
       
@@ -315,9 +315,7 @@ const TraitesGrid = () => {
         à <input type="date" placeholder="jj/mm/aaaa" value={to} onChange={(e) => setTo(e.target.value)} className="search-input" />
         <button className="submit-button" onClick={() => { setPage(1); fetchItems() }}>Rechercher</button>
         
-        <button className="submit-button" onClick={() => { setPage(1); setSort((s) => ({ key: 'nom_raison_sociale', dir: s.key === 'nom_raison_sociale' && s.dir === 'asc' ? 'desc' : 'asc' })) }}>
-          Trier {sort.key === 'nom_raison_sociale' && sort.dir === 'desc' ? 'A→Z' : 'Z→A'} (Nom)
-        </button>
+        
         {/* Removed sort, alpha and expand controls as requested */}
         <button className="submit-button" onClick={handleNew}><Plus size={16} style={{ marginRight: 6 }} /> Nouvelle traite</button>
         <div style={{ display: 'flex', gap: 8 }}>

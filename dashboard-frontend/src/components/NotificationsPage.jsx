@@ -100,27 +100,70 @@ const NotificationsPage = () => {
   const fetchRows = async () => {
     setLoading(true); setError("")
     try {
-      const params = new URLSearchParams()
-      params.append('per_page', String(perPage))
-      params.append('page', String(page))
-      params.append('upcoming_days', '3')
-      const res = await fetch(`${baseUrl}/api/traites?${params.toString()}`, { headers: authHeaders() })
-      if (!res.ok) throw new Error('Erreur chargement')
-      const data = await res.json()
-      const rows = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
-      const meta = data?.meta || {}
-      const mapped = compute(rows)
+      // Construire YYYY-MM-DD du jour (heure locale)
+      const today = new Date()
+      const yyyy = today.getFullYear()
+      const mm = String(today.getMonth() + 1).padStart(2, '0')
+      const dd = String(today.getDate()).padStart(2, '0')
+      const todayStr = `${yyyy}-${mm}-${dd}`
+
+      // 1) Requête: traites à échéance aujourd'hui (tous statuts, hors Payé côté client)
+      const p1 = (async () => {
+        const p = new URLSearchParams()
+        p.append('per_page', '200')
+        p.append('page', '1')
+        p.append('echeance_from', todayStr)
+        p.append('echeance_to', todayStr)
+        p.append('sort', 'numero')
+        p.append('dir', 'desc')
+        const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
+        if (!res.ok) throw new Error('Erreur chargement (aujourd\'hui)')
+        const data = await res.json()
+        return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
+      })()
+
+      // 2) Requête: traites Non échu sous 3 jours (y compris aujourd'hui)
+      const p2 = (async () => {
+        const p = new URLSearchParams()
+        p.append('per_page', String(perPage))
+        p.append('page', String(page))
+        p.append('upcoming_days', '3')
+        p.append('sort', 'numero')
+        p.append('dir', 'desc')
+        const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
+        if (!res.ok) throw new Error('Erreur chargement (à venir)')
+        const data = await res.json()
+        return { rows: Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []), meta: (data?.meta || {}) }
+      })()
+
+      const [rowsTodayRaw, upcomingRes] = await Promise.all([p1, p2])
+
+      // Construire sections à partir de la 2e requête
+      const mapped = compute(upcomingRes.rows)
+
+      // Filtrer côté client: exclure Payé des listes et retirés (dismissed)
       const dismissed = new Set(getDismissed())
-      const filtered = mapped.sections.map(sec => ({
+      const notPaid = (s) => {
+        const v = String(s || '').toLowerCase()
+        return !(v.includes('payé') || v.includes('paye'))
+      }
+      const filteredSections = mapped.sections.map(sec => ({
         ...sec,
-        items: sec.items.filter(it => !dismissed.has(it.id))
+        items: sec.items.filter(it => notPaid(it.statut) && !dismissed.has(it.id))
       }))
-      const filteredToday = mapped.today.filter(it => !dismissed.has(it.id))
-      setSections(filtered)
+
+      // Construire la liste du jour à partir de rowsTodayRaw (tous statuts sauf Payé)
+      const filteredToday = rowsTodayRaw
+        .filter(it => notPaid(it.statut) && !dismissed.has(it.id))
+        .sort((a,b) => new Date(a.echeance) - new Date(b.echeance))
+
+      setSections(filteredSections)
       setTodayItems(filteredToday)
-      const totalCount = filtered.reduce((sum, s) => sum + s.items.length, 0) + filteredToday.length
+
+      const totalCount = filteredSections.reduce((sum, s) => sum + s.items.length, 0) + filteredToday.length
+      const meta = upcomingRes.meta || {}
       if (meta?.total && Number(meta.total) > 0) {
-        setTotal(Number(meta.total))
+        setTotal(Number(meta.total) + filteredToday.length) // approx: total à venir + aujourd'hui
       } else {
         setTotal(totalCount)
       }
@@ -132,6 +175,7 @@ const NotificationsPage = () => {
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
       setSections([])
+      setTodayItems([])
     } finally {
       setLoading(false)
     }
@@ -157,6 +201,8 @@ const NotificationsPage = () => {
     }
     setSections(prev => prev.map(sec => ({ ...sec, items: sec.items.filter(it => it.id !== id) })))
     setTodayItems(prev => prev.filter(it => it.id !== id))
+    // Rafraîchir la liste pour refléter l'état serveur
+    fetchRows().catch(() => {})
     navigate(`/traites/${id}`)
   }
 
@@ -179,11 +225,11 @@ const NotificationsPage = () => {
   }, [])
 
   const gridTemplateColumns = viewportWidth >= 1400
-    ? '560px 1fr 360px'
+    ? '400px 1fr'
     : viewportWidth >= 1200
-      ? '480px 1fr 320px'
+      ? '350px 1fr'
       : viewportWidth >= 992
-        ? '380px 1fr 300px'
+        ? '300px 1fr'
         : viewportWidth >= 768
           ? '1fr'
           : '1fr'
@@ -265,7 +311,7 @@ const NotificationsPage = () => {
           <aside style={{ display: viewportWidth < 768 ? 'none' : 'block' }}>
             <div style={{ position: viewportWidth < 992 ? 'static' : 'sticky', top: 8 }}>
               <div style={{ background: '#ffffff', borderRadius: 12, overflow: 'hidden' }}>
-                <img src={Logo} alt="Visuel notifications" style={{ display: 'block', width: '100%', height: imageHeight, objectFit: 'cover' }} />
+                <img src={Logo} alt="Visuel notifications" style={{ display: 'block', width: '100%', height: imageHeight, objectFit: 'contain' }} />
               </div>
             </div>
           </aside>
@@ -278,6 +324,116 @@ const NotificationsPage = () => {
             width: '100%',
             position: 'relative'
           }}>
+          {/* Échéance aujourd'hui affichée en premier */}
+          <div className="notification-frame">
+            <div className="notif-section-title"><CheckCircle2 size={16} color="#92400e" /> <span style={{ marginLeft: 6, color: '#92400e', fontWeight: 600 }}>Échéance aujourd'hui (passera Échu)</span> <span style={{ marginLeft: 8, color: '#6b7280' }}>({todayItems.length})</span></div>
+            {todayItems.length === 0 ? (
+              <div className="notif-empty">Aucune aujourd'hui</div>
+            ) : (
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: viewportWidth >= 768 
+                  ? 'repeat(auto-fill, minmax(300px, 1fr))' 
+                  : '1fr', 
+                gap: viewportWidth >= 768 ? 12 : 8,
+                maxWidth: '100%',
+                overflow: 'hidden'
+              }}>
+                {todayItems.map(it => (
+                  <div key={it.id} onClick={() => handleClick(it.id)} style={{ 
+                    cursor: 'pointer', 
+                    border: '2px solid #f59e0b', 
+                    background: '#fff7ed', 
+                    borderRadius: 12, 
+                    padding: 12, 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr auto', 
+                    gap: 8, 
+                    alignItems: 'flex-start', 
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)', 
+                    transition: 'box-shadow .2s, transform .2s', 
+                    minHeight: 80,
+                    maxWidth: '100%',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
+                    position: 'relative'
+                  }} onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 14px rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'translateY(-1px)' }} onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                    <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <CheckCircle2 size={18} color="#92400e" />
+                        <div style={{ 
+                          fontWeight: 700, 
+                          color: '#92400e', 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          maxWidth: '100%'
+                        }}>
+                          {(() => {
+                            const s = String(it.statut || '').toLowerCase()
+                            const dejaEchu = s.includes('échu') || s.includes('echu')
+                            return dejaEchu
+                              ? `Traite ${it.numero} — Échue aujourd'hui`
+                              : `Traite ${it.numero} à échéance aujourd'hui — passe Échu`
+                          })()}
+                        </div>
+                      </div>
+                      <div style={{ 
+                        display: 'flex', 
+                        flexWrap: 'wrap', 
+                        gap: 8, 
+                        rowGap: 6, 
+                        color: '#6b7280', 
+                        fontSize: 13,
+                        maxWidth: '100%',
+                        overflow: 'hidden'
+                      }}>
+                        <span style={{ 
+                          background: '#f3f4f6', 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 999, 
+                          padding: '2px 8px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: '100%'
+                        }}>
+                          Par {it.nom_raison_sociale}
+                        </span>
+                        <span style={{ 
+                          background: '#f3f4f6', 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 999, 
+                          padding: '2px 8px',
+                          whiteSpace: 'nowrap',
+                          fontWeight: 'bold'
+                        }}>
+                          {new Date(it.echeance).toLocaleDateString('fr-FR')}
+                        </span>
+                        <span style={{ 
+                          background: '#f3f4f6', 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 999, 
+                          padding: '2px 8px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: '100%'
+                        }}>
+                          {it.numero}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ alignSelf: 'start' }}>
+                      <span style={{ border: '1px solid #e5e7eb', background: '#f8fafc', color: '#0f172a', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600 }}>Notification</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {sections.map(sec => (
             <div key={sec.key} className="notification-frame">
               <div className="notif-section-title">{sec.icon} <span style={{ marginLeft: 6 }}>{sec.title}</span> <span style={{ marginLeft: 8, color: '#6b7280' }}>({sec.items.length})</span></div>
@@ -350,15 +506,17 @@ const NotificationsPage = () => {
                           }}>
                             Par {it.nom_raison_sociale}
                           </span>
-                          <span style={{ 
-                            background: '#f3f4f6', 
-                            border: '1px solid #e5e7eb', 
-                            borderRadius: 999, 
-                            padding: '2px 8px',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {new Date(it.echeance).toLocaleDateString('fr-FR')}
-                          </span>
+                        <span style={{ 
+                          background: '#f3f4f6', 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: 999, 
+                          padding: '2px 8px',
+                          whiteSpace: 'nowrap',
+                          fontWeight: 'bold',
+                          color:'black',
+                        }}>
+                          {new Date(it.echeance).toLocaleDateString('fr-FR')}
+                        </span>
                           <span style={{ 
                             background: '#f3f4f6', 
                             border: '1px solid #e5e7eb', 
@@ -416,50 +574,6 @@ const NotificationsPage = () => {
             </div>
           </div>
           </div>
-          {/* Colonne droite: frame secondaire pour notifications du jour */}
-          <aside style={{ display: viewportWidth < 768 ? 'none' : 'block' }}>
-            <div className="notification-frame" style={{ 
-              position: rightAsideSticky ? 'sticky' : 'static', 
-              top: 8, 
-              maxHeight: viewportWidth >= 992 ? 'calc(100vh - 140px)' : 'none', 
-              overflowY: rightAsideSticky ? 'auto' : 'visible', 
-              paddingRight: 2,
-              width: '100%',
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>Échéance aujourd'hui</div>
-              {todayItems.length === 0 ? (
-                <div className="notif-empty">Aucune aujourd'hui</div>
-              ) : (
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {todayItems.map(it => (
-                    <div key={it.id} className="card" onClick={() => handleClick(it.id)} style={{ 
-                      border: '1px solid #f59e0b', 
-                      background: '#fff7ed', 
-                      borderRadius: 8, 
-                      padding: 12, 
-                      cursor: 'pointer',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{ 
-                        fontWeight: 700, 
-                        color: '#9a3412', 
-                        whiteSpace: 'nowrap', 
-                        overflow: 'hidden', 
-                        textOverflow: 'ellipsis',
-                        maxWidth: '100%'
-                      }}>
-                        {it.numero} • {it.nom_raison_sociale}
-                      </div>
-                      <div style={{ color: '#92400e' }}>{new Date(it.echeance).toLocaleDateString('fr-FR')}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </aside>
         </div>
       )}
     </div>

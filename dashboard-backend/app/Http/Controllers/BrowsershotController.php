@@ -351,7 +351,7 @@ class BrowsershotController extends Controller
                   . 'html,body{margin:0;padding:0;background:#fff}'
                   . '.page{width:210mm;height:297mm;overflow:hidden;page-break-after:always;background:#fff;}'
                   . '.page-inner{width:210mm;height:297mm;overflow:hidden;position:relative;background:#fff;}'
-                  . '.page-inner img{position:absolute;top:0;right:2px;width:1550px;height:2780px;display:block;object-fit:cover;object-position:center;transform:scale(1.15);transform-origin:top left;}'
+                  . '.page-inner img{position:absolute;top:0;right:2px;width:1550px;height:2300px;display:block;object-fit:cover;object-position:center;transform:scale(1.15);transform-origin:top left;}'
                   . '</style>'
                   . '</head><body>'.implode('', $pagesHtml).'</body></html>';
 

@@ -19,7 +19,7 @@ const EditionPage = () => {
   const [error, setError] = useState("")
   // Mass action removed per request
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
+  const [perPage, setPerPage] = useState(6)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440)
 
@@ -51,6 +51,8 @@ const EditionPage = () => {
       params.append('to', to)
       params.append('page', String(page))
       params.append('per_page', String(perPage))
+      params.append('sort', 'numero')
+      params.append('dir', 'desc')
       const res = await fetch(`${baseUrl}/api/traites?${params.toString()}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Erreur lors du chargement')
       const data = await res.json()
@@ -87,11 +89,11 @@ const EditionPage = () => {
       </button>
       <h2 className="stats-title">Édition des traites</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '1.3fr 1.5fr' : '1fr', gap: 16, height: viewportWidth >= 992 ? 'calc(100vh - 120px)' : 'auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: viewportWidth >= 992 ? '0.8fr 2.2fr' : '1fr', gap: 16, height: viewportWidth >= 992 ? 'calc(100vh - 120px)' : 'auto' }}>
         <div style={{ position: viewportWidth >= 992 ? 'sticky' : 'static', top: 8 }}>
           <div style={{
             backgroundImage: `url(${MonImage})`,
-            backgroundSize: 'cover',
+            backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             borderRadius: 10,
@@ -180,8 +182,8 @@ const EditionPage = () => {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>Afficher</span>
-                        <select className="search-input" value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value || '10', 10)); setPage(1); }}>
-                          {[10,20,50,100].map(n => (
+                        <select className="search-input" value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value || '6', 10)); setPage(1); }}>
+                          {[6,12,18,24].map(n => (
                             <option key={n} value={n}>{n}</option>
                           ))}
                         </select>

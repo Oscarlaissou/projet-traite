@@ -65,6 +65,7 @@ const NotificationsMenu = () => {
       // Exiger exactement "non echu" (accents/majuscules ignorés)
       return v === 'non echu'
     }
+    const isEchuStatus = (s) => normalize(s).includes('echu')
 
     // On ne se base pas sur le statut pour classer; uniquement la date (sauf exclusion payé)
 
@@ -75,10 +76,10 @@ const NotificationsMenu = () => {
       if (isPaid) continue
 
       const diff = dayDiff(echeance, startOfToday)
-      // Ignorer les échues
+      // Ignorer les échéances passées (hier et avant)
       if (diff < 0) continue
-      // Jour J en haut
-      if (diff === 0 && isNonEchuStatus(t.statut)) {
+      // Jour J: inclure Non échu ET déjà Échu (pour notification immédiate)
+      if (diff === 0 && (isNonEchuStatus(t.statut) || isEchuStatus(t.statut))) {
         todayArr.push(t)
         continue
       }
@@ -121,28 +122,69 @@ const NotificationsMenu = () => {
     setLoading(true)
     setError("")
     try {
-      const params = new URLSearchParams()
-      params.append('per_page', '200')
-      params.append('upcoming_days', '3')
-      const res = await fetch(`${baseUrl}/api/traites?${params.toString()}`, { headers: authHeaders() })
-      if (!res.ok) throw new Error('Erreur chargement traites')
-      const data = await res.json()
-      const rows = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
-      const { mapped, count, today } = computeNotifications(rows)
-      // filtrer les notifs déjà dismiss
+      // Construire YYYY-MM-DD (local) pour aujourd'hui
+      const now = new Date()
+      const yyyy = now.getFullYear()
+      const mm = String(now.getMonth() + 1).padStart(2, '0')
+      const dd = String(now.getDate()).padStart(2, '0')
+      const todayStr = `${yyyy}-${mm}-${dd}`
+
+      // 1) Aujourd'hui (tous statuts) via plage echeance_from/echeance_to
+      const p1 = (async () => {
+        const p = new URLSearchParams()
+        p.append('per_page', '200')
+        p.append('page', '1')
+        p.append('echeance_from', todayStr)
+        p.append('echeance_to', todayStr)
+        p.append('sort', 'numero')
+        p.append('dir', 'desc')
+        const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
+        if (!res.ok) throw new Error('Erreur chargement (aujourd\'hui)')
+        const data = await res.json()
+        return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
+      })()
+
+      // 2) À venir (Non échu) sous 3 jours
+      const p2 = (async () => {
+        const p = new URLSearchParams()
+        p.append('per_page', '200')
+        p.append('upcoming_days', '3')
+        p.append('sort', 'numero')
+        p.append('dir', 'desc')
+        const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
+        if (!res.ok) throw new Error('Erreur chargement (à venir)')
+        const data = await res.json()
+        return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
+      })()
+
+      const [rowsTodayRaw, upcomingRows] = await Promise.all([p1, p2])
+
+      // Construire sections pour à venir avec l'existant
+      const { mapped } = computeNotifications(upcomingRows)
+
+      // Filtrages communs
       const dismissed = new Set(getDismissed())
-      const filtered = mapped.map(sec => ({
+      const notPaid = (s) => {
+        const v = String(s || '').toLowerCase()
+        return !(v.includes('payé') || v.includes('paye'))
+      }
+
+      // Filtrer sections et aujourd'hui
+      const filteredSections = mapped.map(sec => ({
         ...sec,
         items: sec.items.filter(it => !dismissed.has(it.id))
       }))
-      const filteredToday = today.filter(it => !dismissed.has(it.id))
-      const newCount = filtered.reduce((acc, sec) => acc + sec.items.length, 0) + filteredToday.length
-      setItems(filtered)
+      const filteredToday = rowsTodayRaw.filter(it => notPaid(it.statut) && !dismissed.has(it.id))
+
+      // Mettre à jour état et badge
+      setItems(filteredSections)
       setTodayItems(filteredToday)
+      const newCount = filteredSections.reduce((acc, sec) => acc + sec.items.length, 0) + filteredToday.length
       setCount(newCount)
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
       setItems([])
+      setTodayItems([])
       setCount(0)
     } finally {
       setLoading(false)
@@ -153,7 +195,7 @@ const NotificationsMenu = () => {
 
   useEffect(() => {
     fetchData()
-    const id = setInterval(fetchData, 60000) // refresh chaque 60s
+    const id = setInterval(fetchData, 5000) // refresh chaque 5s
     return () => clearInterval(id)
   }, [])
 
@@ -163,9 +205,15 @@ const NotificationsMenu = () => {
       const dismissed = new Set(getDismissed())
       setItems(prev => {
         const next = prev.map(sec => ({ ...sec, items: sec.items.filter(it => !dismissed.has(it.id)) }))
-        const nextCount = next.reduce((acc, sec) => acc + sec.items.length, 0)
-        setCount(nextCount)
         return next
+      })
+      setTodayItems(prev => prev.filter(it => !dismissed.has(it.id)))
+      setCount(prev => {
+        const itemsCount = (arr) => arr.reduce((acc, sec) => acc + sec.items.length, 0)
+        const currentItems = typeof items === 'object' ? items : []
+        const nextItemsCount = itemsCount(currentItems)
+        const nextTodayCount = Math.max(0, (Array.isArray(todayItems) ? todayItems.length : 0) - 0)
+        return nextItemsCount + nextTodayCount
       })
     }
     window.addEventListener('dismissed_notifs_changed', onExternalDismiss)
@@ -203,6 +251,8 @@ const NotificationsMenu = () => {
     setItems(prev => prev.map(sec => ({ ...sec, items: sec.items.filter(it => it.id !== id) })))
     setTodayItems(prev => prev.filter(it => it.id !== id))
     setCount(prev => Math.max(0, prev - 1))
+    // Rafraîchir immédiatement depuis l'API pour refléter l'état réel
+    fetchData().catch(() => {})
     // naviguer vers la fiche traite
     navigate(`/traites/${id}`)
   }
@@ -219,9 +269,9 @@ const NotificationsMenu = () => {
           {todayItems.length > 0 && (
             <div className="notif-today-cards" style={{ padding: 8 }}>
               {todayItems.map(it => (
-                <div key={it.id} className="notif-today-card" onClick={() => handleClickItem(it.id)} style={{ border: '1px solid #f59e0b', background: '#fff7ed', borderRadius: 8, padding: 8, marginBottom: 8, cursor: 'pointer' }}>
-                  <div className="notif-item-label" style={{ fontWeight: 600, color: '#9a3412' }}>{it.numero} • {it.nom_raison_sociale}</div>
-                  <div className="notif-item-sub" style={{ color: '#92400e' }}>Échéance aujourd'hui • {new Date(it.echeance).toLocaleDateString('fr-FR')}</div>
+                <div key={it.id} className="notif-today-card" onClick={() => handleClickItem(it.id)} style={{ border: '2px solid #f59e0b', background: '#fff7ed', borderRadius: 8, padding: 8, marginBottom: 8, cursor: 'pointer' }}>
+                  <div className="notif-item-label" style={{ fontWeight: 600, color: '#92400e' }}>{it.numero} • {it.nom_raison_sociale}</div>
+                  <div className="notif-item-sub" style={{ color: '#92400e' }}>Échéance aujourd'hui — passe/échue • {new Date(it.echeance).toLocaleDateString('fr-FR')}</div>
                 </div>
               ))}
             </div>

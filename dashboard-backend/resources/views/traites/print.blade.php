@@ -6,7 +6,7 @@
 <title>Lettre de Change</title>
 <style>
     body { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #000; background-color: #fff; display: flex; justify-content: center; padding: 0; margin: 0; }
-    .container { width: 100%; max-width: 850px; min-height: 900px; background-color: #fff; padding: 28px 20px; box-sizing: border-box; }
+    .container { width: 100%; max-width: 850px; min-height: 900px; background-color: #fff; padding: 28px 20px; box-sizing: border-box; margin: 20px; }
     .flex-container { display: flex; justify-content: space-between; gap: 0; }
     .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; position: relative; }
     .header-left { font-family: 'Roboto', sans-serif; z-index: 10; position: relative; padding-right: 50px; text-align: center; }
@@ -15,7 +15,7 @@
     .header-right .boxed-info { border: 1px solid #000; padding: 8px 12px; display: flex;  gap: 12px; white-space: nowrap; font-size: 14px; min-width: 200px; align-items: center; text-align: center;}
  
     .double-line-container { position: absolute; top: 20px; left: 0; height: 14px; }
-    .double-line { width: 250px; height: 5px; border-top: 1px solid black; border-bottom: 1px solid black; margin: 15px; margin-left: 5px; }
+    .double-line { width: 240px; height: 5px; border-top: 1px solid black; border-bottom: 1px solid black; margin: 15px; margin-left: 5px; }
     .double-line-spacer { position: absolute; top: 7px; left: 0; width: 200px; height: 1px; border-top: 1px solid transparent; margin: 0; }
     .main-content { align-items: flex-start; }
     .left-column { width: 55%; padding-right: 30px; text-align: center; margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
@@ -79,7 +79,7 @@
 
     @media print {
         body { padding: 0; background-color: #fff; margin: 0; }
-        .container { width: 100%; max-width: none; box-shadow: none; padding: 0; margin: 0; }
+        .container { width: 100%; max-width: none; box-shadow: none; padding: 15px; margin: 20px; }
     }
 
     /* Styles pour capture d'écran optimisée */

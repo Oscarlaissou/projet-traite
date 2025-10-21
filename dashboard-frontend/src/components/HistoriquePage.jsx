@@ -47,7 +47,13 @@ const HistoriquePage = () => {
       if (!res.ok) throw new Error('Erreur lors du chargement de l\'historique')
       const data = await res.json()
       const rows = Array.isArray(data) ? data : []
-      setHistoriqueData(rows)
+      // Trier par date de dernière modification/d'activité décroissante
+      const sorted = rows.slice().sort((a, b) => {
+        const da = a && a.date ? new Date(a.date).getTime() : 0
+        const db = b && b.date ? new Date(b.date).getTime() : 0
+        return db - da
+      })
+      setHistoriqueData(sorted)
       setPage(1)
       setPagination({ current_page: 1, last_page: Math.max(1, Math.ceil(rows.length / perPage)), total: rows.length })
     } catch (e) {
@@ -90,7 +96,7 @@ const HistoriquePage = () => {
 
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: viewportWidth >= 992 ? '1.2fr 1.8fr' : '1fr', 
+        gridTemplateColumns: viewportWidth >= 992 ? '0.8fr 2.2fr' : '1fr', 
         gap: viewportWidth >= 768 ? 16 : 8, 
         minHeight: viewportWidth >= 768 ? 'calc(88vh - 120px)' : 'auto'
       }}>
@@ -101,7 +107,7 @@ const HistoriquePage = () => {
         }}>
           <div className="frame-card" style={{
             backgroundImage: `url(${MonImage})`,
-            backgroundSize: 'cover',
+            backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             minHeight: viewportWidth >= 992 ? 480 : '30vh'

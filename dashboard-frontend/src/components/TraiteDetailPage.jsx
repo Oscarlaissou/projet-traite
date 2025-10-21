@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react"
+import { useLocation } from "react-router-dom"
+import Toast from "./Toast"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Edit3, Trash2, Printer } from "lucide-react"
 import { formatMoney } from "../utils/format"
@@ -9,6 +11,8 @@ const TraiteDetailPage = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const [item, setItem] = useState(null)
+  const location = useLocation()
+  const [toast, setToast] = useState(() => (location.state && location.state.toast) ? location.state.toast : null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
@@ -112,15 +116,18 @@ const TraiteDetailPage = () => {
         <span className="crumb-current">Détail</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr', gap: 16, height: 'calc(100vh - 120px)' }}>
+      {toast && (
+        <Toast title={toast.title} message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 2.2fr', gap: 16, height: 'calc(100vh - 120px)' }}>
         <div style={{
           backgroundImage: `url(${MonImage})`,
-          backgroundSize: 'cover',
+          backgroundSize: 'contain',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           // border: '1px solid #e5e7eb',
           borderRadius: 10,
-          minHeight: 480
+          minHeight: 360
         }} />
 
         <div style={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>

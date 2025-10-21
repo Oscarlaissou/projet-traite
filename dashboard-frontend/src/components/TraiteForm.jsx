@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { formatMoney } from "../utils/format"
+import SuccessDialog from "./SuccessDialog"
 
 const defaultForm = {
   numero: "",
@@ -19,6 +20,8 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
   const [form, setForm] = useState(defaultForm)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [successData, setSuccessData] = useState(null)
 
   useEffect(() => {
     if (initialValue) {
@@ -88,7 +91,20 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         throw new Error(msg || 'Erreur lors de la sauvegarde')
       }
       const saved = await res.json()
-      onSaved && onSaved(saved)
+      
+      // Popup de confirmation pour nouvelle traite
+      if (!isEdit) {
+        setSuccessData({
+          id: saved.id,
+          title: "Traite créée avec succès !",
+          message: "Votre traite a été enregistrée avec succès.",
+          numero: saved.numero || 'Auto-généré',
+          montant: formatMoney(saved.montant)
+        })
+        setShowSuccessDialog(true)
+      } else {
+        onSaved && onSaved(saved)
+      }
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
     } finally {
@@ -96,9 +112,18 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
     }
   }
 
+  const handleSuccessDialogClose = () => {
+    setShowSuccessDialog(false)
+    // Redirection vers la page détail après fermeture du dialogue
+    if (successData && successData.id) {
+      onSaved && onSaved(successData)
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-      {error && <div style={{ gridColumn: '1 / -1', color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', borderRadius:6, padding: 8 }}>{error}</div>}
+    <>
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+        {error && <div style={{ gridColumn: '1 / -1', color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', borderRadius:6, padding: 8 }}>{error}</div>}
 
       <div>
         <label>Numéro de la traite </label>
@@ -167,6 +192,18 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         <button type="submit" disabled={submitting} className="submit-button">{submitting ? 'Enregistrement...' : (submitLabel || (initialValue?.id ? 'Modifier' : 'Créer'))}</button>
       </div>
     </form>
+
+    {showSuccessDialog && successData && (
+      <SuccessDialog
+        isOpen={showSuccessDialog}
+        onClose={handleSuccessDialogClose}
+        title={successData.title}
+        message={successData.message}
+        numero={successData.numero}
+        montant={successData.montant}
+      />
+    )}
+    </>
   )
 }
 

@@ -61,7 +61,7 @@
 .table-wrap {
   overflow-x: auto;
   padding-bottom: 8px; /* espace pour la pagination */
-  border: 2px solid #1f2c49; /* Bordure bleue foncée pour les frames de tableaux */
+  border: 1px solid #1f2c49; /* Bordure bleue foncée pour les frames de tableaux */
   border-radius: 12px;
   padding: 12px;
   background: #ffffff;
