@@ -122,8 +122,22 @@ class TraitesController extends Controller
         }
 
         $perPage = (int) $request->get('per_page', 10);
+        
+        // Si c'est pour l'exportation (per_page élevé), retourner toutes les données sans pagination
+        if ($perPage >= 1000) {
+            $allData = $query->orderBy($sort, $dir)->get();
+            return response()->json([
+                'data' => $allData,
+                'total' => $allData->count(),
+                'per_page' => $allData->count(),
+                'current_page' => 1,
+                'last_page' => 1
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        }
+        
+        // Limitation normale pour la pagination
         if ($perPage < 1 || $perPage > 200) { $perPage = 10; }
-        return response()->json($query->orderBy($sort, $dir)->paginate($perPage));
+        return response()->json($query->orderBy($sort, $dir)->paginate($perPage), 200, [], JSON_UNESCAPED_UNICODE);
     }
 
     /**

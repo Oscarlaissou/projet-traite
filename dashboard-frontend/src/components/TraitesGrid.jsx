@@ -57,12 +57,53 @@ const TraitesGrid = () => {
     return headers
   }
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     try {
+      console.log('Début de l\'exportation CSV...')
+      // Récupérer TOUTES les données sans pagination pour l'export
+      const params = new URLSearchParams()
+      if (search) params.append('search', search)
+      if (statut) params.append('statut', statut)
+      if (from) params.append('from', from)
+      if (to) params.append('to', to)
+      if (sort?.key) params.append('sort', sort.key)
+      if (sort?.dir) params.append('dir', sort.dir)
+      params.append('per_page', '1000') // Récupérer jusqu'à 1000 éléments
+      
+      const url = `${baseUrl}/api/traites?${params.toString()}`
+      console.log('URL de l\'API:', url)
+      
+      const res = await fetch(url, { headers: authHeaders() })
+      console.log('Réponse de l\'API:', res.status, res.statusText)
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('Erreur API:', errorText)
+        throw new Error(`Erreur lors du chargement des données pour export: ${res.status} ${res.statusText}`)
+      }
+      
+      const data = await res.json()
+      console.log('Données reçues:', data)
+      const allItems = data.data || data || []
+      console.log('Nombre d\'éléments à exporter:', allItems.length)
+      
       const headerKeys = Columns.map(c => c.key)
       const headerLabels = Columns.map(c => c.label)
-      const rows = items.map(it => headerKeys.map(k => {
+      console.log('Clés des colonnes:', headerKeys)
+      console.log('Labels des colonnes:', headerLabels)
+      console.log('Premier élément de données:', allItems[0])
+      
+      // Vérifier spécifiquement le champ numero
+      console.log('Vérification du champ numero:')
+      allItems.forEach((item, index) => {
+        console.log(`Élément ${index}: numero = "${item.numero}"`)
+      })
+      
+      const rows = allItems.map(it => headerKeys.map(k => {
         let v = it[k]
+        if (k === 'numero') {
+          console.log(`Champ numero trouvé: "${v}"`)
+        }
         if (k === 'echeance' || k === 'date_emission') {
           if (v) {
             const d = new Date(v)
@@ -81,15 +122,22 @@ const TraitesGrid = () => {
         // escape quotes and wrap
         return '"' + s.replace(/"/g, '""') + '"'
       }).join(','))
-      const csv = [headerLabels.join(','), ...rows].join('\n')
+      
+      console.log('Première ligne CSV:', rows[0])
+      
+      // Ajouter BOM UTF-8 pour assurer la compatibilité avec Excel
+      const csv = '\uFEFF' + [headerLabels.join(','), ...rows].join('\n')
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
+      const url_download = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
+      a.href = url_download
       a.download = `traites_${new Date().toISOString().slice(0,10)}.csv`
       a.click()
-      URL.revokeObjectURL(url)
+      URL.revokeObjectURL(url_download)
+      
+      console.log('Exportation CSV terminée avec succès')
     } catch (e) {
+      console.error('Erreur lors de l\'exportation:', e)
       alert(e.message || 'Export CSV échoué')
     }
   }
@@ -126,52 +174,115 @@ const TraitesGrid = () => {
     return { headers, records }
   }
 
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [csvHeaders, setCsvHeaders] = useState([])
+  const [csvRecords, setCsvRecords] = useState([])
+  const [columnMapping, setColumnMapping] = useState({})
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0, status: '' })
+
+  // Mapping des colonnes CSV vers les champs de la base de données
+  const fieldMappings = {
+    numero: ['num', 'numero', 'numéro', 'Numéro'],
+    nombre_traites: ['nbre tt', 'nbre_tt', 'nombre_traites', 'nb traites'],
+    echeance: ['echeance', 'échéance', 'Echéance'],
+    date_emission: ['datett', 'date_tt', 'date_emission', 'émission'],
+    montant: ['mt', 'montant', 'Montant'],
+    nom_raison_sociale: ['tire', 'nom_raison_sociale', 'nom/raison sociale'],
+    domiciliation_bancaire: ['domiciliation', 'domiciliation_bancaire'],
+    rib: ['numcompte', 'rib', 'RIB'],
+    motif: ['motif', 'Motif'],
+    commentaires: ['commentaires', 'Commentaires'],
+    statut: ['statut', 'Statut']
+  }
+
   const handleFileChange = async (e) => {
     const file = e.target.files && e.target.files[0]
     if (!file) return
+    
     try {
       const text = await file.text()
       const { headers, records } = parseCSV(text)
       if (!headers.length || !records.length) throw new Error('CSV vide ou invalide')
 
-      // Map CSV headers to payload fields
-      const headerToIndex = headers.reduce((acc, h, i) => { acc[h.toLowerCase()] = i; return acc }, {})
-      const toVal = (row, key) => {
-        const idx = headerToIndex[key]
-        return idx != null ? row[idx] : ''
-      }
+      // Normaliser les en-têtes (supprimer espaces, convertir en minuscules)
+      const normalizedHeaders = headers.map(h => h.trim().toLowerCase())
+      
+      // Auto-mapper les colonnes
+      const autoMapping = {}
+      Object.keys(fieldMappings).forEach(field => {
+        const possibleNames = fieldMappings[field]
+        for (const name of possibleNames) {
+          const index = normalizedHeaders.findIndex(h => h === name.toLowerCase())
+          if (index !== -1) {
+            autoMapping[field] = headers[index] // Garder le nom original
+            break
+          }
+        }
+      })
 
+      setCsvHeaders(headers)
+      setCsvRecords(records)
+      setColumnMapping(autoMapping)
+      setImportModalOpen(true)
+      
+    } catch (err) {
+      alert(err.message || 'Erreur lors de la lecture du fichier CSV')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
+  }
+
+  const handleImportConfirm = async () => {
+    try {
+      setImportProgress({ current: 0, total: csvRecords.length, status: 'Importation en cours...' })
+      
       const token = localStorage.getItem('token')
       const headersReq = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
       if (token) headersReq['Authorization'] = `Bearer ${token}`
 
-      for (const row of records) {
-        // Accept common French headers; fallback to our column keys
+      // Créer un mapping des colonnes vers les indices
+      const headerToIndex = csvHeaders.reduce((acc, h, i) => { acc[h] = i; return acc }, {})
+      
+      const toVal = (row, fieldName) => {
+        const mappedColumn = columnMapping[fieldName]
+        if (!mappedColumn) return ''
+        const idx = headerToIndex[mappedColumn]
+        return idx != null ? row[idx] : ''
+      }
+
+      for (let i = 0; i < csvRecords.length; i++) {
+        const row = csvRecords[i]
+        setImportProgress({ current: i + 1, total: csvRecords.length, status: `Importation ligne ${i + 1}...` })
+        
         const payload = {
-          numero: toVal(row, 'numero') || toVal(row, 'numéro') || toVal(row, 'Numéro'.toLowerCase()),
+          numero: toVal(row, 'numero') || '',
           nombre_traites: Number((toVal(row, 'nombre_traites') || '1').replace(/\D+/g, '')) || 1,
-          echeance: toVal(row, 'echeance') || toVal(row, 'échéance') || '',
-          date_emission: toVal(row, 'date_emission') || toVal(row, 'émission') || '',
+          echeance: toVal(row, 'echeance') || '',
+          date_emission: toVal(row, 'date_emission') || '',
           montant: Number(String(toVal(row, 'montant') || '').replace(/\D+/g, '')) || 0,
-          nom_raison_sociale: toVal(row, 'nom_raison_sociale') || toVal(row, 'nom/raison sociale'.toLowerCase()) || '',
-          domiciliation_bancaire: toVal(row, 'domiciliation_bancaire') || toVal(row, 'domiciliation') || '',
+          nom_raison_sociale: toVal(row, 'nom_raison_sociale') || '',
+          domiciliation_bancaire: toVal(row, 'domiciliation_bancaire') || '',
           rib: toVal(row, 'rib') || '',
           motif: toVal(row, 'motif') || '',
           commentaires: toVal(row, 'commentaires') || '',
           statut: toVal(row, 'statut') || 'Non échu',
         }
+        
         const res = await fetch(`${baseUrl}/api/traites`, { method: 'POST', headers: headersReq, body: JSON.stringify(payload) })
         if (!res.ok) {
           const msg = await res.text()
-          throw new Error(msg || 'Import échoué pour une ligne')
+          throw new Error(`Import échoué pour la ligne ${i + 1}: ${msg}`)
         }
       }
-      alert('Import CSV terminé')
-      fetchItems()
+      
+      setImportProgress({ current: csvRecords.length, total: csvRecords.length, status: 'Importation terminée avec succès!' })
+      setTimeout(() => {
+        setImportModalOpen(false)
+        fetchItems()
+      }, 2000)
+      
     } catch (err) {
-      alert(err.message || 'Import CSV échoué')
-    } finally {
-      if (importInputRef.current) importInputRef.current.value = ''
+      setImportProgress({ current: 0, total: 0, status: `Erreur: ${err.message}` })
     }
   }
 
