@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Plus, ArrowLeft } from "lucide-react"
 import { formatMoney } from "../utils/format"
+import Pagination from './Pagination'
 import "./Traites.css"
 
 const Columns = [
@@ -147,30 +148,109 @@ const TraitesGrid = () => {
   }
 
   const parseCSV = (text) => {
-    // Simple CSV parser supporting quotes
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0)
-    if (!lines.length) return { headers: [], records: [] }
-    const parseLine = (line) => {
-      const out = []
-      let cur = ''
+    console.log('=== DÉBUT PARSING CSV AVEC GUILLEMETS ===')
+    
+    // Force semicolon separator for CFAO data
+    const separator = ';'
+    console.log(`Utilisation du séparateur point-virgule pour les données CFAO`)
+    
+    // Parse CSV with proper handling of quotes and multiline content
+    const parseCSVWithQuotes = (csvText) => {
+      const rows = []
+      let currentRow = []
+      let currentField = ''
       let inQuotes = false
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i]
-        if (inQuotes) {
-          if (ch === '"') {
-            if (line[i+1] === '"') { cur += '"'; i++ } else { inQuotes = false }
-          } else { cur += ch }
+      let i = 0
+      
+      while (i < csvText.length) {
+        const char = csvText[i]
+        const nextChar = csvText[i + 1]
+        
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            // Escaped quote
+            currentField += '"'
+            i += 2
+            continue
+          } else {
+            // Toggle quote state
+            inQuotes = !inQuotes
+          }
+        } else if (char === separator && !inQuotes) {
+          // End of field
+          currentRow.push(currentField.trim())
+          currentField = ''
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          // End of row (but not if we're inside quotes)
+          if (currentField !== '' || currentRow.length > 0) {
+            currentRow.push(currentField.trim())
+            if (currentRow.some(field => field !== '')) {
+              rows.push(currentRow)
+            }
+            currentRow = []
+            currentField = ''
+          }
+          // Skip \r\n
+          if (char === '\r' && nextChar === '\n') {
+            i++
+          }
         } else {
-          if (ch === '"') { inQuotes = true }
-          else if (ch === ',') { out.push(cur); cur = '' }
-          else { cur += ch }
+          // Regular character
+          currentField += char
+        }
+        i++
+      }
+      
+      // Add last field and row if exists
+      if (currentField !== '' || currentRow.length > 0) {
+        currentRow.push(currentField.trim())
+        if (currentRow.some(field => field !== '')) {
+          rows.push(currentRow)
         }
       }
-      out.push(cur)
-      return out
+      
+      return rows
     }
-    const headers = parseLine(lines[0]).map(h => h.trim())
-    const records = lines.slice(1).map(l => parseLine(l))
+    
+    const rows = parseCSVWithQuotes(text)
+    console.log('Nombre de lignes parsées:', rows.length)
+    
+    if (rows.length === 0) {
+      return { headers: [], records: [] }
+    }
+    
+    // First row is headers
+    const headers = rows[0]
+    console.log('Headers détectés:', headers)
+    console.log('Nombre de colonnes attendues:', headers.length)
+    
+    // Rest are data rows
+    const records = rows.slice(1).map((row, index) => {
+      console.log(`\n=== Traitement ligne ${index + 2} ===`)
+      console.log(`Row brute:`, row)
+      
+      // Ensure row has same length as headers
+      const record = new Array(headers.length).fill('')
+      row.forEach((field, fieldIndex) => {
+        if (fieldIndex < headers.length) {
+          record[fieldIndex] = field
+        }
+      })
+      
+      console.log(`Record final:`, record)
+      console.log(`Correspondance:`, headers.map((header, i) => `${header}: "${record[i]}"`))
+      
+      return record
+    })
+    
+    console.log('\n=== RÉSUMÉ DU PARSING ===')
+    console.log('Headers:', headers)
+    console.log('Nombre de colonnes:', headers.length)
+    console.log('Nombre de lignes de données:', records.length)
+    records.forEach((record, index) => {
+      console.log(`Ligne ${index + 2}:`, record)
+    })
+    
     return { headers, records }
   }
 
@@ -179,20 +259,129 @@ const TraitesGrid = () => {
   const [csvRecords, setCsvRecords] = useState([])
   const [columnMapping, setColumnMapping] = useState({})
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, status: '' })
+  const [duplicates, setDuplicates] = useState({ csvDuplicates: [], existingDuplicates: [] })
+  const [duplicateAction, setDuplicateAction] = useState('skip') // 'skip', 'replace', 'import_all'
+  const [isImporting, setIsImporting] = useState(false)
 
   // Mapping des colonnes CSV vers les champs de la base de données
   const fieldMappings = {
-    numero: ['num', 'numero', 'numéro', 'Numéro'],
-    nombre_traites: ['nbre tt', 'nbre_tt', 'nombre_traites', 'nb traites'],
-    echeance: ['echeance', 'échéance', 'Echéance'],
-    date_emission: ['datett', 'date_tt', 'date_emission', 'émission'],
-    montant: ['mt', 'montant', 'Montant'],
-    nom_raison_sociale: ['tire', 'nom_raison_sociale', 'nom/raison sociale'],
-    domiciliation_bancaire: ['domiciliation', 'domiciliation_bancaire'],
-    rib: ['numcompte', 'rib', 'RIB'],
-    motif: ['motif', 'Motif'],
-    commentaires: ['commentaires', 'Commentaires'],
-    statut: ['statut', 'Statut']
+    numero: ['num'],
+    nombre_traites: ['nbreTT'],
+    echeance: ['echeance'],
+    date_emission: ['DateTT'],
+    montant: ['Mt'],
+    nom_raison_sociale: ['tire'],
+    domiciliation_bancaire: ['domiciliation'],
+    rib: ['NumCompte'],
+    motif: ['motif'],
+    commentaires: ['commentaires'],
+    statut: ['statut']
+  }
+
+  // Fonction pour détecter les doublons
+  const detectDuplicates = async (headers, records, columnMapping) => {
+    console.log('=== DÉTECTION DES DOUBLONS ===')
+    console.log('headers:', headers)
+    console.log('records:', records)
+    console.log('columnMapping:', columnMapping)
+    
+    const csvDuplicates = []
+    const existingDuplicates = []
+    
+    // Détecter les doublons dans le CSV lui-même (basé sur nombre de traites + montant)
+    const numeroIndex = headers.findIndex(h => columnMapping.numero === h)
+    const nbTraitesIndex = headers.findIndex(h => columnMapping.nombre_traites === h)
+    const montantIndex = headers.findIndex(h => columnMapping.montant === h)
+    
+    console.log('numeroIndex:', numeroIndex)
+    console.log('nbTraitesIndex:', nbTraitesIndex)
+    console.log('montantIndex:', montantIndex)
+    console.log('columnMapping.numero:', columnMapping.numero)
+    console.log('columnMapping.nombre_traites:', columnMapping.nombre_traites)
+    console.log('columnMapping.montant:', columnMapping.montant)
+    
+    if (numeroIndex !== -1 && nbTraitesIndex !== -1 && montantIndex !== -1) {
+      const seenTraites = new Map() // Utiliser Map pour stocker nbTraites + montant comme clé
+      
+      records.forEach((record, index) => {
+        const numero = record[numeroIndex]?.trim()
+        const nbTraites = parseInt(record[nbTraitesIndex]) || 0
+        const montant = parseFloat(record[montantIndex]) || 0
+        
+        console.log(`Ligne ${index + 2}: numero = "${numero}", nbTraites = ${nbTraites}, montant = ${montant}`)
+        
+        if (nbTraites > 0 && montant > 0) {
+          const cleTraite = `${nbTraites}_${montant}` // Clé composite comme dans le backend
+          
+          if (seenTraites.has(cleTraite)) {
+            csvDuplicates.push({ 
+              line: index + 2, 
+              numero, 
+              nbTraites,
+              montant,
+              type: 'csv',
+              reason: `Doublon par nombre de traites (${nbTraites}) et montant (${montant})`
+            })
+            console.log(`Doublon CSV détecté: ligne ${index + 2}, numero "${numero}", nbTraites ${nbTraites}, montant ${montant}`)
+          } else {
+            seenTraites.set(cleTraite, { line: index + 2, numero })
+          }
+        }
+      })
+    } else {
+      console.log('ERREUR: Colonnes requises non trouvées dans le mapping')
+      if (numeroIndex === -1) console.log('Colonne numero manquante')
+      if (nbTraitesIndex === -1) console.log('Colonne nombre_traites manquante')
+      if (montantIndex === -1) console.log('Colonne montant manquante')
+    }
+    
+    // Détecter les doublons avec les données existantes
+    try {
+      console.log('Vérification des doublons existants...')
+      const res = await fetch(`${baseUrl}/api/traites?per_page=1000`, { headers: authHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        const existingTraites = data.data || data || []
+        
+        // Créer un Set des combinaisons nbTraites + montant existantes
+        const existingTraitesKeys = new Set(
+          existingTraites
+            .filter(t => t.nombre_traites > 0 && t.montant > 0)
+            .map(t => `${t.nombre_traites}_${t.montant}`)
+        )
+        console.log('existingTraitesKeys:', existingTraitesKeys)
+        
+        records.forEach((record, index) => {
+          const numero = record[numeroIndex]?.trim()
+          const nbTraites = parseInt(record[nbTraitesIndex]) || 0
+          const montant = parseFloat(record[montantIndex]) || 0
+          
+          if (nbTraites > 0 && montant > 0) {
+            const cleTraite = `${nbTraites}_${montant}`
+            if (existingTraitesKeys.has(cleTraite)) {
+              existingDuplicates.push({ 
+                line: index + 2, 
+                numero, 
+                nbTraites,
+                montant,
+                type: 'existing',
+                reason: `Nombre de traites (${nbTraites}) et montant (${montant}) déjà existant en base`
+              })
+              console.log(`Doublon existant détecté: ligne ${index + 2}, numero "${numero}", nbTraites ${nbTraites}, montant ${montant}`)
+            }
+          }
+        })
+      } else {
+        console.log('Erreur lors de la récupération des traites existantes:', res.status)
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification des doublons existants:', error)
+    }
+    
+    console.log('csvDuplicates:', csvDuplicates)
+    console.log('existingDuplicates:', existingDuplicates)
+    
+    return { csvDuplicates, existingDuplicates }
   }
 
   const handleFileChange = async (e) => {
@@ -204,25 +393,55 @@ const TraitesGrid = () => {
       const { headers, records } = parseCSV(text)
       if (!headers.length || !records.length) throw new Error('CSV vide ou invalide')
 
-      // Normaliser les en-têtes (supprimer espaces, convertir en minuscules)
-      const normalizedHeaders = headers.map(h => h.trim().toLowerCase())
-      
-      // Auto-mapper les colonnes
+      // Auto-mapper les colonnes avec parsing amélioré
       const autoMapping = {}
+      console.log('=== MAPPING AUTOMATIQUE ===')
+      console.log('Headers détectés:', headers)
+      console.log('Headers disponibles pour mapping:', headers.map((h, i) => `${i}: "${h}"`))
+      
       Object.keys(fieldMappings).forEach(field => {
         const possibleNames = fieldMappings[field]
+        console.log(`\n--- Recherche du champ ${field} ---`)
+        console.log(`Noms possibles:`, possibleNames)
+        
         for (const name of possibleNames) {
-          const index = normalizedHeaders.findIndex(h => h === name.toLowerCase())
+          // Recherche exacte d'abord
+          let index = headers.findIndex(h => h === name)
+          console.log(`Recherche exacte "${name}":`, index !== -1 ? `✅ Trouvé à l'index ${index}` : '❌ Non trouvé')
+          
+          // Si pas trouvé, recherche insensible à la casse
+          if (index === -1) {
+            index = headers.findIndex(h => h.toLowerCase() === name.toLowerCase())
+            console.log(`Recherche insensible à la casse "${name}":`, index !== -1 ? `✅ Trouvé à l'index ${index}` : '❌ Non trouvé')
+          }
+          
+          // Si pas trouvé, recherche partielle
+          if (index === -1) {
+            index = headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(h.toLowerCase()))
+            console.log(`Recherche partielle "${name}":`, index !== -1 ? `✅ Trouvé à l'index ${index}` : '❌ Non trouvé')
+          }
+          
           if (index !== -1) {
             autoMapping[field] = headers[index] // Garder le nom original
+            console.log(`✅ Champ ${field} mappé vers "${headers[index]}" (index ${index})`)
             break
           }
         }
+        
+        if (!autoMapping[field]) {
+          console.log(`❌ Champ ${field} non mappé - sera laissé vide`)
+        }
       })
+      
+      console.log('Mapping final:', autoMapping)
+
+      // Détecter les doublons
+      const duplicates = await detectDuplicates(headers, records, autoMapping)
 
       setCsvHeaders(headers)
       setCsvRecords(records)
       setColumnMapping(autoMapping)
+      setDuplicates(duplicates)
       setImportModalOpen(true)
       
     } catch (err) {
@@ -234,7 +453,15 @@ const TraitesGrid = () => {
 
   const handleImportConfirm = async () => {
     try {
-      setImportProgress({ current: 0, total: csvRecords.length, status: 'Importation en cours...' })
+      console.log('=== DÉBUT IMPORTATION ===')
+      console.log('csvRecords:', csvRecords)
+      console.log('csvHeaders:', csvHeaders)
+      console.log('columnMapping:', columnMapping)
+      console.log('duplicates:', duplicates)
+      console.log('duplicateAction:', duplicateAction)
+      
+      setIsImporting(true)
+      setImportProgress({ current: 0, total: csvRecords.length, status: 'Préparation de l\'importation...' })
       
       const token = localStorage.getItem('token')
       const headersReq = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
@@ -242,46 +469,103 @@ const TraitesGrid = () => {
 
       // Créer un mapping des colonnes vers les indices
       const headerToIndex = csvHeaders.reduce((acc, h, i) => { acc[h] = i; return acc }, {})
+      console.log('headerToIndex:', headerToIndex)
       
       const toVal = (row, fieldName) => {
         const mappedColumn = columnMapping[fieldName]
-        if (!mappedColumn) return ''
+        if (!mappedColumn) {
+          console.log(`⚠️ Champ ${fieldName} non mappé`)
+          return ''
+        }
         const idx = headerToIndex[mappedColumn]
-        return idx != null ? row[idx] : ''
+        const value = idx != null ? row[idx] : ''
+        console.log(`📋 ${fieldName} (${mappedColumn}): "${value}"`)
+        return value
       }
 
+      // Préparer les données à importer - le backend gère maintenant les doublons
+      const dataToImport = []
+      
+      console.log('\n=== PRÉPARATION DES DONNÉES POUR IMPORTATION ===')
+      console.log('Nombre de lignes à traiter:', csvRecords.length)
+      
       for (let i = 0; i < csvRecords.length; i++) {
         const row = csvRecords[i]
-        setImportProgress({ current: i + 1, total: csvRecords.length, status: `Importation ligne ${i + 1}...` })
+        
+        console.log(`\n--- Traitement ligne ${i + 1} ---`)
+        console.log('Row data:', row)
         
         const payload = {
-          numero: toVal(row, 'numero') || '',
+          numero: toVal(row, 'numero'),
           nombre_traites: Number((toVal(row, 'nombre_traites') || '1').replace(/\D+/g, '')) || 1,
-          echeance: toVal(row, 'echeance') || '',
-          date_emission: toVal(row, 'date_emission') || '',
-          montant: Number(String(toVal(row, 'montant') || '').replace(/\D+/g, '')) || 0,
-          nom_raison_sociale: toVal(row, 'nom_raison_sociale') || '',
-          domiciliation_bancaire: toVal(row, 'domiciliation_bancaire') || '',
-          rib: toVal(row, 'rib') || '',
-          motif: toVal(row, 'motif') || '',
-          commentaires: toVal(row, 'commentaires') || '',
-          statut: toVal(row, 'statut') || 'Non échu',
+          echeance: toVal(row, 'echeance'),
+          date_emission: toVal(row, 'date_emission'),
+          montant: Number(String(toVal(row, 'montant') || '').replace(/[^\d.,]/g, '').replace(',', '.')) || 0,
+          nom_raison_sociale: toVal(row, 'nom_raison_sociale'),
+          domiciliation_bancaire: toVal(row, 'domiciliation_bancaire'),
+          rib: toVal(row, 'rib'),
+          motif: toVal(row, 'motif') || '', // Laisser vide si non mappé
+          commentaires: toVal(row, 'commentaires') || '', // Laisser vide si non mappé
+          statut: toVal(row, 'statut') || '', // Laisser vide si non mappé
         }
         
-        const res = await fetch(`${baseUrl}/api/traites`, { method: 'POST', headers: headersReq, body: JSON.stringify(payload) })
-        if (!res.ok) {
-          const msg = await res.text()
-          throw new Error(`Import échoué pour la ligne ${i + 1}: ${msg}`)
-        }
+        console.log(`✅ Payload ligne ${i + 1}:`, payload)
+        dataToImport.push(payload)
       }
       
-      setImportProgress({ current: csvRecords.length, total: csvRecords.length, status: 'Importation terminée avec succès!' })
+      console.log('dataToImport:', dataToImport)
+      console.log('Nombre d\'éléments à importer:', dataToImport.length)
+      
+      // Vérifier la taille des données
+      const dataSize = JSON.stringify(dataToImport).length
+      console.log('Taille des données:', dataSize, 'bytes (' + Math.round(dataSize / 1024 / 1024 * 100) / 100 + ' MB)')
+      
+      setImportProgress({ current: 0, total: dataToImport.length, status: 'Importation en cours...' })
+      
+      // Utiliser la route de test temporaire
+      const requestBody = { 
+        data: dataToImport, 
+        duplicate_action: duplicateAction 
+      }
+      console.log('Request body:', requestBody)
+      
+      const res = await fetch(`${baseUrl}/api/traites/import-csv`, { 
+        method: 'POST', 
+        headers: headersReq, 
+        body: JSON.stringify(requestBody) 
+      })
+      
+      console.log('Response status:', res.status)
+      console.log('Response headers:', res.headers)
+      
+      if (!res.ok) {
+        const msg = await res.text()
+        console.error('Erreur API:', msg)
+        throw new Error(`Import échoué: ${msg}`)
+      }
+      
+      const result = await res.json()
+      console.log('Result:', result)
+      
+      let statusMessage = `Importation terminée! ${result.imported} traites importées`
+      if (result.skipped > 0) {
+        statusMessage += `, ${result.skipped} doublons ignorés`
+      }
+      if (result.errors && result.errors.length > 0) {
+        statusMessage += `, ${result.errors.length} erreurs`
+      }
+      
+      setImportProgress({ current: dataToImport.length, total: dataToImport.length, status: statusMessage })
+      
       setTimeout(() => {
         setImportModalOpen(false)
+        setIsImporting(false)
         fetchItems()
       }, 2000)
       
     } catch (err) {
+      console.error('Erreur importation:', err)
+      setIsImporting(false)
       setImportProgress({ current: 0, total: 0, status: `Erreur: ${err.message}` })
     }
   }
@@ -406,6 +690,55 @@ const TraitesGrid = () => {
 
   return (
     <div className="dashboard-stats">
+      {/* Indicateur de chargement global */}
+      {isImporting && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          color: 'white'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            border: '4px solid #ffffff',
+            borderTop: '4px solid transparent',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '20px'
+          }} />
+          <h3 style={{ margin: 0, fontSize: '18px' }}>Importation en cours...</h3>
+          <p style={{ margin: '10px 0 0 0', fontSize: '14px', opacity: 0.8 }}>
+            {importProgress.status || 'Traitement des données...'}
+          </p>
+          {importProgress.total > 0 && (
+            <div style={{ marginTop: '20px', width: '300px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span>{importProgress.current} / {importProgress.total}</span>
+                <span>{Math.round((importProgress.current / importProgress.total) * 100)}%</span>
+              </div>
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.3)', borderRadius: '4px', height: '8px' }}>
+                <div style={{
+                  backgroundColor: '#ffffff',
+                  height: '100%',
+                  borderRadius: '4px',
+                  width: `${(importProgress.current / importProgress.total) * 100}%`,
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
       <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'numero', dir: 'desc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
         <ArrowLeft size={18} />
       </button>
@@ -490,33 +823,255 @@ const TraitesGrid = () => {
           <tfoot>
             <tr>
               <td colSpan={Columns.length}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>Afficher</span>
-                    <select className="search-input" value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value || '10', 10)); setPage(1); }}>
-                      {[10,20,50,100].map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                    <span>lignes</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap',marginLeft:200}}>
-                    <button className="page-button" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Précédent</button>
-                    {Array.from({ length: pagination.last_page || 1 }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(p => (
-                      <button key={p} className={`page-button ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>
-                    ))}
-                    <button className="page-button" disabled={page >= (pagination.last_page || 1)} onClick={() => setPage(p => Math.min((pagination.last_page || 1), p + 1))}>Suivant</button>
-                  </div>
-                </div>
+                <Pagination
+                  currentPage={pagination.current_page || page}
+                  totalPages={pagination.last_page || 1}
+                  totalItems={pagination.total || 0}
+                  itemsPerPage={perPage}
+                  onPageChange={(newPage) => setPage(newPage)}
+                  onItemsPerPageChange={(newPerPage) => {
+                    setPerPage(newPerPage)
+                    setPage(1)
+                  }}
+                  itemsPerPageOptions={[10, 20, 50, 100]}
+                  showItemsPerPage={true}
+                  showTotal={true}
+                />
               </td>
             </tr>
           </tfoot>
         </div>
       )}
-    </div>
+      
+      {/* Modal d'importation CSV */}
+    {importModalOpen && (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: 8,
+          padding: 24,
+          maxWidth: '90vw',
+          maxHeight: '90vh',
+          overflow: 'auto',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+        }}>
+          <h3 style={{ marginTop: 0, marginBottom: 20 }}>Configuration de l'importation CSV</h3>
+          
+          {/* Aperçu des données */}
+          <div style={{ marginBottom: 20 }}>
+            <h4>Colonnes détectées dans le fichier CSV :</h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {csvHeaders.map((header, index) => (
+                <span key={index} style={{
+                  backgroundColor: '#f3f4f6',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  fontSize: '12px',
+                  border: '1px solid #d1d5db'
+                }}>
+                  {header}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Détection des doublons */}
+          {(duplicates.csvDuplicates.length > 0 || duplicates.existingDuplicates.length > 0) && (
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ color: '#dc2626' }}>⚠️ Doublons détectés :</h4>
+              
+              {duplicates.csvDuplicates.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Doublons dans le fichier CSV :</strong>
+                  <div style={{ backgroundColor: '#fef2f2', padding: 8, borderRadius: 4, marginTop: 4 }}>
+                    {duplicates.csvDuplicates.map((dup, index) => (
+                      <div key={index} style={{ fontSize: '12px', color: '#dc2626' }}>
+                        Ligne {dup.line}: Numéro "{dup.numero}" déjà présent dans le fichier
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {duplicates.existingDuplicates.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Doublons avec les données existantes :</strong>
+                  <div style={{ backgroundColor: '#fef2f2', padding: 8, borderRadius: 4, marginTop: 4 }}>
+                    {duplicates.existingDuplicates.map((dup, index) => (
+                      <div key={index} style={{ fontSize: '12px', color: '#dc2626' }}>
+                        Ligne {dup.line}: Numéro "{dup.numero}" existe déjà dans la base de données
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div style={{ marginTop: 12 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
+                  Action pour les doublons :
+                </label>
+                <select
+                  value={duplicateAction}
+                  onChange={(e) => setDuplicateAction(e.target.value)}
+                  style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, width: '100%' }}
+                >
+                  <option value="skip">Ignorer les doublons (recommandé)</option>
+                  <option value="import_all">Importer tous les enregistrements</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Mapping des colonnes */}
+          <div style={{ marginBottom: 20 }}>
+            <h4>Mapping des colonnes :</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {Object.keys(fieldMappings).map(field => (
+                <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <label style={{ minWidth: 120, fontSize: '14px' }}>
+                    {Columns.find(c => c.key === field)?.label || field}:
+                  </label>
+                  <select
+                    value={columnMapping[field] || ''}
+                    onChange={(e) => setColumnMapping(prev => ({ ...prev, [field]: e.target.value }))}
+                    style={{ flex: 1, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4 }}
+                  >
+                    <option value="">-- Non mappé --</option>
+                    {csvHeaders.map(header => (
+                      <option key={header} value={header}>{header}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Aperçu des données */}
+          {csvRecords.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h4>Aperçu des données (3 premières lignes) :</h4>
+              <div style={{ overflow: 'auto', maxHeight: 200, border: '1px solid #d1d5db', borderRadius: 4 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f9fafb' }}>
+                      {csvHeaders.map((header, index) => (
+                        <th key={index} style={{ padding: '4px 8px', border: '1px solid #d1d5db', textAlign: 'left' }}>
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvRecords.slice(0, 3).map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex} style={{ padding: '4px 8px', border: '1px solid #d1d5db' }}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Progression de l'importation */}
+          {importProgress.total > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h4>Progression de l'importation :</h4>
+              <div style={{ backgroundColor: '#f3f4f6', borderRadius: 4, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span>{importProgress.status}</span>
+                  <span>{importProgress.current} / {importProgress.total}</span>
+                </div>
+                <div style={{ backgroundColor: '#e5e7eb', borderRadius: 4, height: 8 }}>
+                  <div style={{
+                    backgroundColor: '#10b981',
+                    height: '100%',
+                    borderRadius: 4,
+                    width: `${(importProgress.current / importProgress.total) * 100}%`,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Boutons d'action */}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setImportModalOpen(false)}
+              style={{
+                padding: '8px 16px',
+                border: '1px solid #d1d5db',
+                borderRadius: 4,
+                backgroundColor: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => {
+                console.log('=== CLIC BOUTON IMPORTER ===')
+                console.log('columnMapping:', columnMapping)
+                console.log('csvHeaders:', csvHeaders)
+                console.log('csvRecords:', csvRecords)
+                
+                // Vérifier que les champs requis sont mappés
+                const requiredFields = ['numero', 'nombre_traites', 'echeance', 'date_emission', 'montant', 'nom_raison_sociale']
+                const missingFields = requiredFields.filter(field => !columnMapping[field])
+                
+                if (missingFields.length > 0) {
+                  alert(`Champs requis non mappés: ${missingFields.join(', ')}`)
+                  return
+                }
+                
+                handleImportConfirm()
+              }}
+              disabled={isImporting}
+              style={{
+                padding: '8px 16px',
+                border: 'none',
+                borderRadius: 4,
+                backgroundColor: isImporting ? '#9ca3af' : '#3b82f6',
+                color: 'white',
+                cursor: isImporting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {isImporting && (
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid #ffffff',
+                  borderTop: '2px solid transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+              )}
+              {isImporting ? 'Importation en cours...' : 'Importer'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
   )
 }
 

@@ -18,6 +18,18 @@ class Traite extends Model
         'statut' => 'Non échu',
     ];
 
+    // S'assurer que statut n'est jamais null lors des mises à jour
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::saving(function ($model) {
+            if (is_null($model->statut)) {
+                $model->statut = 'Non échu';
+            }
+        });
+    }
+
     public function activities()
     {
         return $this->hasMany(TraiteActivity::class);

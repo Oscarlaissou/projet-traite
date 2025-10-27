@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Users, Calendar, ArrowLeft, Search, Download } from "lucide-react"
 import { formatMoney } from "../utils/format"
+import Pagination from './Pagination'
 import "./Traites.css"
 import MonImage from "../images/image6.png"
 
@@ -277,51 +278,42 @@ const HistoriquePage = () => {
                 <tfoot>
                 <tr>
                   <td colSpan={7}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
-                      {(() => {
-                        const q = globalQuery.trim().toLowerCase()
-                        const filteredCount = (q ? historiqueData.filter(item => {
-                          const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
-                          const user = item.username || item.user_name || item.user_email || ''
-                          const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, item.statut].join(' ')
-                          return fields.toLowerCase().includes(q)
-                        }) : historiqueData).length
-                        const lastPage = Math.max(1, Math.ceil(filteredCount / perPage))
-                        return (
-                          <div>
-                            Page {Math.min(page, lastPage)} / {lastPage} • {filteredCount} résultats
-                          </div>
-                        )
-                      })()}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>Afficher</span>
-                        <select className="search-input" value={perPage} onChange={(e) => { const newPer = parseInt(e.target.value || '6', 10); setPerPage(newPer); setPage(1); setPagination(p => ({ ...p, current_page: 1, last_page: Math.max(1, Math.ceil(historiqueData.length / newPer)), total: historiqueData.length })); }}>
-                          {[6,12,18,24].map(n => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                        <span>lignes</span>
-                      </div>
-                      {(() => {
-                        const q = globalQuery.trim().toLowerCase()
-                        const filteredCount = (q ? historiqueData.filter(item => {
-                          const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
-                          const user = item.username || item.user_name || item.user_email || ''
-                          const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, item.statut].join(' ')
-                          return fields.toLowerCase().includes(q)
-                        }) : historiqueData).length
-                        const lastPage = Math.max(1, Math.ceil(filteredCount / perPage))
-                        return (
-                          <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap', marginLeft: 200 }}>
-                            <button className="page-button" disabled={page <= 1} onClick={() => { const np = Math.max(1, page - 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Précédent</button>
-                            {Array.from({ length: lastPage }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(pn => (
-                              <button key={pn} className={`page-button ${pn === page ? 'active' : ''}`} onClick={() => { setPage(pn); setPagination(ps => ({ ...ps, current_page: pn })); }}>{pn}</button>
-                            ))}
-                            <button className="page-button" disabled={page >= lastPage} onClick={() => { const np = Math.min(lastPage, page + 1); setPage(np); setPagination(ps => ({ ...ps, current_page: np })); }}>Suivant</button>
-                          </div>
-                        )
-                      })()}
-                    </div>
+                    {(() => {
+                      const q = globalQuery.trim().toLowerCase()
+                      const filteredCount = (q ? historiqueData.filter(item => {
+                        const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+                        const user = item.username || item.user_name || item.user_email || ''
+                        const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, item.statut].join(' ')
+                        return fields.toLowerCase().includes(q)
+                      }) : historiqueData).length
+                      const lastPage = Math.max(1, Math.ceil(filteredCount / perPage))
+                      
+                      return (
+                        <Pagination
+                          currentPage={Math.min(page, lastPage)}
+                          totalPages={lastPage}
+                          totalItems={filteredCount}
+                          itemsPerPage={perPage}
+                          onPageChange={(newPage) => {
+                            setPage(newPage)
+                            setPagination(ps => ({ ...ps, current_page: newPage }))
+                          }}
+                          onItemsPerPageChange={(newPerPage) => {
+                            setPerPage(newPerPage)
+                            setPage(1)
+                            setPagination(p => ({ 
+                              ...p, 
+                              current_page: 1, 
+                              last_page: Math.max(1, Math.ceil(historiqueData.length / newPerPage)), 
+                              total: historiqueData.length 
+                            }))
+                          }}
+                          itemsPerPageOptions={[6, 12, 18, 24]}
+                          showItemsPerPage={true}
+                          showTotal={true}
+                        />
+                      )
+                    })()}
                   </td>
                 </tr>
               </tfoot>

@@ -49,21 +49,66 @@ class TraitesStatsController extends Controller
         }
     }
 
+    public function availableYears(Request $request)
+    {
+        try {
+            // Récupérer toutes les années distinctes présentes dans la base de données
+            $years = Traite::query()
+                ->selectRaw('DISTINCT YEAR(COALESCE(date_emission, created_at)) as year')
+                ->whereNotNull(DB::raw('COALESCE(date_emission, created_at)'))
+                ->orderBy('year', 'desc')
+                ->pluck('year')
+                ->toArray();
+
+            // S'assurer qu'il y a au moins l'année courante
+            $currentYear = (int) date('Y');
+            if (!in_array($currentYear, $years)) {
+                $years[] = $currentYear;
+            }
+
+            // Trier par ordre décroissant (plus récent en premier)
+            rsort($years);
+
+            return response()->json($years);
+        } catch (\Throwable $e) {
+            // En cas d'erreur, retourner au moins l'année courante
+            return response()->json([(int) date('Y')]);
+        }
+    }
+
     public function monthly(Request $request)
     {
         try {
-            // Retourne 12 mois glissants: [{ name: '2025-01', traites: 10 }, ...]
+            // Récupérer l'année depuis les paramètres de requête, par défaut année courante
+            $year = $request->get('year', date('Y'));
+            $year = (int) $year; // S'assurer que c'est un entier
+            
+            // Retourne les 12 mois de l'année spécifiée: [{ name: '2025-01', traites: 10 }, ...]
             $rows = Traite::query()
                 ->selectRaw("DATE_FORMAT(COALESCE(date_emission, created_at), '%Y-%m') as ym, COUNT(*) as total")
+                ->whereYear(DB::raw('COALESCE(date_emission, created_at)'), $year)
                 ->groupBy('ym')
                 ->orderBy('ym')
-                ->limit(12)
                 ->get();
 
-            $data = $rows->map(fn($r) => [
-                'name' => $r->ym,
-                'traites' => (int) $r->total,
-            ]);
+            // Créer un tableau avec tous les mois de l'année (même ceux sans données)
+            $months = [];
+            for ($i = 1; $i <= 12; $i++) {
+                $monthKey = sprintf('%04d-%02d', $year, $i);
+                $months[$monthKey] = 0;
+            }
+            
+            // Remplir avec les données existantes
+            foreach ($rows as $row) {
+                $months[$row->ym] = (int) $row->total;
+            }
+
+            $data = array_map(function($ym, $total) {
+                return [
+                    'name' => $ym,
+                    'traites' => $total,
+                ];
+            }, array_keys($months), array_values($months));
 
             return response()->json($data);
         } catch (\Throwable $e) {

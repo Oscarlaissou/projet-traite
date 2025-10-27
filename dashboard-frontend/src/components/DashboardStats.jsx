@@ -16,6 +16,8 @@ const DashboardStats = () => {
   const [stats, setStats] = useState({ total: 0, perDay: 0, perMonth: 0, overdue: 0 })
   const [monthlyData, setMonthlyData] = useState([])
   const [statusData, setStatusData] = useState([])
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [availableYears, setAvailableYears] = useState([new Date().getFullYear()])
   const navigate = useNavigate()
 
   // Adapte les données au style souhaité
@@ -55,7 +57,7 @@ const DashboardStats = () => {
         })
 
         // monthly
-        const resMonthly = await fetch(`${baseUrl}/api/traites/monthly`, {
+        const resMonthly = await fetch(`${baseUrl}/api/traites/monthly?year=${selectedYear}`, {
           headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
         })
         if (resMonthly.ok) {
@@ -71,6 +73,21 @@ const DashboardStats = () => {
           const status = await resStatus.json()
           if (isMounted) setStatusData(Array.isArray(status) ? status : [])
         }
+
+        // available years
+        const resYears = await fetch(`${baseUrl}/api/traites/available-years`, {
+          headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+        })
+        if (resYears.ok) {
+          const years = await resYears.json()
+          if (isMounted) {
+            setAvailableYears(Array.isArray(years) ? years : [new Date().getFullYear()])
+            // Si l'année sélectionnée n'est pas dans les années disponibles, sélectionner la première année
+            if (!years.includes(selectedYear) && years.length > 0) {
+              setSelectedYear(years[0])
+            }
+          }
+        }
       } catch (e) {
         if (!isMounted) return
         setError(e.message || "Erreur inconnue")
@@ -81,7 +98,7 @@ const DashboardStats = () => {
     fetchStats()
     intervalId = setInterval(fetchStats, 300000) // refresh every 5 mins
     return () => { isMounted = false; if (intervalId) clearInterval(intervalId) }
-  }, [])
+  }, [selectedYear])
 
   const cardsData = [
     {
@@ -167,8 +184,29 @@ const DashboardStats = () => {
       {/* Charts Section */}
       <div className="stats-grid" style={{ marginTop: '1rem' }}>
         <div className="stat-card chart-card" style={{ padding: 0 }}>
-          <div style={{ padding: '1rem' }}>
+          <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0, color: '#1a365d' }}>Évolution des Traites</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.875rem', color: '#4b5563' }}>Année:</label>
+              <select 
+                value={selectedYear} 
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                style={{
+                  padding: '0.25rem 0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  backgroundColor: 'white',
+                  color: '#374151'
+                }}
+              >
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div style={{ padding: '0 1rem 1rem', minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loading ? (

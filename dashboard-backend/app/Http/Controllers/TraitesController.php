@@ -125,7 +125,12 @@ class TraitesController extends Controller
         
         // Si c'est pour l'exportation (per_page élevé), retourner toutes les données sans pagination
         if ($perPage >= 1000) {
-            $allData = $query->orderBy($sort, $dir)->get();
+            // Tri numérique spécial pour le champ numero
+            if ($sort === 'numero') {
+                $allData = $query->orderByRaw("CAST(numero AS UNSIGNED) $dir")->get();
+            } else {
+                $allData = $query->orderBy($sort, $dir)->get();
+            }
             return response()->json([
                 'data' => $allData,
                 'total' => $allData->count(),
@@ -137,7 +142,13 @@ class TraitesController extends Controller
         
         // Limitation normale pour la pagination
         if ($perPage < 1 || $perPage > 200) { $perPage = 10; }
-        return response()->json($query->orderBy($sort, $dir)->paginate($perPage), 200, [], JSON_UNESCAPED_UNICODE);
+        
+        // Tri numérique spécial pour le champ numero
+        if ($sort === 'numero') {
+            return response()->json($query->orderByRaw("CAST(numero AS UNSIGNED) $dir")->paginate($perPage), 200, [], JSON_UNESCAPED_UNICODE);
+        } else {
+            return response()->json($query->orderBy($sort, $dir)->paginate($perPage), 200, [], JSON_UNESCAPED_UNICODE);
+        }
     }
 
     /**
@@ -664,7 +675,7 @@ class TraitesController extends Controller
 
     private function validateData(Request $request, $id = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'numero' => ['nullable','string','max:100'],
             'nombre_traites' => ['required','integer','min:1'],
             'echeance' => ['required','date'],
@@ -677,6 +688,13 @@ class TraitesController extends Controller
             'commentaires' => ['nullable','string','max:1000'],
             'statut' => ['nullable', Rule::in(['Non échu', 'Échu', 'Impayé', 'Rejeté', 'Payé'])],
         ]);
+        
+        // S'assurer que statut n'est jamais null (utiliser la valeur par défaut)
+        if (is_null($validated['statut'])) {
+            $validated['statut'] = 'Non échu';
+        }
+        
+        return $validated;
     }
 
     private function generateNumero(): string
@@ -685,6 +703,96 @@ class TraitesController extends Controller
         $nextId = (int) (Traite::max('id') ?? 0) + 1;
         $prefix = 'TR-'.date('Ym').'-';
         return $prefix . str_pad((string)$nextId, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Convertit une date du format DD/MM/YYYY vers YYYY-MM-DD
+     */
+    private function convertDateFormat($dateString): string
+    {
+        if (empty($dateString)) {
+            return date('Y-m-d');
+        }
+
+        // Si c'est déjà au format YYYY-MM-DD, on le retourne tel quel
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $dateString)) {
+            return substr($dateString, 0, 10); // Garde seulement la partie date
+        }
+
+        // Si c'est au format DD/MM/YYYY ou DD/MM/YYYY HH:MM
+        if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})/', $dateString, $matches)) {
+            $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+            $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+            $year = $matches[3];
+            return "$year-$month-$day";
+        }
+
+        // Si aucun format reconnu, retourner la date actuelle
+        return date('Y-m-d');
+    }
+
+    /**
+     * Calcule la différence en jours entre deux dates
+     */
+    private function calculateDateDifference($date1, $date2): int
+    {
+        $d1 = new \DateTime($date1);
+        $d2 = new \DateTime($date2);
+        return abs($d1->diff($d2)->days);
+    }
+
+    /**
+     * Vérifie les doublons par nombre de traites ET montant dans les données CSV avant importation
+     * Garde la traite dont l'échéance est la plus proche de la date d'émission
+     * Si le montant est différent, les deux traites sont conservées
+     */
+    private function checkCsvDuplicates($data): array
+    {
+        $duplicates = [];
+        $seenTraites = []; // Changé pour stocker nbTraites + montant comme clé
+        
+        foreach ($data as $index => $item) {
+            $nbTraites = (int)($item['nombre_traites'] ?? 0);
+            $montant = (float)($item['montant'] ?? 0);
+            
+            // Vérifier les doublons par nombre de traites ET montant
+            if ($nbTraites > 0 && $montant > 0) {
+                $cleTraite = $nbTraites . '_' . $montant; // Clé composite
+                
+                if (isset($seenTraites[$cleTraite])) {
+                    // Comparer les dates pour garder la meilleure traite
+                    $currentEcheance = $this->convertDateFormat($item['echeance'] ?? '');
+                    $currentDateEmission = $this->convertDateFormat($item['date_emission'] ?? '');
+                    $currentDiff = $this->calculateDateDifference($currentEcheance, $currentDateEmission);
+                    
+                    $existingIndex = $seenTraites[$cleTraite] - 1; // Convertir en index 0-based
+                    $existingEcheance = $this->convertDateFormat($data[$existingIndex]['echeance'] ?? '');
+                    $existingDateEmission = $this->convertDateFormat($data[$existingIndex]['date_emission'] ?? '');
+                    $existingDiff = $this->calculateDateDifference($existingEcheance, $existingDateEmission);
+                    
+                    if ($currentDiff < $existingDiff) {
+                        // La traite actuelle est meilleure, marquer l'ancienne comme doublon
+                        $duplicates[] = [
+                            'line' => $seenTraites[$cleTraite],
+                            'numero' => $data[$existingIndex]['numero'] ?? '',
+                            'reason' => "Doublon par nombre de traites ({$nbTraites}) et montant ({$montant}) - remplacée par une traite avec échéance plus proche de la date d'émission"
+                        ];
+                        $seenTraites[$cleTraite] = $index + 1; // Remplacer par la nouvelle ligne
+                    } else {
+                        // L'ancienne traite est meilleure, marquer la actuelle comme doublon
+                        $duplicates[] = [
+                            'line' => $index + 1,
+                            'numero' => $item['numero'] ?? '',
+                            'reason' => "Doublon par nombre de traites ({$nbTraites}) et montant ({$montant}) - échéance moins proche de la date d'émission"
+                        ];
+                    }
+                } else {
+                    $seenTraites[$cleTraite] = $index + 1;
+                }
+            }
+        }
+        
+        return $duplicates;
     }
 
     public function historique(Request $request)
@@ -741,6 +849,196 @@ class TraitesController extends Controller
         ->values();
 
         return response()->json($mapped);
+    }
+
+    /**
+     * Import CSV avec validation des doublons
+     */
+    public function importCsv(Request $request)
+    {
+        try {
+            \Log::info('=== DÉBUT IMPORT CSV ===');
+            \Log::info('Request data: ' . json_encode($request->all()));
+            
+            // Augmenter les limites pour les gros imports
+            ini_set('memory_limit', '512M');
+            ini_set('max_execution_time', 300);
+            
+            // Récupérer les données avec le mapping déjà fait par le frontend
+            $data = $request->input('data', []);
+            $duplicateAction = $request->input('duplicate_action', 'skip');
+            
+            \Log::info('Data count: ' . count($data));
+            \Log::info('Duplicate action: ' . $duplicateAction);
+            
+            // Vérifier la taille des données
+            $dataSize = strlen(json_encode($data));
+            \Log::info('Data size: ' . $dataSize . ' bytes (' . round($dataSize / 1024 / 1024, 2) . ' MB)');
+            
+            // Vérifier les doublons dans le fichier CSV lui-même
+            $csvDuplicates = $this->checkCsvDuplicates($data);
+            if (!empty($csvDuplicates)) {
+                \Log::warning('Doublons détectés dans le fichier CSV: ' . count($csvDuplicates));
+            }
+            
+            $imported = 0;
+            $skipped = 0;
+            $errors = [];
+            $duplicates = $csvDuplicates;
+            
+            // Traitement par lots pour les gros imports
+            $batchSize = 1000; // Traiter par lots de 1000 éléments
+            $totalItems = count($data);
+            \Log::info("Traitement de {$totalItems} éléments par lots de {$batchSize}");
+            
+            for ($batchStart = 0; $batchStart < $totalItems; $batchStart += $batchSize) {
+                $batchEnd = min($batchStart + $batchSize, $totalItems);
+                $batch = array_slice($data, $batchStart, $batchSize);
+                
+                \Log::info("Traitement du lot " . ($batchStart / $batchSize + 1) . " (éléments {$batchStart}-{$batchEnd})");
+                
+                foreach ($batch as $index => $item) {
+                    $actualIndex = $batchStart + $index;
+                    \Log::info("Traitement ligne " . ($actualIndex + 1) . ": " . json_encode($item));
+                
+                    try {
+                    // Vérifier les doublons par nombre de traites ET montant
+                    $numero = $item['numero'] ?? '';
+                    $nbTraites = (int)($item['nombre_traites'] ?? 0);
+                    $montant = (float)($item['montant'] ?? 0);
+                    $existingTraite = null;
+                    
+                    // Vérifier si le nombre de traites ET le montant existent déjà en base
+                    if ($nbTraites > 0 && $montant > 0) {
+                        $existingTraite = Traite::where('nombre_traites', $nbTraites)
+                                               ->where('montant', $montant)
+                                               ->first();
+                        if ($existingTraite) {
+                            // Comparer les dates pour décider si remplacer
+                            $currentEcheance = $this->convertDateFormat($item['echeance'] ?? '');
+                            $currentDateEmission = $this->convertDateFormat($item['date_emission'] ?? '');
+                            $currentDiff = $this->calculateDateDifference($currentEcheance, $currentDateEmission);
+                            
+                            $existingDiff = $this->calculateDateDifference($existingTraite->echeance, $existingTraite->date_emission);
+                            
+                            if ($currentDiff < $existingDiff) {
+                                // La traite actuelle est meilleure, remplacer
+                                \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Nombre de traites {$nbTraites} et montant {$montant} - remplacement par traite avec échéance plus proche");
+                                $existingTraite->delete();
+                                \Log::info("Ancienne traite supprimée: nombre de traites {$nbTraites} et montant {$montant} (échéance moins proche)");
+                            } else {
+                                // L'ancienne traite est meilleure, ignorer la nouvelle
+                                \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Nombre de traites {$nbTraites} et montant {$montant} - échéance moins proche que celle en base");
+                                $duplicates[] = [
+                                    'line' => $actualIndex + 1,
+                                    'numero' => $numero,
+                                    'reason' => "Nombre de traites ({$nbTraites}) et montant ({$montant}) déjà existant en base (échéance moins proche de la date d'émission)"
+                                ];
+                                
+                                if ($duplicateAction === 'skip') {
+                                    $skipped++;
+                                    \Log::info("Ligne " . ($actualIndex + 1) . " ignorée (doublon en base)");
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Vérifier aussi si cette ligne est un doublon CSV
+                    $isCsvDuplicate = false;
+                    foreach ($csvDuplicates as $csvDup) {
+                        if ($csvDup['line'] === ($actualIndex + 1)) {
+                            $isCsvDuplicate = true;
+                            break;
+                        }
+                    }
+                    
+                    if ($isCsvDuplicate && $duplicateAction === 'skip') {
+                        $skipped++;
+                        \Log::info("Ligne " . ($actualIndex + 1) . " ignorée (doublon CSV)");
+                        continue;
+                    }
+                    
+                    // Les données sont déjà mappées par le frontend, on les utilise directement
+                    // Convertir les dates du format DD/MM/YYYY vers YYYY-MM-DD
+                    $echeance = $this->convertDateFormat($item['echeance'] ?? date('Y-m-d'));
+                    $dateEmission = $this->convertDateFormat($item['date_emission'] ?? date('Y-m-d'));
+                    
+                    $traiteData = [
+                        'numero' => $numero ?: $this->generateNumero(),
+                        'nombre_traites' => (int)($item['nombre_traites'] ?? 1),
+                        'echeance' => $echeance,
+                        'date_emission' => $dateEmission,
+                        'montant' => (float)($item['montant'] ?? 0),
+                        'nom_raison_sociale' => $item['nom_raison_sociale'] ?? 'Import CSV',
+                        'domiciliation_bancaire' => $item['domiciliation_bancaire'] ?? '',
+                        'rib' => $item['rib'] ?? '',
+                        'motif' => $item['motif'] ?? '',
+                        'commentaires' => $item['commentaires'] ?? '',
+                        'statut' => $item['statut'] ?? '',
+                    ];
+                    
+                    \Log::info("Données traite ligne " . ($actualIndex + 1) . ": " . json_encode($traiteData));
+
+                    $traite = Traite::create($traiteData);
+                    \Log::info("Traite créée pour ligne " . ($actualIndex + 1) . ": ID {$traite->id}");
+
+                    // Créer une activité pour l'import CSV
+                    try {
+                        TraiteActivity::create([
+                            'traite_id' => $traite->id,
+                            'user_id' => optional(Auth::user())->id,
+                            'action' => 'Création',
+                            'changes' => null,
+                        ]);
+                    } catch (\Throwable $e) {
+                        \Log::warning("Impossible de créer l'activité pour la traite {$traite->id}: " . $e->getMessage());
+                    }
+
+                    $imported++;
+                    
+                    } catch (\Throwable $e) {
+                        \Log::error("Erreur ligne " . ($actualIndex + 1) . ": " . $e->getMessage());
+                        $errors[] = "Ligne " . ($actualIndex + 1) . ": " . $e->getMessage();
+                    }
+                }
+                
+                // Libérer la mémoire après chaque lot
+                if (function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
+                \Log::info("Lot " . ($batchStart / $batchSize + 1) . " terminé. Mémoire utilisée: " . round(memory_get_usage() / 1024 / 1024, 2) . " MB");
+            }
+
+            $result = [
+                'imported' => $imported,
+                'skipped' => $skipped,
+                'errors' => $errors,
+                'duplicates' => $duplicates,
+                'message' => "Import terminé: {$imported} traites importées, {$skipped} doublons ignorés"
+            ];
+            
+            \Log::info('=== FIN IMPORT CSV === ' . json_encode($result));
+            
+            return response()->json($result)
+                ->header('Access-Control-Allow-Origin', 'http://localhost:3000')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+                ->header('Access-Control-Allow-Credentials', 'true');
+                
+        } catch (\Throwable $e) {
+            \Log::error('Erreur globale import CSV: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'error' => true,
+                'message' => 'Erreur lors de l\'importation: ' . $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', 'http://localhost:3000')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+                ->header('Access-Control-Allow-Credentials', 'true');
+        }
     }
 }
 

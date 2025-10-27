@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, Clock, RefreshCcw, CheckCircle2, ArrowLeft } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import Pagination from './Pagination'
 import "./Traites.css"
 import Logo from "../images/image2.png"
 
@@ -542,36 +543,21 @@ const NotificationsPage = () => {
             </div>
           ))}
           {/* Footer type tfoot responsive */}
-          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ color: '#111827', fontSize: 14 }}>
-              {total > 0 ? (
-                <span>Page {page} / {lastPage} • {total} résultats</span>
-              ) : (
-                <span>Aucun résultat</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#111827', fontSize: 14 }}>
-                <span>Afficher</span>
-                <select value={perPage} onChange={(e) => { setPage(1); setPerPage(Number(e.target.value)) }} style={{ padding: '4px 8px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
-                  {[6,12,18,24].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-                <span>lignes</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} style={page <= 1 ? navBtnDisabled : navBtnBase}>Précédent</button>
-                {/* Numéros de pages compacts */}
-                {Array.from({ length: lastPage }, (_, i) => i + 1).slice(Math.max(0, page - 2), Math.max(0, page - 2) + 3).map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setPage(n)}
-                    disabled={n === page}
-                    style={n === page ? pageBtnActive : pageBtnBase}
-                  >{n}</button>
-                ))}
-                <button onClick={() => setPage(p => Math.min(lastPage, p + 1))} disabled={page >= lastPage} style={page >= lastPage ? navBtnDisabled : navBtnBase}>Suivant</button>
-              </div>
-            </div>
+          <div style={{ marginTop: 16 }}>
+            <Pagination
+              currentPage={page}
+              totalPages={lastPage}
+              totalItems={total}
+              itemsPerPage={perPage}
+              onPageChange={(newPage) => setPage(newPage)}
+              onItemsPerPageChange={(newPerPage) => {
+                setPage(1)
+                setPerPage(newPerPage)
+              }}
+              itemsPerPageOptions={[6, 12, 18, 24]}
+              showItemsPerPage={true}
+              showTotal={true}
+            />
           </div>
           </div>
         </div>

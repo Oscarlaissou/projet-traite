@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { formatMoney } from "../utils/format"
 import { Calendar, CalendarClock, ArrowLeft } from "lucide-react"
+import Pagination from './Pagination'
 import "./Traites.css"
 import MonImage from "../images/image3.png"
 
@@ -176,27 +177,20 @@ const EditionPage = () => {
               <tfoot>
                 <tr>
                   <td colSpan={5}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, gap: 12, flexWrap: 'wrap' }}>
-                      <div>
-                        Page {pagination.current_page || page} / {pagination.last_page || 1} • {pagination.total} résultats
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>Afficher</span>
-                        <select className="search-input" value={perPage} onChange={(e) => { setPerPage(parseInt(e.target.value || '6', 10)); setPage(1); }}>
-                          {[6,12,18,24].map(n => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                        <span>lignes</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap', marginLeft: 200 }}>
-                        <button className="page-button" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Précédent</button>
-                        {Array.from({ length: pagination.last_page || 1 }, (_, i) => i + 1).slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5).map(p => (
-                          <button key={p} className={`page-button ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>
-                        ))}
-                        <button className="page-button" disabled={page >= (pagination.last_page || 1)} onClick={() => setPage(p => Math.min((pagination.last_page || 1), p + 1))}>Suivant</button>
-                      </div>
-                    </div>
+                    <Pagination
+                      currentPage={pagination.current_page || page}
+                      totalPages={pagination.last_page || 1}
+                      totalItems={pagination.total || 0}
+                      itemsPerPage={perPage}
+                      onPageChange={(newPage) => setPage(newPage)}
+                      onItemsPerPageChange={(newPerPage) => {
+                        setPerPage(newPerPage)
+                        setPage(1)
+                      }}
+                      itemsPerPageOptions={[6, 12, 18, 24]}
+                      showItemsPerPage={true}
+                      showTotal={true}
+                    />
                   </td>
                 </tr>
               </tfoot>
