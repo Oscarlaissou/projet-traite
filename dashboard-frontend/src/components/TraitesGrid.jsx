@@ -495,18 +495,33 @@ const TraitesGrid = () => {
         console.log(`\n--- Traitement ligne ${i + 1} ---`)
         console.log('Row data:', row)
         
+        // Extraire les valeurs
+        const numero = toVal(row, 'numero')
+        const nombre_traites = Number((toVal(row, 'nombre_traites') || '1').replace(/\D+/g, '')) || 1
+        const echeance = toVal(row, 'echeance')
+        const date_emission = toVal(row, 'date_emission')
+        const montant = Number(String(toVal(row, 'montant') || '').replace(/[^\d.,]/g, '').replace(',', '.')) || 0
+        const nom_raison_sociale = toVal(row, 'nom_raison_sociale')
+        
+        // Vérifier si la ligne est totalement vide ou invalide (aucun champ important rempli)
+        const hasImportantData = numero || montant > 0 || echeance || date_emission
+        if (!hasImportantData) {
+          console.log(`⚠️ Ligne ${i + 1} ignorée: aucune donnée valide (numero, montant, ou dates)`)
+          continue
+        }
+        
         const payload = {
-          numero: toVal(row, 'numero'),
-          nombre_traites: Number((toVal(row, 'nombre_traites') || '1').replace(/\D+/g, '')) || 1,
-          echeance: toVal(row, 'echeance'),
-          date_emission: toVal(row, 'date_emission'),
-          montant: Number(String(toVal(row, 'montant') || '').replace(/[^\d.,]/g, '').replace(',', '.')) || 0,
-          nom_raison_sociale: toVal(row, 'nom_raison_sociale'),
+          numero: numero,
+          nombre_traites: nombre_traites,
+          echeance: echeance,
+          date_emission: date_emission,
+          montant: montant,
+          nom_raison_sociale: nom_raison_sociale || 'Client sans nom',
           domiciliation_bancaire: toVal(row, 'domiciliation_bancaire'),
           rib: toVal(row, 'rib'),
-          motif: toVal(row, 'motif') || '', // Laisser vide si non mappé
-          commentaires: toVal(row, 'commentaires') || '', // Laisser vide si non mappé
-          statut: toVal(row, 'statut') || '', // Laisser vide si non mappé
+          motif: toVal(row, 'motif') || '',
+          commentaires: toVal(row, 'commentaires') || '',
+          statut: toVal(row, 'statut') || '',
         }
         
         console.log(`✅ Payload ligne ${i + 1}:`, payload)

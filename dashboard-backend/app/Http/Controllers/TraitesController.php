@@ -749,15 +749,16 @@ class TraitesController extends Controller
     private function checkCsvDuplicates($data): array
     {
         $duplicates = [];
-        $seenTraites = []; // Changé pour stocker nbTraites + montant comme clé
+        $seenTraites = []; // Stocke nbTraites + montant + nom comme clé
         
         foreach ($data as $index => $item) {
             $nbTraites = (int)($item['nombre_traites'] ?? 0);
             $montant = (float)($item['montant'] ?? 0);
+            $nom = $item['nom_raison_sociale'] ?? '';
             
-            // Vérifier les doublons par nombre de traites ET montant
-            if ($nbTraites > 0 && $montant > 0) {
-                $cleTraite = $nbTraites . '_' . $montant; // Clé composite
+            // Vérifier les doublons par nombre de traites + montant + nom
+            if ($nbTraites > 0 && $montant > 0 && $nom) {
+                $cleTraite = $nbTraites . '_' . $montant . '_' . md5($nom); // Clé composite avec nom
                 
                 if (isset($seenTraites[$cleTraite])) {
                     // Comparer les dates pour garder la meilleure traite
@@ -775,7 +776,7 @@ class TraitesController extends Controller
                         $duplicates[] = [
                             'line' => $seenTraites[$cleTraite],
                             'numero' => $data[$existingIndex]['numero'] ?? '',
-                            'reason' => "Doublon par nombre de traites ({$nbTraites}) et montant ({$montant}) - remplacée par une traite avec échéance plus proche de la date d'émission"
+                            'reason' => "Doublon pour client '{$nom}', nombre de traites ({$nbTraites}) et montant ({$montant}) - remplacée par une traite avec échéance plus proche de la date d'émission"
                         ];
                         $seenTraites[$cleTraite] = $index + 1; // Remplacer par la nouvelle ligne
                     } else {
@@ -783,7 +784,7 @@ class TraitesController extends Controller
                         $duplicates[] = [
                             'line' => $index + 1,
                             'numero' => $item['numero'] ?? '',
-                            'reason' => "Doublon par nombre de traites ({$nbTraites}) et montant ({$montant}) - échéance moins proche de la date d'émission"
+                            'reason' => "Doublon pour client '{$nom}', nombre de traites ({$nbTraites}) et montant ({$montant}) - échéance moins proche de la date d'émission"
                         ];
                     }
                 } else {
@@ -902,16 +903,18 @@ class TraitesController extends Controller
                     \Log::info("Traitement ligne " . ($actualIndex + 1) . ": " . json_encode($item));
                 
                     try {
-                    // Vérifier les doublons par nombre de traites ET montant
+                    // Vérifier les doublons par nombre de traites + montant + nom
                     $numero = $item['numero'] ?? '';
                     $nbTraites = (int)($item['nombre_traites'] ?? 0);
                     $montant = (float)($item['montant'] ?? 0);
+                    $nom = $item['nom_raison_sociale'] ?? '';
                     $existingTraite = null;
                     
-                    // Vérifier si le nombre de traites ET le montant existent déjà en base
-                    if ($nbTraites > 0 && $montant > 0) {
+                    // Vérifier si le nombre de traites, le montant ET le nom existent déjà en base
+                    if ($nbTraites > 0 && $montant > 0 && $nom) {
                         $existingTraite = Traite::where('nombre_traites', $nbTraites)
                                                ->where('montant', $montant)
+                                               ->where('nom_raison_sociale', $nom)
                                                ->first();
                         if ($existingTraite) {
                             // Comparer les dates pour décider si remplacer
@@ -923,16 +926,16 @@ class TraitesController extends Controller
                             
                             if ($currentDiff < $existingDiff) {
                                 // La traite actuelle est meilleure, remplacer
-                                \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Nombre de traites {$nbTraites} et montant {$montant} - remplacement par traite avec échéance plus proche");
+                                \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Client '{$nom}', nombre de traites {$nbTraites} et montant {$montant} - remplacement par traite avec échéance plus proche");
                                 $existingTraite->delete();
-                                \Log::info("Ancienne traite supprimée: nombre de traites {$nbTraites} et montant {$montant} (échéance moins proche)");
+                                \Log::info("Ancienne traite supprimée: client '{$nom}', nombre de traites {$nbTraites} et montant {$montant} (échéance moins proche)");
                             } else {
                                 // L'ancienne traite est meilleure, ignorer la nouvelle
-                                \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Nombre de traites {$nbTraites} et montant {$montant} - échéance moins proche que celle en base");
+                                \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Client '{$nom}', nombre de traites {$nbTraites} et montant {$montant} - échéance moins proche que celle en base");
                                 $duplicates[] = [
                                     'line' => $actualIndex + 1,
                                     'numero' => $numero,
-                                    'reason' => "Nombre de traites ({$nbTraites}) et montant ({$montant}) déjà existant en base (échéance moins proche de la date d'émission)"
+                                    'reason' => "Client '{$nom}', nombre de traites ({$nbTraites}) et montant ({$montant}) déjà existant en base (échéance moins proche de la date d'émission)"
                                 ];
                                 
                                 if ($duplicateAction === 'skip') {
@@ -970,7 +973,7 @@ class TraitesController extends Controller
                         'echeance' => $echeance,
                         'date_emission' => $dateEmission,
                         'montant' => (float)($item['montant'] ?? 0),
-                        'nom_raison_sociale' => $item['nom_raison_sociale'] ?? 'Import CSV',
+                        'nom_raison_sociale' => $item['nom_raison_sociale'] ?? 'Client sans nom (Import CSV)',
                         'domiciliation_bancaire' => $item['domiciliation_bancaire'] ?? '',
                         'rib' => $item['rib'] ?? '',
                         'motif' => $item['motif'] ?? '',
