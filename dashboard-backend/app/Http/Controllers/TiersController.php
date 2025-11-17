@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tier;
+use App\Models\TierActivity;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -206,6 +207,18 @@ class TiersController extends Controller
                     }
                 }
 
+                // Enregistrer l'activité de création
+                try {
+                    TierActivity::create([
+                        'tier_id' => $newTier->id,
+                        'user_id' => optional(Auth::user())->id,
+                        'action' => 'Création',
+                        'changes' => null,
+                    ]);
+                } catch (\Throwable $e) {
+                    // ignore logging failures
+                }
+
                 return $newTier; // La transaction retourne le Tiers créé.
             });
 
@@ -350,6 +363,19 @@ class TiersController extends Controller
 
         try {
             DB::transaction(function () use ($validated, $tier) {
+                // Capturer les valeurs avant modification (Tiers)
+                $oldValues = $tier->only([
+                    'numero_compte', 'nom_raison_sociale', 'bp', 'ville', 'pays',
+                    'adresse_geo_1', 'adresse_geo_2', 'telephone', 'email',
+                    'categorie', 'n_contribuable', 'type_tiers'
+                ]);
+                
+                // Capturer aussi les valeurs de la demande avant modification
+                $oldDemande = null;
+                if (!empty($this->demandeColumns)) {
+                    $oldDemande = DB::table('demande_ouverture_compte')->where('id', $tier->id)->first();
+                }
+
                 // Mise à jour des champs Tiers
                 $tier->update([
                     'numero_compte' => $validated['numero_compte'] ?? null,
@@ -366,6 +392,15 @@ class TiersController extends Controller
                     'type_tiers' => $validated['type_tiers'],
                 ]);
 
+                // Détecter les changements sur Tiers
+                $changes = [];
+                foreach ($oldValues as $key => $oldValue) {
+                    $newValue = $tier->{$key};
+                    if ($oldValue != $newValue) {
+                        $changes[$key] = ['old' => $oldValue, 'new' => $newValue];
+                    }
+                }
+
                 // Mise à jour/Création de la demande d'ouverture si la table existe
                 if (!empty($this->demandeColumns)) {
                     $demande = DB::table('demande_ouverture_compte')->where('id', $tier->id)->first();
@@ -374,10 +409,32 @@ class TiersController extends Controller
                         if ($demande) {
                             unset($payload['id']); // inutile pour update
                             DB::table('demande_ouverture_compte')->where('id', $tier->id)->update($payload);
+                            
+                            // Détecter les changements sur demande_ouverture_compte
+                            $demandeFields = ['etablissement', 'service', 'nom_signataire', 'montant_facture', 'montant_paye', 'credit', 'motif'];
+                            foreach ($demandeFields as $field) {
+                                if ($this->hasDemandeColumn($field)) {
+                                    $oldVal = $oldDemande->{$field} ?? null;
+                                    $newVal = $payload[$field] ?? null;
+                                    if ($oldVal != $newVal) {
+                                        $changes[$field] = ['old' => $oldVal, 'new' => $newVal];
+                                    }
+                                }
+                            }
                         } else {
                             DB::table('demande_ouverture_compte')->insert($payload);
                         }
                     }
+                }
+
+                // Enregistrer l'activité de modification si des changements ont été détectés
+                if (!empty($changes)) {
+                    TierActivity::create([
+                        'tier_id' => $tier->id,
+                        'user_id' => optional(Auth::user())->id,
+                        'action' => 'Modification',
+                        'changes' => $changes,
+                    ]);
                 }
             });
 
@@ -737,102 +794,67 @@ class TiersController extends Controller
     }
 
     /**
-     * Historique des clients par jour ou par mois basé sur demande_ouverture_compte.date_creation.
+     * Historique des clients - Fonctionne comme l'historique des traites.
      */
     public function historique(Request $request): JsonResponse
     {
-        // Mode détaillé (par client / par mois) pour UI façon "Historique des traites"
-        $type = strtolower((string) $request->get('type', ''));
-        if (in_array($type, ['client', 'mois'], true)) {
-            $userColumn = null;
-            if (Schema::hasColumn('demande_ouverture_compte', 'user_id')) {
-                $userColumn = 'user_id';
-            } elseif (Schema::hasColumn('demande_ouverture_compte', 'utilisateur_id')) {
-                $userColumn = 'utilisateur_id';
-            } elseif (Schema::hasColumn('demande_ouverture_compte', 'utilisateur')) {
-                $userColumn = 'utilisateur';
-            }
+        $type = $request->get('type'); // 'client' or 'mois'
+        $nom = $request->get('nom_raison_sociale');
+        $month = $request->get('month'); // YYYY-MM
 
-            $perPage = max(1, min((int) $request->get('per_page', 1000), 100000));
-            if ($type === 'client') {
-                $search = trim((string) $request->get('nom_raison_sociale', ''));
-                $query = DB::table('tiers as t')
-                    ->leftJoin('demande_ouverture_compte as d', 'd.id', '=', 't.id');
+        // Objectif: retourner TOUS les tiers, avec la dernière action et l'utilisateur s'ils existent
+        $query = Tier::query()
+            ->with(['latestActivity.user:id,username'])
+            ->select(['id','numero_compte','nom_raison_sociale']);
 
-                if ($userColumn === 'user_id' || $userColumn === 'utilisateur_id') {
-                    $query->leftJoin('users as u', "u.id", '=', "d.{$userColumn}");
-                }
-
-                $query->select([
-                    DB::raw("COALESCE(d.updated_at, d.date_creation) as date"),
-                    't.nom_raison_sociale',
-                    DB::raw("CASE WHEN d.updated_at IS NOT NULL AND d.created_at IS NOT NULL AND d.updated_at <> d.created_at THEN 'Modification' ELSE 'Création' END as action"),
-                    DB::raw((match ($userColumn) {
-                        'user_id', 'utilisateur_id' => "COALESCE(u.username, u.name, '')",
-                        'utilisateur' => "COALESCE(d.utilisateur, '')",
-                        default => "''"
-                    }) . " as username")
-                ])
-                    ->when($search !== '', function ($q) use ($search) {
-                        $q->where('t.nom_raison_sociale', 'like', "%{$search}%");
-                    })
-                    ->orderByDesc(DB::raw("COALESCE(d.updated_at, d.date_creation)"))
-                    ->limit($perPage);
-
-                $rows = $query->get();
-                return response()->json($rows, 200, [], JSON_UNESCAPED_UNICODE);
-            }
-            if ($type === 'mois') {
-                $month = (string) $request->get('month', now()->format('Y-m'));
-                $start = \Carbon\Carbon::createFromFormat('Y-m', $month)->startOfMonth();
-                $end = $start->copy()->endOfMonth();
-                $query = DB::table('tiers as t')
-                    ->leftJoin('demande_ouverture_compte as d', 'd.id', '=', 't.id');
-
-                if ($userColumn === 'user_id' || $userColumn === 'utilisateur_id') {
-                    $query->leftJoin('users as u', "u.id", '=', "d.{$userColumn}");
-                }
-
-                $query->select([
-                    DB::raw("COALESCE(d.updated_at, d.date_creation) as date"),
-                    't.nom_raison_sociale',
-                    DB::raw("CASE WHEN d.updated_at IS NOT NULL AND d.created_at IS NOT NULL AND d.updated_at <> d.created_at THEN 'Modification' ELSE 'Création' END as action"),
-                    DB::raw((match ($userColumn) {
-                        'user_id', 'utilisateur_id' => "COALESCE(u.username, u.name, '')",
-                        'utilisateur' => "COALESCE(d.utilisateur, '')",
-                        default => "''"
-                    }) . " as username")
-                ])
-                    ->whereBetween(DB::raw("COALESCE(d.updated_at, d.date_creation)"), [$start, $end])
-                    ->orderByDesc(DB::raw("COALESCE(d.updated_at, d.date_creation)"))
-                    ->limit($perPage);
-
-                $rows = $query->get();
-                return response()->json($rows, 200, [], JSON_UNESCAPED_UNICODE);
-            }
+        if ($type === 'client' && $nom) {
+            $query->where('nom_raison_sociale', 'like', "%$nom%");
         }
 
-        // Mode agrégé (par jour / par mois) utilisé pour graphiques/compteurs
-        $group = strtolower($request->get('group', 'day')) === 'month' ? 'month' : 'day';
-        $from = $request->get('from');
-        $to = $request->get('to');
-        if (!$from || !$to) {
-            $start = now()->startOfMonth();
-            $end = now()->endOfMonth();
-        } else {
-            $start = \Carbon\Carbon::parse($from)->startOfDay();
-            $end = \Carbon\Carbon::parse($to)->endOfDay();
+        if ($type === 'mois' && $month && preg_match('/^\\d{4}-\\d{2}$/', $month)) {
+            // Filtrer par mois en utilisant tier_activities
+            $parts = explode('-', $month);
+            $yyyy = (int)($parts[0] ?? date('Y'));
+            $mm = (int)($parts[1] ?? date('m'));
+            $lastDay = cal_days_in_month(CAL_GREGORIAN, $mm, $yyyy);
+            $start = sprintf('%04d-%02d-01', $yyyy, $mm);
+            $end = sprintf('%04d-%02d-%02d', $yyyy, $mm, $lastDay);
+            
+            // Filtrer par les tiers qui ont des activités dans ce mois
+            $query->whereHas('activities', function($q) use ($start, $end) {
+                $q->whereBetween('created_at', [$start, $end]);
+            });
         }
-        $query = DB::table('demande_ouverture_compte')
-            ->select([
-                DB::raw($group === 'month' ? "DATE_FORMAT(date_creation, '%Y-%m-01') as period" : "DATE(date_creation) as period"),
-                DB::raw('COUNT(*) as total'),
-            ])
-            ->whereBetween('date_creation', [$start, $end])
-            ->groupBy('period')
-            ->orderBy('period', 'asc');
-        $data = $query->get();
-        return response()->json(['group' => $group, 'from' => $start->toDateString(), 'to' => $end->toDateString(), 'data' => $data], 200, [], JSON_UNESCAPED_UNICODE);
+
+        $tiers = $query->get();
+
+        $mapped = $tiers->map(function($t) {
+            // Récupérer la dernière activité et l'utilisateur associé
+            $act = $t->latestActivity; // peut être null
+            $action = $act?->action ?? 'Création';
+            $user = $act?->user; // peut être null
+            $displayUser = $user?->username ?? null;
+            // La date est toujours celle de l'activité (obligatoire maintenant)
+            $date = $act && $act->created_at ? $act->created_at->toDateTimeString() : now()->toDateTimeString();
+            
+            // Récupérer les changements s'il y en a
+            $changes = $act?->changes ?? null;
+            
+            return [
+                'date' => (string)$date,
+                'nom_raison_sociale' => $t->nom_raison_sociale,
+                'action' => $action,
+                'username' => $displayUser,
+                'changes' => $changes, // Ajout des changements
+            ];
+        })
+        // trier par la date calculée décroissante (plus récent en premier)
+        ->sortByDesc(function($row) {
+            return $row['date'] ?? '';
+        })
+        ->values();
+
+        return response()->json($mapped, 200, [], JSON_UNESCAPED_UNICODE);
     }
 
     public function preview(Tier $tier)

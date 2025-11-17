@@ -70,7 +70,45 @@ const ClientsHistoriquePage = () => {
       const db = b && b.date ? new Date(b.date).getTime() : 0
       return da - db
     })
-    const headers = ['Date', 'Nom/Raison sociale', 'Action', 'Utilisateur']
+    
+    // Fonction pour formater les changements pour CSV
+    const formatChangesForCSV = (changes) => {
+      if (!changes || typeof changes !== 'object') return '';
+      
+      const fieldLabels = {
+        'numero_compte': 'N° compte',
+        'nom_raison_sociale': 'Nom/Raison sociale',
+        'bp': 'BP',
+        'ville': 'Ville',
+        'pays': 'Pays',
+        'adresse_geo_1': 'Adresse 1',
+        'adresse_geo_2': 'Adresse 2',
+        'telephone': 'Téléphone',
+        'email': 'Email',
+        'categorie': 'Catégorie',
+        'n_contribuable': 'N° contribuable',
+        'type_tiers': 'Type',
+        'etablissement': 'Établissement',
+        'service': 'Service',
+        'nom_signataire': 'Signataire',
+        'montant_facture': 'Montant facturé',
+        'montant_paye': 'Montant payé',
+        'credit': 'Crédit',
+        'motif': 'Motif'
+      };
+      
+      const items = [];
+      for (const [key, value] of Object.entries(changes)) {
+        const label = fieldLabels[key] || key;
+        const oldVal = value.old || value.from || 'vide';
+        const newVal = value.new || value.to || 'vide';
+        items.push(`${label}: ${oldVal} -> ${newVal}`);
+      }
+      
+      return items.length > 0 ? items.join(' | ') : '';
+    };
+    
+    const headers = ['Date', 'Nom/Raison sociale', 'Action', 'Utilisateur', 'Détails']
     const esc = (val) => {
       const s = val == null ? '' : String(val)
       return '"' + s.replace(/"/g, '""') + '"'
@@ -79,7 +117,8 @@ const ClientsHistoriquePage = () => {
       item.date,
       item.nom_raison_sociale,
       item.action,
-      item.username
+      item.username,
+      item.action === 'Modification' ? formatChangesForCSV(item.changes) : ''
     ].map(esc).join(','))
     const csv = '\uFEFF' + [headers.join(','), ...csvRows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -194,14 +233,53 @@ const ClientsHistoriquePage = () => {
                 <th>Nom/Raison sociale</th>
                 <th>Action</th>
                 <th>Utilisateur</th>
+                <th>Détails</th>
               </tr>
             </thead>
             <tbody>
               {(() => {
                 const currentRows = filteredRows.slice((page - 1) * perPage, (page - 1) * perPage + perPage)
+                
+                // Fonction pour formater les changements
+                const formatChanges = (changes) => {
+                  if (!changes || typeof changes !== 'object') return 'Aucun détail';
+                  
+                  const fieldLabels = {
+                    'numero_compte': 'N° compte',
+                    'nom_raison_sociale': 'Nom/Raison sociale',
+                    'bp': 'BP',
+                    'ville': 'Ville',
+                    'pays': 'Pays',
+                    'adresse_geo_1': 'Adresse 1',
+                    'adresse_geo_2': 'Adresse 2',
+                    'telephone': 'Téléphone',
+                    'email': 'Email',
+                    'categorie': 'Catégorie',
+                    'n_contribuable': 'N° contribuable',
+                    'type_tiers': 'Type',
+                    'etablissement': 'Établissement',
+                    'service': 'Service',
+                    'nom_signataire': 'Signataire',
+                    'montant_facture': 'Montant facturé',
+                    'montant_paye': 'Montant payé',
+                    'credit': 'Crédit',
+                    'motif': 'Motif'
+                  };
+                  
+                  const items = [];
+                  for (const [key, value] of Object.entries(changes)) {
+                    const label = fieldLabels[key] || key;
+                    const oldVal = value.old || value.from || 'vide';
+                    const newVal = value.new || value.to || 'vide';
+                    items.push(`${label}: ${oldVal} → ${newVal}`);
+                  }
+                  
+                  return items.length > 0 ? items.join(' | ') : 'Aucun détail';
+                };
+                
                 return filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={{ padding: 16, textAlign: "center", color: "#6b7280" }}>
+                    <td colSpan={5} style={{ padding: 16, textAlign: "center", color: "#6b7280" }}>
                       Aucun enregistrement pour les critères sélectionnés.
                     </td>
                   </tr>
@@ -211,6 +289,9 @@ const ClientsHistoriquePage = () => {
                     <td>{r.nom_raison_sociale || ''}</td>
                     <td>{r.action || ''}</td>
                     <td>{r.username || ''}</td>
+                    <td style={{ fontSize: '0.85em', maxWidth: '300px' }}>
+                      {r.action === 'Modification' ? formatChanges(r.changes) : '-'}
+                    </td>
                   </tr>
                 ))})()}
             </tbody>

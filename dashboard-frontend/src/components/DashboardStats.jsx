@@ -155,9 +155,9 @@ const DashboardStats = () => {
 
   const clientCardsData = [
     { icon: Users, title: "Clients totaux", value: clientStats.total, color: "#3B82F6", bgColor: "#EFF6FF", onClick: () => navigate('/dashboard?tab=credit&view=GestionClients') },
-    { icon: UserPlus, title: "Nouveaux/jour", value: clientStats.perDay, color: "#10B981", bgColor: "#ECFDF5" },
-    { icon: Calendar, title: "Nouveaux/mois", value: clientStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF" },
-    { icon: DollarSign, title: "Crédit total", value: formatCredit(clientStats.totalCredit), color: "#F59E0B", bgColor: "#FFFBEB" }
+    { icon: UserPlus, title: "Comptes clients/jour", value: clientStats.perDay, color: "#10B981", bgColor: "#ECFDF5" },
+    { icon: Calendar, title: "Comptes clients/mois", value: clientStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF" },
+    
   ]
 
   return (

@@ -48,6 +48,22 @@ class Tier extends Model
         'n_contribuable',
         'type_tiers',
     ];
+
+    /**
+     * Relation avec les activités du tier.
+     */
+    public function activities()
+    {
+        return $this->hasMany(TierActivity::class);
+    }
+
+    /**
+     * Relation avec la dernière activité du tier.
+     */
+    public function latestActivity()
+    {
+        return $this->hasOne(TierActivity::class)->latestOfMany();
+    }
 }
 
 

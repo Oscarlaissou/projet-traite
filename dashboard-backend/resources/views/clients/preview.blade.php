@@ -33,7 +33,6 @@
       margin: auto;
       min-height: 340mm;
       box-sizing: border-box;
-      padding-right: 700px;
     }
 
     .header-sidebar {
@@ -74,11 +73,40 @@
       line-height: 1.3;
     }
 
-    /* === BOUTONS À DROITE, MÊME NIVEAU === */
+    /* === BOUTONS AU-DESSUS DE LA PAGE CENTRALE === */
     .header-right-fixed {
-      right: 0px;
-      width: auto;
-      padding-left: 50px;
+      position: relative;
+      width: 100%;
+      max-width: 1200px;
+      margin: 30px auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 40px;
+      padding: 20px 220px;
+    }
+
+    .header-logo-inline {
+      max-height: 60px;
+      height: auto;
+    }
+
+    .header-title {
+      text-align: center;
+    }
+
+    .header-title h2 {
+      margin: 0;
+      font-size: 1.25em;
+      color: #1f2937;
+      font-weight: 600;
+    }
+
+    .header-title p {
+      margin: 4px 0 0;
+      font-size: 0.85em;
+      color: #6b7280;
+      line-height: 1.3;
     }
 
     .toolbar {
@@ -143,7 +171,22 @@
       }
       
       .header-right-fixed {
-          margin-bottom: 30px;
+        padding: 16px;
+        margin: 20px auto;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .header-logo-inline {
+        max-height: 50px;
+      }
+
+      .header-title h2 {
+        font-size: 1.1em;
+      }
+
+      .header-title p {
+        font-size: 0.8em;
       }
 
       .header-left-fixed,
@@ -163,13 +206,14 @@
       }
     }
 
-    /* === Impression : Masquer les barres latérales === */
+    /* === Impression : Masquer les barres latérales et les boutons === */
     @media print {
       body {
         background: #fff;
       }
       
-      .header-sidebar { /* La barre de séparation a été retirée du sélecteur */
+      .header-sidebar,
+      .header-right-fixed { 
         display: none !important;
       }
 
@@ -198,17 +242,15 @@
 </head>
 <body>
 
-  <!-- LOGO + TEXTE À GAUCHE (HORS DE LA ZONE D'IMPRESSION) -->
-  <div class="header-sidebar header-left-fixed">
-    <img src="{{ asset('LOGO.png') }}" alt="CFAO Mobility" class="header-logo">
-    <div class="header-title">
+
+
+  <!-- BOUTONS AU-DESSUS DE LA PAGE CENTRALE -->
+  <div class="header-right-fixed">
+    <img src="{{ asset('LOGO.png') }}" alt="CFAO Mobility" class="header-logo-inline">
+     <div class="header-title">
       <h2>Aperçu du document</h2>
       <p>Veuillez vérifier avant d'imprimer.</p>
     </div>
-  </div>
-
-  <!-- BOUTONS À DROITE (HORS DE LA ZONE D'IMPRESSION) -->
-  <div class="header-sidebar header-right-fixed">
     <div class="toolbar">
       <button class="secondary" onclick="cancelPreview()">Fermer</button>
       <button class="primary" onclick="window.print()">Imprimer</button>
