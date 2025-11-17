@@ -6,6 +6,10 @@ import Sidebar from "./Sidebar"
 import DashboardStats from "./DashboardStats"
 import Header from "./Header"
 import TraitesGrid from "./TraitesGrid"
+import ClientsGrid from "./ClientsGrid"
+import ClientFormPage from "./ClientFormPage"
+import ClientsHistoriquePage from "./ClientsHistoriquePage"
+import ClientDetailPage from "./ClientDetailPage"
 import EditionPage from "./EditionPage"
 import HistoriquePage from "./HistoriquePage"
 import TraiteFormPage from "./TraiteFormPage"
@@ -27,12 +31,19 @@ const Dashboard = () => {
       if (view === 'Edition') setActiveSubItem('Edition')
       else if (view === 'Historique') setActiveSubItem('Historique')
       else if (view === 'Notification') setActiveSubItem('Notification')
+      else if (view === 'Clients') setActiveSubItem('Grille clients')
       else setActiveSubItem('Grille de saisie')
+    } else if (tab === 'credit') {
+      setActiveMenuItem('Credit compte')
+      if (view === 'GestionClients') setActiveSubItem('Gestion des comptes clients')
+      else if (view === 'HistoriqueClients') setActiveSubItem('Historique clients')
+      else if (view === 'NewClient') setActiveSubItem('Nouveau client')
+      else setActiveSubItem('Gestion des comptes clients')
     } else if (location.pathname.startsWith('/notifications')) {
       setActiveMenuItem('Gestion Traites')
       setActiveSubItem('Notification')
     }
-  }, [location.search])
+  }, [location.search, location.pathname])
 
   return (
     <div className="dashboard-container">
@@ -45,6 +56,12 @@ const Dashboard = () => {
               <TraiteFormPage />
             ) : location.pathname.match(/^\/traites\/\d+$/) ? (
               <TraiteDetailPage />
+            ) : location.pathname.match(/^\/clients\/\d+\/edit$/) ? (
+              <ClientFormPage key={location.pathname} />
+            ) : location.pathname.match(/^\/clients\/\d+$/) ? (
+              <ClientDetailPage />
+            ) : location.pathname.startsWith('/clients/new') ? (
+              <ClientFormPage key={location.pathname} />
             ) : location.pathname.startsWith('/notifications') ? (
               <NotificationsPage />
             ) : activeMenuItem === "Dashboard" ? (
@@ -52,9 +69,14 @@ const Dashboard = () => {
             ) : activeMenuItem === "Gestion Traites" ? (
               activeSubItem === "Edition" ? <EditionPage /> : 
               activeSubItem === "Historique" ? <HistoriquePage /> : 
-              activeSubItem === "Notification" ? <NotificationsPage /> : <TraitesGrid />
+              activeSubItem === "Notification" ? <NotificationsPage /> : 
+              activeSubItem === "Grille clients" ? <ClientsGrid /> : 
+              <TraitesGrid />
             ) : activeMenuItem === "Credit compte" ? (
-              <div>Module Credit compte (contenu à définir)</div>
+              activeSubItem === "Gestion des comptes clients" ? <ClientsGrid /> :
+              activeSubItem === "Historique clients" ? <ClientsHistoriquePage /> :
+              activeSubItem === "Nouveau client" ? <ClientFormPage /> :
+              <ClientsGrid />
             ) : null}
             
           </div>

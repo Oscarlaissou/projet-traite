@@ -166,10 +166,9 @@ class TraitesController extends Controller
         // Compute tranche due date: monthly increments from first échéance
         $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($currentIndex - 1) : null;
 
-        // Amount per tranche using currency-friendly rounding and preserved total
+        // Amount per tranche: simple division (total / nombre_traites)
         $total = (int) round($traite->montant ?? 0);
-        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
-        $amountForThisTranche = $tranches[$currentIndex - 1] ?? 0;
+        $amountForThisTranche = (int) round($total / max(1, $totalTranches));
 
         // French number to words (basic, integers)
         $amountInWords = $this->numberToFrenchWords($amountForThisTranche);
@@ -201,12 +200,11 @@ class TraitesController extends Controller
         $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
 
         $total = (int) round($traite->montant ?? 0);
-        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
 
         $pages = [];
         for ($i = 1; $i <= $totalTranches; $i++) {
             $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
-            $amountForThisTranche = $tranches[$i - 1] ?? 0;
+            $amountForThisTranche = (int) round($total / max(1, $totalTranches));
             $pages[] = [
                 'rangeText' => $i . ' | ' . $totalTranches,
                 'ville' => 'Douala',
@@ -234,13 +232,12 @@ class TraitesController extends Controller
         $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
         $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
         $total = (int) round($traite->montant ?? 0);
-        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
 
         // Construire un HTML "pur impression" en utilisant traites.print, sans toolbar/footer
         $htmlParts = [];
         for ($i = 1; $i <= $totalTranches; $i++) {
             $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
-            $amountForThisTranche = $tranches[$i - 1] ?? 0;
+            $amountForThisTranche = (int) round($total / max(1, $totalTranches));
             $data = [
                 'rangeText' => $i . ' | ' . $totalTranches,
                 'ville' => 'Douala',
@@ -273,12 +270,11 @@ class TraitesController extends Controller
         $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
         $firstDue = $traite->echeance ? Carbon::parse($traite->echeance) : null;
         $total = (int) round($traite->montant ?? 0);
-        $tranches = $this->splitAmountIntoTranches($total, $totalTranches);
 
         $htmlParts = [];
         for ($i = 1; $i <= $totalTranches; $i++) {
             $dueDate = $firstDue ? $firstDue->copy()->addMonthsNoOverflow($i - 1) : null;
-            $amountForThisTranche = $tranches[$i - 1] ?? 0;
+            $amountForThisTranche = (int) round($total / max(1, $totalTranches));
             $data = [
                 'rangeText' => $i . ' | ' . $totalTranches,
                 'ville' => 'Douala',
@@ -822,13 +818,14 @@ class TraitesController extends Controller
             $query->whereBetween('date_emission', [$start, $end]);
         }
 
-        $traites = $query->orderByDesc('date_emission')->limit(1000)->get();
+        $traites = $query->orderByDesc('date_emission')->get();
 
         $mapped = $traites->map(function($t) {
-            $act = $t->latestActivity;
+            // Récupérer la dernière activité et l'utilisateur associé
+            $act = $t->latestActivity; // peut être null
             $action = $act?->action ?? 'Création';
-            $user = $act?->user;
-            $displayUser = $user?->username;
+            $user = $act?->user; // peut être null
+            $displayUser = $user?->username ?? $user?->name ?? null;
             // Choisir une date sûre: priorité à la date de l'activité, sinon date_emission, sinon echeance, sinon created_at de la traite
             $date = $act && $act->created_at ? $act->created_at->toDateTimeString() : (
                 ($t->date_emission ?: ($t->echeance ?: ($t->created_at ?? '')))
@@ -875,6 +872,29 @@ class TraitesController extends Controller
             // Vérifier la taille des données
             $dataSize = strlen(json_encode($data));
             \Log::info('Data size: ' . $dataSize . ' bytes (' . round($dataSize / 1024 / 1024, 2) . ' MB)');
+            
+            // Étape supplémentaire : pré-filtrage CSV, conservation d'une seule par 
+            // (nom, montant, nombre_traites, date_emission) : on conserve la meilleure (écart le plus faible) pour chaque groupe
+            $filtered = [];
+            foreach ($data as $row) {
+                $nom = trim($row['nom_raison_sociale'] ?? '');
+                $nbTraites = (int)($row['nombre_traites'] ?? 0);
+                $montant = (float)($row['montant'] ?? 0);
+                $dateEmission = isset($row['date_emission']) ? $this->convertDateFormat($row['date_emission']) : null;
+                $echeance = isset($row['echeance']) ? $this->convertDateFormat($row['echeance']) : null;
+                // La clé NE comprend plus l'échéance
+                if (!$nom || !$nbTraites || !$montant || !$dateEmission || !$echeance) continue;
+                $key = md5($nom).'_'.$montant.'_'.$nbTraites.'_'.$dateEmission;
+                $diff = $this->calculateDateDifference($echeance, $dateEmission);
+                if (!isset($filtered[$key]) || $diff < $filtered[$key]['_diff']) {
+                    $row['_diff'] = $diff;
+                    $filtered[$key] = $row;
+                }
+            }
+            $data = array_map(function($row) {
+                unset($row['_diff']);
+                return $row;
+            }, array_values($filtered));
             
             // Vérifier les doublons dans le fichier CSV lui-même
             $csvDuplicates = $this->checkCsvDuplicates($data);
@@ -967,6 +987,13 @@ class TraitesController extends Controller
                     $echeance = $this->convertDateFormat($item['echeance'] ?? date('Y-m-d'));
                     $dateEmission = $this->convertDateFormat($item['date_emission'] ?? date('Y-m-d'));
                     
+                    // Calcul du statut automatique :
+                    if ($echeance < date('Y-m-d')) {
+                        $statut = 'Échu';
+                    } else {
+                        $statut = 'Non échu';
+                    }
+
                     $traiteData = [
                         'numero' => $numero ?: $this->generateNumero(),
                         'nombre_traites' => (int)($item['nombre_traites'] ?? 1),
@@ -978,7 +1005,7 @@ class TraitesController extends Controller
                         'rib' => $item['rib'] ?? '',
                         'motif' => $item['motif'] ?? '',
                         'commentaires' => $item['commentaires'] ?? '',
-                        'statut' => $item['statut'] ?? '',
+                        'statut' => $statut, // toujours prendre le statut calculé
                     ];
                     
                     \Log::info("Données traite ligne " . ($actualIndex + 1) . ": " . json_encode($traiteData));

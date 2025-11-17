@@ -1,5 +1,5 @@
 .sidebar {
-  width: 280px;
+  width: 300px;
   background: white;
   display: flex;
   flex-direction: column;
@@ -8,8 +8,36 @@
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: visible; /* ne pas couper le bouton toggle à droite */
   box-sizing: border-box;
+  z-index: 10; /* assure la visibilité au-dessus du contenu */
+  transition: width 0.2s ease;
 }
+
+/* Bouton externe, en dehors de la sidebar */
+.sidebar-external-toggle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px; /* léger décalage à droite du bord */
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100; /* très au-dessus */
+}
+
+.sidebar-external-toggle:hover {
+  background: #f9fafb;
+}
+
+/* (plus utilisé pour le bouton externe) */
 
 .sidebar-header {
   padding: 30px 20px 20px;
@@ -172,7 +200,7 @@
 
 /* Responsive: conserver la sidebar à gauche, réduire légèrement la largeur et les espacements */
 .sidebar {
-  width: 280px;
+  width: 300px;
   background: white;
   display: flex;
   flex-direction: column;
@@ -184,22 +212,53 @@
   box-sizing: border-box;
 }
 
-/* Compact sidebar on 1366px-wide screens */
-@media (max-width: 1400px) {
-  .sidebar {
-    width: 240px;
-  }
+/* État réduit */
+.sidebar.collapsed {
+  width: 120px;
 }
 
-@media (max-width: 1200px) {
+.sidebar.collapsed .sidebar-header {
+  padding: 20px 12px 12px;
+}
+
+.sidebar.collapsed .logo img {
+  width: 36px !important;
+}
+
+.sidebar.collapsed .logo-text { display: none; }
+.sidebar.collapsed .nav-text { display: none; }
+.sidebar.collapsed .subitems-group { display: none; }
+
+/* Assure l'affichage des sous-menus lorsque la sidebar est élargie */
+.sidebar:not(.collapsed) .subitems-group { display: flex; }
+
+.sidebar.collapsed .nav-item,
+.sidebar.collapsed .logout-button {
+  justify-content: center;
+  padding: 10px 8px;
+}
+
+.sidebar.collapsed .nav-icon,
+.sidebar.collapsed .logout-icon {
+  margin-top: 0;
+}
+
+/* Compact sidebar on 1366px-wide screens */
+@media (max-width: 1400px) {
   .sidebar {
     width: 260px;
   }
 }
 
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 280px;
+  }
+}
+
 @media (max-width: 992px) {
   .sidebar {
-    width: 240px;
+    width: 260px; /* keep sidebar on the left on small screens */
   }
   .sidebar-header {
     padding: 24px 16px 16px;
@@ -247,7 +306,7 @@
 
 @media (max-width: 600px) {
   .sidebar {
-    width: 200px;
+    width: 220px;
   }
   .nav-item {
     gap: 8px;

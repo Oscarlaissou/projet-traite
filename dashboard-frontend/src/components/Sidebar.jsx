@@ -2,7 +2,7 @@
 import React from "react"
 import { useNavigate } from "react-router-dom"
 import "./Sidebar.css"
-import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit, History } from "lucide-react"
+import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit, History, ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import MonImage from "../images/LOGO.png"
 import { useAuth } from "../hooks/useAuth" // Import du hook
 
@@ -10,6 +10,29 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
   const navigate = useNavigate()
   const { logout } = useAuth() // Utilisation du contexte auth
   const sidebarId = React.useRef(Math.random().toString(36).substr(2, 9)).current
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try {
+      return localStorage.getItem('sidebar_collapsed') === '1'
+    } catch (_) {
+      return false
+    }
+  })
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try { localStorage.setItem('sidebar_collapsed', next ? '1' : '0') } catch (_) {}
+      return next
+    })
+  }
+
+  // Si un sous-menu est actif, s'assurer que la sidebar est élargie
+  React.useEffect(() => {
+    if (activeSubItem) {
+      setCollapsed(false)
+      try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
+    }
+  }, [activeSubItem])
 
   const handleLogout = async () => {
     try {
@@ -29,7 +52,20 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
   
   return (
   
-      <aside className="sidebar" data-sidebar-id={sidebarId}>
+      <>
+      {/* Bouton externe, positionné à l'extérieur de la sidebar */}
+      <button
+        className="sidebar-external-toggle"
+        onClick={toggleCollapsed}
+        aria-label={collapsed ? 'Déplier la barre latérale' : 'Réduire la barre latérale'}
+        style={{
+          left: collapsed ? 120 : 300, // aligné au bord droit de la sidebar
+        }}
+      >
+        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+      </button>
+
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`} data-sidebar-id={sidebarId}>
       <div className="sidebar-header">
         <div className="logo">
           <img src={MonImage} alt="CFAO Mobility Cameroon Logo" style={{ width: "190px", height: "auto" }} />
@@ -56,7 +92,13 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           </button>
           <button
             className={`nav-item ${activeMenuItem === "Gestion Traites" ? "active" : ""}`}
-            onClick={() => { setActiveMenuItem("Gestion Traites"); setActiveSubItem && setActiveSubItem("Grille de saisie"); navigate('/dashboard') }}
+            onClick={() => { 
+              setActiveMenuItem("Gestion Traites"); 
+              setActiveSubItem && setActiveSubItem("Grille de saisie"); 
+              setCollapsed(false);
+              try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
+              navigate('/dashboard') 
+            }}
           >
             <span className="nav-icon">
               <Briefcase size={16} />
@@ -71,6 +113,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                 </span>
                 <span className="nav-text">Grille de saisie</span>
               </button>
+ 
               <button className={`nav-subitem ${activeSubItem === "Edition" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Edition"); navigate('/dashboard') }}>
                 <span className="nav-icon">
                   <Edit size={16} />
@@ -93,7 +136,13 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           )}
           <button
             className={`nav-item ${activeMenuItem === "Credit compte" ? "active" : ""}`}
-            onClick={() => setActiveMenuItem("Credit compte")}
+            onClick={() => { 
+              setActiveMenuItem("Credit compte");
+              setActiveSubItem && setActiveSubItem("Gestion des comptes clients");
+              setCollapsed(false);
+              try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
+              navigate('/dashboard?tab=credit&view=GestionClients');
+            }}
           >
             <span className="nav-icon">
               <CreditCard size={16} />
@@ -102,11 +151,23 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           </button>
           {activeMenuItem === "Credit compte" && (
             <div className="subitems-group">
-              <button className="nav-subitem">
+              <button className={`nav-subitem ${activeSubItem === "Gestion des comptes clients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Gestion des comptes clients"); navigate('/dashboard?tab=credit&view=GestionClients') }}>
                 <span className="nav-icon">
                   <Users size={16} />
                 </span>
                 <span className="nav-text">Gestion des comptes clients</span>
+              </button>
+              <button className={`nav-subitem ${activeSubItem === "Historique clients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique clients"); navigate('/dashboard?tab=credit&view=HistoriqueClients') }}>
+                <span className="nav-icon">
+                  <History size={16} />
+                </span>
+                <span className="nav-text">Historique comptes clients</span>
+              </button>
+              <button className={`nav-subitem ${activeSubItem === "Nouveau client" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Nouveau client"); navigate('/dashboard?tab=credit&view=NewClient') }}>
+                <span className="nav-icon">
+                  <Plus size={16} />
+                </span>
+                <span className="nav-text">Nouveau compte client</span>
               </button>
             </div>
           )}
@@ -128,6 +189,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
         </button>
       </div>
     </aside>
+    </>
   )
 }
 

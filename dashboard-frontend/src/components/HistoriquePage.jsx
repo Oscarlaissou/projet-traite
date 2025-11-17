@@ -43,11 +43,13 @@ const HistoriquePage = () => {
       } else if (mode === 'mois' && selectedMonth) {
         params.append('month', selectedMonth)
       }
+      // Demander la récupération de tous les enregistrements
+      params.append('per_page', '100000')
 
       const res = await fetch(`${baseUrl}/api/traites/historique?${params.toString()}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Erreur lors du chargement de l\'historique')
       const data = await res.json()
-      const rows = Array.isArray(data) ? data : []
+      const rows = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
       // Trier par date de dernière modification/d'activité décroissante
       const sorted = rows.slice().sort((a, b) => {
         const da = a && a.date ? new Date(a.date).getTime() : 0
@@ -73,11 +75,31 @@ const HistoriquePage = () => {
   }, [])
 
   const handleExport = () => {
-    // Simulate export functionality
-    const csvContent = historiqueData.map(item => 
-      `${item.date},${item.nom_raison_sociale},${item.montant},${item.statut},${item.action}`
-    ).join('\n')
-    const blob = new Blob([`Date,Nom/Raison sociale,Montant,Statut,Action\n${csvContent}`], { type: 'text/csv' })
+    // Export ascendant: date (du plus ancien au plus récent)
+    const sortedData = historiqueData.slice().sort((a, b) => {
+      const da = a && a.date ? new Date(a.date).getTime() : 0
+      const db = b && b.date ? new Date(b.date).getTime() : 0
+      return da - db;
+    });
+
+    const headers = ['Date','Nom/Raison sociale','Montant','Statut','Action','Utilisateur']
+    const escapeCsv = (val) => {
+      const s = val == null ? '' : String(val)
+      return '"' + s.replace(/"/g, '""') + '"'
+    }
+
+    const rows = sortedData.map(item => [
+      item.date,
+      item.nom_raison_sociale,
+      item.montant,
+      item.statut,
+      item.action,
+      item.username 
+    ].map(escapeCsv).join(','))
+
+    // BOM UTF-8 pour compatibilité Excel
+    const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

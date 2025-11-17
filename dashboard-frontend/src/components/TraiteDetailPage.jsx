@@ -134,7 +134,7 @@ const TraiteDetailPage = () => {
           <div className="detail-header">
             <div className="detail-title">Détail de la traite</div>
             <div className="detail-status-actions">
-              <span className={`status-badge ${statusClass}`}>{item?.statut || 'Non échu'}</span>
+              <span className={`status-badge ${statusClass}`}style={{fontSize: '20px'}}>{item?.statut || 'Non échu'}</span>
               {(() => {
                 const current = String(item?.statut || '').toLowerCase()
                 const isManual = ['impayé','impaye','rejeté','rejete','payé','paye'].some(k => current.includes(k))

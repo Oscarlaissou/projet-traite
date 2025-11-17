@@ -4,6 +4,7 @@
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TraitesController;
+use App\Http\Controllers\TiersController;
 use App\Http\Controllers\BrowsershotController;
 
 Route::get('/test-db', function () {
@@ -41,6 +42,10 @@ Route::get('/print/traites/{traite}/{index?}', [TraitesController::class, 'print
 // Aperçu multi-pages: afficher toutes les traites et bouton Imprimer
 Route::get('/print/traites/{traite}/preview', [TraitesController::class, 'preview'])
     ->name('traites.preview');
+
+// Impression client: aperçu imprimable
+Route::get('/print/clients/{tier}/preview', [TiersController::class, 'preview'])
+    ->name('clients.preview');
 
 // Télécharger le PDF de l'aperçu (multi-pages)
 Route::get('/print/traites/{traite}/preview.pdf', [TraitesController::class, 'previewPdf'])

@@ -22,10 +22,16 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
   const [error, setError] = useState("")
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [successData, setSuccessData] = useState(null)
+  // Conserver la valeur brute du montant et savoir si l'utilisateur l'a modifiée
+  const [rawMontant, setRawMontant] = useState(null)
+  const [montantTouched, setMontantTouched] = useState(false)
 
   useEffect(() => {
     if (initialValue) {
       setForm({ ...defaultForm, ...initialValue })
+      // Initialiser la valeur brute du montant à partir de la valeur initiale
+      setRawMontant(typeof initialValue.montant === 'number' ? initialValue.montant : Number(String(initialValue.montant || '').replace(/\D+/g, '')) || 0)
+      setMontantTouched(false)
     }
   }, [initialValue])
 
@@ -43,6 +49,9 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       const formatted = digitsOnly ? formatMoney(digitsOnly) : ''
 
       setForm((f) => ({ ...f, [name]: formatted }))
+      // Mettre à jour la valeur brute et le flag de modification
+      setRawMontant(digitsOnly === '' ? 0 : Number(digitsOnly))
+      setMontantTouched(true)
 
       // Restore caret based on number of digits to the left of the caret
       requestAnimationFrame(() => {
@@ -83,8 +92,12 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       const url = isEdit ? `${baseUrl}/api/traites/${initialValue.id}` : `${baseUrl}/api/traites`
       const method = isEdit ? 'PUT' : 'POST'
 
-      const amountDigits = String(form.montant || '').replace(/\D+/g, '')
-      const payload = { ...form, montant: amountDigits === '' ? 0 : Number(amountDigits) }
+      // Utiliser la valeur brute uniquement si l'utilisateur a touché le champ montant
+      const montantToSend = montantTouched
+        ? (rawMontant == null ? 0 : Number(rawMontant))
+        : (isEdit ? (Number(initialValue?.montant ?? 0)) : (Number(String(form.montant || '').replace(/\D+/g, '')) || 0))
+
+      const payload = { ...form, montant: montantToSend }
       const res = await fetch(url, { method, headers, body: JSON.stringify(payload) })
       if (!res.ok) {
         const msg = await res.text()

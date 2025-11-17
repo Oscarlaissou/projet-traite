@@ -6,258 +6,257 @@ import {
   TrendingUp, 
   Calendar, 
   CheckCircle,
-  Loader2 
+  Loader2,
+  Users,
+  UserPlus,
+  DollarSign
 } from "lucide-react"
 import "./DashboardStats.css"
 
 const DashboardStats = () => {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [stats, setStats] = useState({ total: 0, perDay: 0, perMonth: 0, overdue: 0 })
-  const [monthlyData, setMonthlyData] = useState([])
-  const [statusData, setStatusData] = useState([])
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [availableYears, setAvailableYears] = useState([new Date().getFullYear()])
   const navigate = useNavigate()
 
-  // Adapte les données au style souhaité
-  const monthlyDisplay = useMemo(() => {
-    // Convertir 'YYYY-MM' -> libellé court (Jan, Fév, ...)
-    const monthNames = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc']
-    return (monthlyData || []).map((d) => {
-      const [y, m] = String(d.name || '').split('-').map(Number)
-      const label = m ? monthNames[m-1] || d.name : d.name
-      return { ...d, label }
+  // --- ÉTATS POUR LES STATS DES TRAITES ---
+  const [loadingTraites, setLoadingTraites] = useState(true)
+  const [errorTraites, setErrorTraites] = useState("")
+  const [traiteStats, setTraiteStats] = useState({ total: 0, perDay: 0, perMonth: 0, overdue: 0 })
+  const [traiteMonthlyData, setTraiteMonthlyData] = useState([])
+  const [traiteStatusData, setTraiteStatusData] = useState([])
+  const [selectedTraiteYear, setSelectedTraiteYear] = useState(new Date().getFullYear())
+  const [traiteAvailableYears, setTraiteAvailableYears] = useState([new Date().getFullYear()])
+
+  // --- ÉTATS POUR LES STATS DES CLIENTS ---
+  const [loadingClients, setLoadingClients] = useState(true)
+  const [errorClients, setErrorClients] = useState("")
+  const [clientStats, setClientStats] = useState({ total: 0, perDay: 0, perMonth: 0, totalCredit: 0 })
+  const [clientMonthlyData, setClientMonthlyData] = useState([])
+  const [clientTypeData, setClientTypeData] = useState([])
+  const [selectedClientYear, setSelectedClientYear] = useState(new Date().getFullYear())
+  const [clientAvailableYears, setClientAvailableYears] = useState([new Date().getFullYear()])
+
+  const monthNames = useMemo(() => ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'], [])
+
+  // --- DONNÉES MÉMORISÉES POUR LES GRAPHIQUES ---
+  const traiteMonthlyDisplay = useMemo(() => {
+    return (traiteMonthlyData || []).map((d) => {
+      const [, m] = String(d.name || '').split('-').map(Number)
+      return { ...d, label: m ? monthNames[m-1] || d.name : d.name }
     })
-  }, [monthlyData])
+  }, [traiteMonthlyData, monthNames])
 
-  // Utiliser exactement les statuts renvoyés par l'API (Non échu, Échu, Impayé, Rejeté, Payé)
-  const statusTotal = useMemo(() => (statusData || []).reduce((sum, s) => sum + (s.value || 0), 0), [statusData])
+  const traiteStatusTotal = useMemo(() => (traiteStatusData || []).reduce((sum, s) => sum + (s.value || 0), 0), [traiteStatusData])
 
+  const clientMonthlyDisplay = useMemo(() => {
+    return (clientMonthlyData || []).map((d) => {
+      const [, m] = String(d.name || '').split('-').map(Number)
+      return { ...d, label: m ? monthNames[m-1] || d.name : d.name }
+    })
+  }, [clientMonthlyData, monthNames])
+
+  const clientTypeTotal = useMemo(() => (clientTypeData || []).reduce((sum, s) => sum + (s.value || 0), 0), [clientTypeData])
+
+  // --- FETCH DES DONNÉES POUR LES TRAITES ---
   useEffect(() => {
     let isMounted = true
-    let intervalId
-    const fetchStats = async () => {
+    const fetchTraiteStats = async () => {
+      setLoadingTraites(true)
+      setErrorTraites("")
       try {
-        setLoading(true)
         const baseUrl = process.env.REACT_APP_API_URL || ''
         const token = localStorage.getItem('token')
-        const res = await fetch(`${baseUrl}/api/traites/stats`, {
-          headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
-        })
-        if (!res.ok) throw new Error("Erreur lors du chargement des statistiques")
-        const contentType = res.headers.get('content-type') || ''
-        const data = contentType.includes('application/json') ? await res.json() : { total: 0, perDay: 0, perMonth: 0, overdue: 0 }
-        if (!isMounted) return
-        setStats({
-          total: data.total ?? 0,
-          perDay: data.perDay ?? 0,
-          perMonth: data.perMonth ?? 0,
-          overdue: data.overdue ?? 0,
-        })
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
 
-        // monthly
-        const resMonthly = await fetch(`${baseUrl}/api/traites/monthly?year=${selectedYear}`, {
-          headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
-        })
-        if (resMonthly.ok) {
-          const monthly = await resMonthly.json()
-          if (isMounted) setMonthlyData(Array.isArray(monthly) ? monthly : [])
-        }
+        const [resStats, resMonthly, resStatus, resYears] = await Promise.all([
+          fetch(`${baseUrl}/api/traites/stats`, { headers }),
+          fetch(`${baseUrl}/api/traites/monthly?year=${selectedTraiteYear}`, { headers }),
+          fetch(`${baseUrl}/api/traites/status`, { headers }),
+          fetch(`${baseUrl}/api/traites/available-years`, { headers })
+        ])
 
-        // status
-        const resStatus = await fetch(`${baseUrl}/api/traites/status`, {
-          headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
-        })
-        if (resStatus.ok) {
-          const status = await resStatus.json()
-          if (isMounted) setStatusData(Array.isArray(status) ? status : [])
-        }
+        if (!isMounted) return;
 
-        // available years
-        const resYears = await fetch(`${baseUrl}/api/traites/available-years`, {
-          headers: token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
-        })
-        if (resYears.ok) {
-          const years = await resYears.json()
-          if (isMounted) {
-            setAvailableYears(Array.isArray(years) ? years : [new Date().getFullYear()])
-            // Si l'année sélectionnée n'est pas dans les années disponibles, sélectionner la première année
-            if (!years.includes(selectedYear) && years.length > 0) {
-              setSelectedYear(years[0])
-            }
-          }
-        }
+        if (resStats.ok) setTraiteStats(await resStats.json())
+        else throw new Error("Erreur de chargement des stats traites")
+        
+        const monthlyPayload = resMonthly.ok ? await resMonthly.json() : []
+        setTraiteMonthlyData(Array.isArray(monthlyPayload) ? monthlyPayload : [])
+
+        const statusPayload = resStatus.ok ? await resStatus.json() : []
+        setTraiteStatusData(Array.isArray(statusPayload) ? statusPayload : [])
+
+        const yearsPayload = resYears.ok ? await resYears.json() : [new Date().getFullYear()]
+        const yearsArray = Array.isArray(yearsPayload) ? yearsPayload : [new Date().getFullYear()]
+        setTraiteAvailableYears(yearsArray)
+        if (!yearsArray.includes(selectedTraiteYear) && yearsArray.length > 0) setSelectedTraiteYear(yearsArray[0])
+
       } catch (e) {
-        if (!isMounted) return
-        setError(e.message || "Erreur inconnue")
+        if (isMounted) setErrorTraites(e.message || "Erreur inconnue")
       } finally {
-        if (isMounted) setLoading(false)
+        if (isMounted) setLoadingTraites(false)
       }
     }
-    fetchStats()
-    intervalId = setInterval(fetchStats, 300000) // refresh every 5 mins
-    return () => { isMounted = false; if (intervalId) clearInterval(intervalId) }
-  }, [selectedYear])
+    fetchTraiteStats()
+    return () => { isMounted = false }
+  }, [selectedTraiteYear])
 
-  const cardsData = [
-    {
-      icon: FileText,
-      title: "Traites totales",
-      value: stats.total,
-      color: "#3B82F6",
-      bgColor: "#EFF6FF",
-      onClick: () => navigate('/dashboard?tab=traites')
-    },
-    {
-      icon: TrendingUp,
-      title: "Traites/jour",
-      value: stats.perDay,
-      color: "#FFBB7F",
-      bgColor: "#FEF2F2",
-      onClick: () => {
-        const today = new Date().toISOString().slice(0,10)
-        navigate(`/dashboard?tab=traites&from=${today}&to=${today}`)
-      }
-    },
-    {
-      icon: Calendar,
-      title: "Traites/mois",
-      value: stats.perMonth,
-      color: "#8B5CF6",
-      bgColor: "#F5F3FF",
-      onClick: () => {
-        const d = new Date()
-        const yyyy = d.getFullYear()
-        const mm = String(d.getMonth()+1).padStart(2,'0')
-        const first = `${yyyy}-${mm}-01`
-        const last = new Date(yyyy, d.getMonth()+1, 0)
-        const lastStr = `${yyyy}-${mm}-${String(last.getDate()).padStart(2,'0')}`
-        navigate(`/dashboard?tab=traites&from=${first}&to=${lastStr}`)
-      }
-    },
-    {
-      icon: CheckCircle,
-      title: "Traites échues",
-      value: stats.overdue,
-      color: "#2AAD4D",
-      bgColor: "#ECFDF5",
-      onClick: () => {
-        const statut = encodeURIComponent('Échu')
-        navigate(`/dashboard?tab=traites&statut=${statut}`)
+  // --- FETCH DES DONNÉES POUR LES CLIENTS ---
+  useEffect(() => {
+    let isMounted = true
+    const fetchClientStats = async () => {
+      setLoadingClients(true)
+      setErrorClients("")
+      try {
+        const baseUrl = process.env.REACT_APP_API_URL || ''
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+
+        const [resStats, resMonthly, resType, resYears] = await Promise.all([
+          fetch(`${baseUrl}/api/clients/stats`, { headers }),
+          fetch(`${baseUrl}/api/clients/monthly?year=${selectedClientYear}`, { headers }),
+          fetch(`${baseUrl}/api/clients/type-breakdown`, { headers }),
+          fetch(`${baseUrl}/api/clients/available-years`, { headers })
+        ])
+
+        if (!isMounted) return;
+
+        if (resStats.ok) setClientStats(await resStats.json())
+        else throw new Error("Erreur de chargement des stats clients")
+        
+        const monthlyPayload = resMonthly.ok ? await resMonthly.json() : []
+        setClientMonthlyData(Array.isArray(monthlyPayload) ? monthlyPayload : [])
+        
+        const typePayload = resType.ok ? await resType.json() : []
+        setClientTypeData(Array.isArray(typePayload) ? typePayload : [])
+
+        const yearsPayload = resYears.ok ? await resYears.json() : [new Date().getFullYear()]
+        const yearsArray = Array.isArray(yearsPayload) ? yearsPayload : [new Date().getFullYear()]
+        setClientAvailableYears(yearsArray)
+        if (!yearsArray.includes(selectedClientYear) && yearsArray.length > 0) setSelectedClientYear(yearsArray[0])
+        
+      } catch (e) {
+        if (isMounted) setErrorClients(e.message || "Erreur inconnue")
+      } finally {
+        if (isMounted) setLoadingClients(false)
       }
     }
+    fetchClientStats()
+    return () => { isMounted = false }
+  }, [selectedClientYear])
+
+  // --- DONNÉES DES CARTES ---
+  const traiteCardsData = [
+    { icon: FileText, title: "Traites totales", value: traiteStats.total, color: "#3B82F6", bgColor: "#EFF6FF", onClick: () => navigate('/dashboard?tab=traites') },
+    { icon: TrendingUp, title: "Traites/jour", value: traiteStats.perDay, color: "#FFBB7F", bgColor: "#FEF2F2" },
+    { icon: Calendar, title: "Traites/mois", value: traiteStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF" },
+    { icon: CheckCircle, title: "Traites échues", value: traiteStats.overdue, color: "#2AAD4D", bgColor: "#ECFDF5", onClick: () => navigate(`/dashboard?tab=traites&statut=${encodeURIComponent('Échu')}`) }
+  ]
+
+  const formatCredit = (value) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(value || 0)
+
+  const clientCardsData = [
+    { icon: Users, title: "Clients totaux", value: clientStats.total, color: "#3B82F6", bgColor: "#EFF6FF", onClick: () => navigate('/dashboard?tab=credit&view=GestionClients') },
+    { icon: UserPlus, title: "Nouveaux/jour", value: clientStats.perDay, color: "#10B981", bgColor: "#ECFDF5" },
+    { icon: Calendar, title: "Nouveaux/mois", value: clientStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF" },
+    { icon: DollarSign, title: "Crédit total", value: formatCredit(clientStats.totalCredit), color: "#F59E0B", bgColor: "#FFFBEB" }
   ]
 
   return (
     <div className="dashboard-stats">
-      <h2 className="stats-title">Statistiques</h2>
-      
-      {error && (
-        <div className="error-message">{error}</div>
-      )}
+      {/* SECTION DES CARTES STATISTIQUES */}
+      <h2 className="stats-title">Vue d'ensemble</h2>
+      {errorTraites && <div className="error-message">{errorTraites}</div>}
+      {errorClients && <div className="error-message">{errorClients}</div>}
       
       <div className="stats-grid">
-        {cardsData.map((card, index) => (
-          <div key={index} className="stat-card" onClick={card.onClick} style={{ cursor: 'pointer' }}>
-            <div 
-              className="card-icon-container"
-              style={{ backgroundColor: card.bgColor }}
-            >
-              <card.icon size={20} color={card.color} />
-            </div>
-            
+        {/* Cartes des Traites */}
+        {traiteCardsData.map((card, index) => (
+          <div key={`traite-${index}`} className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default' }}>
+            <div className="card-icon-container" style={{ backgroundColor: card.bgColor }}><card.icon size={20} color={card.color} /></div>
             <div className="card-content">
               <p className="card-title">{card.title}</p>
-              <p className="card-value">
-                {loading ? (
-                  <Loader2 size={16} className="loading-spinner" />
-                ) : (
-                  card.value.toLocaleString()
-                )}
-              </p>
+              <p className="card-value">{loadingTraites ? <Loader2 size={16} className="loading-spinner" /> : card.value.toLocaleString()}</p>
+            </div>
+          </div>
+        ))}
+        {/* Cartes des Clients */}
+        {clientCardsData.map((card, index) => (
+          <div key={`client-${index}`} className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default' }}>
+            <div className="card-icon-container" style={{ backgroundColor: card.bgColor }}><card.icon size={20} color={card.color} /></div>
+            <div className="card-content">
+              <p className="card-title">{card.title}</p>
+              <p className="card-value">{loadingClients ? <Loader2 size={16} className="loading-spinner" /> : (typeof card.value === 'number' ? card.value.toLocaleString() : card.value)}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Charts Section */}
+      {/* SECTION DES GRAPHIQUES */}
+      <h2 className="stats-title" style={{ marginTop: '2rem' }}>Analyses Détaillées</h2>
+      
+      {/* Graphiques des Traites */}
       <div className="stats-grid" style={{ marginTop: '1rem' }}>
         <div className="stat-card chart-card" style={{ padding: 0 }}>
           <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0, color: '#1a365d' }}>Évolution des Traites</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.875rem', color: '#4b5563' }}>Année:</label>
-              <select 
-                value={selectedYear} 
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.875rem',
-                  backgroundColor: 'white',
-                  color: '#374151'
-                }}
-              >
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select value={selectedTraiteYear} onChange={(e) => setSelectedTraiteYear(parseInt(e.target.value))} className="year-select">
+              {traiteAvailableYears.map(year => <option key={year} value={year}>{year}</option>)}
+            </select>
           </div>
-          <div style={{ padding: '0 1rem 1rem', minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {loading ? (
-              <Loader2 size={20} className="loading-spinner" />
-            ) : (monthlyDisplay && monthlyDisplay.length > 0) ? (
+          <div className="chart-container">
+            {loadingTraites ? <Loader2 size={20} className="loading-spinner" /> : (traiteMonthlyDisplay.length > 0) ? (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyDisplay}>
-                  <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
-                  <XAxis dataKey="label" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="traites" stroke="#e11d48" strokeWidth={3} name="Nombre de traites" dot={{ r: 4, stroke: '#e11d48', fill: '#e11d48' }} activeDot={{ r: 6 }} />
-                </LineChart>
+                <LineChart data={traiteMonthlyDisplay}><CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" /><XAxis dataKey="label" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="traites" stroke="#e11d48" strokeWidth={3} name="Nombre de traites" /></LineChart>
               </ResponsiveContainer>
-            ) : (
-              <div style={{ color: '#6b7280' }}>Aucune donnée à afficher</div>
-            )}
+            ) : <div className="no-data">Aucune donnée à afficher</div>}
           </div>
         </div>
-
         <div className="stat-card chart-card" style={{ padding: 0 }}>
-          <div style={{ padding: '1rem' }}>
-            <h3 style={{ margin: 0, color: '#1a365d' }}>Répartition par Statut</h3>
-          </div>
-          <div style={{ padding: '0 1rem 1rem', minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {loading ? (
-              <Loader2 size={20} className="loading-spinner" />
-            ) : (statusTotal > 0) ? (
+          <div style={{ padding: '1rem' }}><h3 style={{ margin: 0, color: '#1a365d' }}>Répartition par Statut</h3></div>
+          <div className="chart-container">
+            {loadingTraites ? <Loader2 size={20} className="loading-spinner" /> : (traiteStatusTotal > 0) ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
-                    {statusData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.color || '#3b82f6'} 
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => {
-                          const statut = encodeURIComponent(String(entry.name || '').trim())
-                          navigate(`/dashboard?tab=traites&statut=${statut}`)
-                        }}
-                      />
-                    ))}
+                  <Pie data={traiteStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
+                    {traiteStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color || '#3b82f6'} style={{ cursor: 'pointer' }} onClick={() => navigate(`/dashboard?tab=traites&statut=${encodeURIComponent(String(entry.name || '').trim())}`)} />)}
                   </Pie>
-                  <Tooltip />
-                  <Legend />
+                  <Tooltip /><Legend />
                 </PieChart>
               </ResponsiveContainer>
-            ) : (
-              <div style={{ color: '#6b7280' }}>Aucune donnée à afficher</div>
-            )}
+            ) : <div className="no-data">Aucune donnée à afficher</div>}
+          </div>
+        </div>
+      </div>
+      
+      {/* Graphiques des Clients */}
+      <div className="stats-grid" style={{ marginTop: '1rem' }}>
+        <div className="stat-card chart-card" style={{ padding: 0 }}>
+          <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, color: '#1a365d' }}>Évolution des Clients</h3>
+            <select value={selectedClientYear} onChange={(e) => setSelectedClientYear(parseInt(e.target.value))} className="year-select">
+              {clientAvailableYears.map(year => <option key={year} value={year}>{year}</option>)}
+            </select>
+          </div>
+          <div className="chart-container">
+            {loadingClients ? <Loader2 size={20} className="loading-spinner" /> : (clientMonthlyDisplay.length > 0) ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={clientMonthlyDisplay}><CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" /><XAxis dataKey="label" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="clients" stroke="#3b82f6" strokeWidth={3} name="Nouveaux clients" /></LineChart>
+              </ResponsiveContainer>
+            ) : <div className="no-data">Aucune donnée à afficher</div>}
+          </div>
+        </div>
+        <div className="stat-card chart-card" style={{ padding: 0 }}>
+          <div style={{ padding: '1rem' }}><h3 style={{ margin: 0, color: '#1a365d' }}>Répartition par Type</h3></div>
+          <div className="chart-container">
+            {loadingClients ? <Loader2 size={20} className="loading-spinner" /> : (clientTypeTotal > 0) ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={clientTypeData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value" nameKey="name">
+                    {clientTypeData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip /><Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <div className="no-data">Aucune donnée à afficher</div>}
           </div>
         </div>
       </div>

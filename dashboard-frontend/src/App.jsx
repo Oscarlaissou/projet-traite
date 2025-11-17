@@ -2,8 +2,13 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
-import PageLoader from './components/BrandedLoader'
-import TraiteDetailPage from './components/TraiteDetailPage'
+import PageLoader from './components/BrandedLoader';
+import TraiteDetailPage from './components/TraiteDetailPage';
+import ClientFormPage from './components/ClientFormPage';
+
+// AJOUTS : import des composants clients
+import ClientsGrid from './components/ClientsGrid';
+import ClientDetailPage from './components/ClientDetailPage';
 
 // Composant pour les routes protégées
 function ProtectedRoute({ children }) {
@@ -46,6 +51,77 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } 
             />
+
+            {/* ---------- ROUTES CLIENTS ---------- */}
+            <Route
+                path="/clients"
+                element={
+                    <ProtectedRoute>
+                        <ClientsGrid />
+                    </ProtectedRoute>
+                }
+            />
+            <Route 
+                path="/clients/new" 
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/clients/:id/edit" 
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/clients/:id" 
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
+
+            {/* ------------------------------------------------------------------ */}
+            {/* AJOUT : routes alternatives avec préfixe /dashboard/clients */}
+            <Route
+                path="/dashboard/clients"
+                element={
+                    <ProtectedRoute>
+                        <ClientsGrid />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/dashboard/clients/new"
+                element={
+                    <ProtectedRoute>
+                        <ClientFormPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/dashboard/clients/:id/edit"
+                element={
+                    <ProtectedRoute>
+                        <ClientFormPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/dashboard/clients/:id"
+                element={
+                    <ProtectedRoute>
+                        <ClientDetailPage />
+                    </ProtectedRoute>
+                }
+            />
+            {/* ------------------------------------------------------------------ */}
+
             <Route 
                 path="/notifications" 
                 element={

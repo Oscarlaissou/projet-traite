@@ -141,6 +141,27 @@
   border: none;
   border-radius: 0 0.375rem 0.375rem 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+  min-width: 40px;
+  z-index: 1;
+  position: relative;
+  pointer-events: auto;
+}
+
+.search-button:hover {
+  background: #2D2D4D;
+}
+
+.search-button:active {
+  background: #1D1D3D;
+}
+
+.search-button:focus {
+  outline: 2px solid #3D3D5D;
+  outline-offset: 2px;
 }
 
 .header-right {

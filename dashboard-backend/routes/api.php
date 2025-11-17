@@ -5,6 +5,8 @@ use App\Http\Controllers\DatabaseController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TraitesStatsController;
 use App\Http\Controllers\TraitesController;
+use App\Http\Controllers\TiersController;
+use App\Http\Controllers\ClientStatsController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
@@ -35,6 +37,16 @@ Route::get('/traites/monthly', [TraitesStatsController::class, 'monthly']);
 Route::get('/traites/status', [TraitesStatsController::class, 'statusBreakdown']);
 Route::get('/traites/available-years', [TraitesStatsController::class, 'availableYears']);
 
+// Grille des clients (tiers)
+Route::get('/tiers', [TiersController::class, 'index']);
+Route::post('/tiers', [TiersController::class, 'store'])->middleware('auth:sanctum');
+Route::post('/tiers/import-csv', [TiersController::class, 'importCsv'])->middleware('auth:sanctum');
+Route::get('/agences', [TiersController::class, 'agences'])->middleware('auth:sanctum');
+Route::get('/tiers/historique', [TiersController::class, 'historique']);
+Route::get('/tiers/{tier}', [TiersController::class, 'show']);
+Route::put('/tiers/{tier}', [TiersController::class, 'update'])->middleware('auth:sanctum');
+Route::delete('/tiers/{tier}', [TiersController::class, 'destroy'])->middleware('auth:sanctum');
+
 // Historique des traites (avec utilisateur) - placer AVANT la route paramétrée
 Route::get('/traites/historique', [TraitesController::class, 'historique']);
 
@@ -53,3 +65,11 @@ Route::get('/traites/{traite}', [TraitesController::class, 'show']);
 Route::put('/traites/{traite}', [TraitesController::class, 'update'])->middleware('auth:sanctum');
 Route::delete('/traites/{traite}', [TraitesController::class, 'destroy'])->middleware('auth:sanctum');
 Route::patch('/traites/{traite}/statut', [TraitesController::class, 'updateStatus'])->middleware('auth:sanctum');
+
+
+Route::prefix('clients')->group(function () {
+    Route::get('/stats', [ClientStatsController::class, 'stats']);
+    Route::get('/available-years', [ClientStatsController::class, 'availableYears']);
+    Route::get('/monthly', [ClientStatsController::class, 'monthly']);
+    Route::get('/type-breakdown', [ClientStatsController::class, 'typeBreakdown']);
+});

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Lettre de Change</title>
 <style>
-    body { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #000; background-color: #fff; display: flex; justify-content: center; padding: 0; margin: 0; }
-    .container { width: 100%; max-width: 850px; min-height: 900px; background-color: #fff; padding: 28px 20px; box-sizing: border-box; margin: 20px; }
+    body { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #000; background-color: #f0f0f0; display: flex; justify-content: center; padding: 0; margin: 0; }
+    .container { width: 100%; max-width: 850px; min-height: 950px; /* Hauteur augmentée */ background-color: #fff; padding: 28px 20px; box-sizing: border-box; margin: 20px; }
     .flex-container { display: flex; justify-content: space-between; gap: 0; }
     .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; position: relative; }
     .header-left { font-family: 'Roboto', sans-serif; z-index: 10; position: relative; padding-right: 50px; text-align: center; }
@@ -26,19 +26,24 @@
     .avaliste-line span { margin-right: 6px; padding-top: 10px; font-size: 12px; }
     .avaliste-line div { flex-grow: 1; border-bottom: 1px solid black; margin-top: 20px; padding-bottom: 10px; }
     .boxed-area { border: 1px solid #000; padding: 7px 2px; height: 108px; margin-top: 5px; position: relative; text-align: center; }
-    .boxed-area .label { font-weight: bold; font-family: 'Roboto', sans-serif; font-size: 14px; margin-top: 0; }
-    .boxed-area .value { margin-top: 4px;  font-weight: bold;font-size: 13px; }
+    .boxed-area .label {  font-family: 'Roboto', sans-serif; font-size: 14px; margin-top: 0; }
+    .boxed-area .value { margin-top: 4px;  font-size: 13px; }
     .signature-area { text-align: left; margin-top: 0; margin-left: 4px; }
     .signature-box { border: 1px solid #000; width: 90px; height: 17px; line-height: 17px; margin-top: 5px; padding: 0; text-align: center; font-size: 13px; }
     .signature-caption { font-size: 11px; margin-top: 1px; width: 90%; max-width: 360px; line-height: 1.2; padding-top: 8px; text-align: center; margin-left: auto; margin-right: auto; }
     hr.dotted-separator { border: none; border-top: 2px dotted #000; margin: 20px 0 7px 0; }
-    .domiciliation-left-column { width: 62%; }
-    .correspondence-section { width: 35%; border-left: 1px dotted #000; padding-left: 10px; font-size: 12px; }
+    /* Ajustement des colonnes du bas */
+    .domiciliation-left-column { width: 60%; }
+    .correspondence-section { width: 38%; border-left: 1px dotted #000; padding-left: 15px; font-size: 12px; }
+    /* Ajout d'espace entre les paragraphes de la section de droite */
+    .correspondence-section p { line-height: 1.4; margin-bottom: 25px; }
     .lettre-de-change { border-collapse: collapse; width: 95%; font-size: 13px; table-layout: fixed; margin-top: 0; }
     .lettre-de-change td { border: 1px solid black; padding: 2px 4px; text-align: center; vertical-align: top; font-size: 13px; }
     .center-text { text-align: center; }
     .bold-text { font-weight: bold; }
     .long-text { text-align: left; line-height: 1.1; }
+    /* Ajout d'espace entre les paragraphes pour occuper l'espace */
+    .long-text p { margin-bottom: 14px; }
     .payment-text-block { text-align: left; margin-bottom: 12px; }
     .single-line { border: none; border-top: 1px solid black; margin-right: 40px; margin-left: 45px; height: 0; }
     .footer-line { border: none; border-top: 1px solid black; margin-top: 6px; margin-left: 30px; width: 250px; }
@@ -47,7 +52,7 @@
     /* Media queries pour responsive design */
     @media (max-width: 768px) {
         body { padding: 5px; }
-        .container { padding: 15px 10px; }
+        .container { padding: 15px 10px; min-height: auto; }
         .header { flex-direction: column; align-items: center; gap: 10px; }
         .header-left { padding-right: 0; }
         .header-right { width: 100%; justify-content: center; flex-wrap: wrap; }
@@ -79,23 +84,9 @@
 
     @media print {
         body { padding: 0; background-color: #fff; margin: 0; }
-        .container { width: 100%; max-width: none; box-shadow: none; padding: 15px; margin: 20px; }
+        .container { width: 100%; max-width: none; box-shadow: none; padding: 15px; margin: 0; }
     }
 
-    /* Styles pour capture d'écran optimisée */
-    @media screen {
-        body { 
-            background-color: #fff; 
-            margin: 0; 
-            padding: 0; 
-            min-height: 100vh;
-        }
-        .container { 
-            background-color: #fff; 
-            margin: 0 auto;
-            box-shadow: none;
-        }
-    }
 </style>
 </head>
 <body>
@@ -137,9 +128,9 @@
             <div class="avaliste-line"><span>Avaliste :</span><div></div></div>
             <div class="flex-container" style="align-items: flex-start; margin-top: 5px;">
                 <div class="boxed-area" style="width: 190px;">
-                    <div class="label">TIRE</div>
+                    <div class="label" style="font-weight: bold;">TIRE</div>
                     <div class="value">{{ $nom_raison_sociale }}</div>
-                    <div class="label" style="margin-top: 7px;">DOMICILIATION</div>
+                    <div class="label" style="margin-top: 7px;font-weight: bold;">DOMICILIATION</div>
                     <div class="value">{{ $domiciliation }}</div>
                 </div>
                 <div class="signature-area">
@@ -187,15 +178,16 @@
                     </tr>
                 </tbody>
             </table>
-            <div class="long-text" style="margin-top: 10px;">
+            <div class="long-text" style="margin-top: 15px;">
                 <p>Tiré par &nbsp; <span class="highlight-pink">CFAO MOBILITY CAMEROON</span></p>
                 <hr class="single-line" />
-                <p>Messieurs</p>
-                <p>Nous avons domicilié à vos guichets l'effet ci-dessus désigné et nous prions de bien vouloir à son échéance, le payer à vue par le débit de notre compte.</p>
-                <p>Nous précisons que cet effet est irrévocable et que la bénéficiaire a accepté un paiement différé de sa créance en raison même de cette irrévocabilité.</p>
+                <p>Messieurs,</p>
+                <p>Nous avons domicilié à vos guichets l'effet ci-dessus désigné et nous vous prions de bien vouloir, à son échéance, le payer à vue par le débit de notre compte.</p>
+                <p>Nous précisons que cet effet est irrévocable et que le bénéficiaire a accepté un paiement différé de sa créance en raison même de cette irrévocabilité.</p>
                 <p>Veuillez agréer, Messieurs, nos salutations distinguées.</p>
             </div>
-            <div class="flex-container" style="margin-top: 10px; justify-content: flex-start; align-items: baseline;">
+            <!-- Marge supérieure augmentée pour pousser le contenu vers le bas -->
+            <div class="flex-container" style="margin-top: 40px; justify-content: flex-start; align-items: baseline;">
                 <div>
                     Le &nbsp;&nbsp; <span class="highlight-yellow">{{ $date_emission_text_long }}</span>
                     <hr class="footer-line" />
@@ -213,4 +205,3 @@
 </div>
 </body>
 </html>
-
