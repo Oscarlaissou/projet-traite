@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom"
 import { Plus, ArrowLeft, X } from "lucide-react"
 import { formatMoney } from "../utils/format"
 import Pagination from './Pagination'
+// ÉTAPE 1: Importer la bibliothèque xlsx
+import * as XLSX from 'xlsx'
 import "./Traites.css"
 
 const Columns = [
@@ -33,7 +35,6 @@ const TraitesGrid = () => {
   const [sort, setSort] = useState({ key: 'numero', dir: 'desc' })
   const [initialized, setInitialized] = useState(false)
   const importInputRef = useRef(null)
-  // Navigation vers la page de détail au clic sur une ligne
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -49,8 +50,6 @@ const TraitesGrid = () => {
     return `${dd}-${mm}-${yyyy}`
   }
 
-  
-
   const authHeaders = () => {
     const token = localStorage.getItem('token')
     const headers = { 'Accept': 'application/json' }
@@ -58,10 +57,11 @@ const TraitesGrid = () => {
     return headers
   }
 
-  const exportCSV = async () => {
+  // ÉTAPE 2: Remplacer la fonction exportCSV par exportExcel
+  const exportExcel = async () => {
     try {
-      console.log('Début de l\'exportation CSV...')
-      // Récupérer TOUTES les données sans pagination pour l'export
+      console.log('Début de l\'exportation Excel...')
+      // 1. La récupération des données reste identique
       const params = new URLSearchParams()
       if (search) params.append('search', search)
       if (statut) params.append('statut', statut)
@@ -69,86 +69,73 @@ const TraitesGrid = () => {
       if (to) params.append('to', to)
       if (sort?.key) params.append('sort', sort.key)
       if (sort?.dir) params.append('dir', sort.dir)
-      params.append('per_page', '1000') // Récupérer jusqu'à 1000 éléments
-      
+      params.append('per_page', '1000') // Récupérer un grand nombre d'éléments pour l'export
+
       const url = `${baseUrl}/api/traites?${params.toString()}`
-      console.log('URL de l\'API:', url)
-      
       const res = await fetch(url, { headers: authHeaders() })
-      console.log('Réponse de l\'API:', res.status, res.statusText)
-      
+
       if (!res.ok) {
-        const errorText = await res.text()
-        console.error('Erreur API:', errorText)
-        throw new Error(`Erreur lors du chargement des données pour export: ${res.status} ${res.statusText}`)
+        throw new Error(`Erreur lors du chargement des données pour l'export: ${res.status} ${res.statusText}`)
       }
-      
+
       const data = await res.json()
-      console.log('Données reçues:', data)
       const allItems = data.data || data || []
-      console.log('Nombre d\'éléments à exporter:', allItems.length)
-      
-      const headerKeys = Columns.map(c => c.key)
-      const headerLabels = Columns.map(c => c.label)
-      console.log('Clés des colonnes:', headerKeys)
-      console.log('Labels des colonnes:', headerLabels)
-      console.log('Premier élément de données:', allItems[0])
-      
-      // Vérifier spécifiquement le champ numero
-      console.log('Vérification du champ numero:')
-      allItems.forEach((item, index) => {
-        console.log(`Élément ${index}: numero = "${item.numero}"`)
-      })
-      
-      // Trier les données pour l'export CSV (ascendant sur 'numero')
+
+      // 2. Le tri des données reste identique
       const sortedItems = allItems.slice().sort((a, b) => {
-        // Essaye un tri numérique si possible
         const an = Number(a.numero)
         const bn = Number(b.numero)
         if (!isNaN(an) && !isNaN(bn)) return an - bn
         return String(a.numero).localeCompare(String(b.numero))
       })
 
-      const rows = sortedItems.map(it => headerKeys.map(k => {
-        let v = it[k]
-        if (k === 'echeance' || k === 'date_emission') {
-          if (v) {
-            const d = new Date(v)
-            if (!isNaN(d)) {
-              const dd = String(d.getDate()).padStart(2, '0')
-              const mm = String(d.getMonth() + 1).padStart(2, '0')
-              const yyyy = d.getFullYear()
-              v = `${dd}-${mm}-${yyyy}`
-            }
+      // 3. Préparer les données pour la feuille de calcul
+      const headerLabels = Columns.map(c => c.label)
+
+      // Mapper les données en utilisant les labels comme clés, ce qui est plus simple pour json_to_sheet
+      const dataForSheet = sortedItems.map(item => {
+        const rowData = {}
+        Columns.forEach(col => {
+          let value = item[col.key]
+          if (col.key === 'echeance' || col.key === 'date_emission') {
+            value = formatDateDDMMYYYY(value) // Utiliser votre fonction de formatage existante
+          } else if (col.key === 'montant') {
+            value = Number(item[col.key] || 0) // Assurer que le montant est un nombre
+          } else {
+            value = value ?? '' // Remplacer null/undefined par une chaîne vide
           }
-        }
-        if (k === 'montant') {
-          v = Number(it[k] || 0)
-        }
-        const s = v == null ? '' : String(v)
-        // escape quotes and wrap
-        return '"' + s.replace(/"/g, '""') + '"'
-      }).join(','))
+          rowData[col.label] = value
+        })
+        return rowData
+      })
       
-      console.log('Première ligne CSV:', rows[0])
-      
-      // Ajouter BOM UTF-8 pour assurer la compatibilité avec Excel
-      const csv = '\uFEFF' + [headerLabels.join(','), ...rows].join('\n')
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-      const url_download = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url_download
-      a.download = `traites_${new Date().toISOString().slice(0,10)}.csv`
-      a.click()
-      URL.revokeObjectURL(url_download)
-      
-      console.log('Exportation CSV terminée avec succès')
+      // 4. Créer la feuille de calcul et le classeur
+      const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerLabels })
+
+      // Optionnel : ajuster la largeur des colonnes automatiquement
+      const colWidths = headerLabels.map(header => ({
+        wch: Math.max(
+          header.length,
+          ...dataForSheet.map(row => row[header]?.toString().length ?? 0)
+        ) + 2 // Ajouter un peu d'espace
+      }))
+      worksheet['!cols'] = colWidths
+
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Traites")
+
+      // 5. Déclencher le téléchargement du fichier Excel
+      const fileName = `traites_${new Date().toISOString().slice(0, 10)}.xlsx`
+      XLSX.writeFile(workbook, fileName)
+
+      console.log('Exportation Excel terminée avec succès')
     } catch (e) {
       console.error('Erreur lors de l\'exportation:', e)
-      alert(e.message || 'Export CSV échoué')
+      alert(e.message || 'Export Excel échoué')
     }
   }
 
+  // ... (le reste du code de votre composant reste inchangé)
   const handleImportClick = () => {
     importInputRef.current?.click()
   }
@@ -711,7 +698,6 @@ const TraitesGrid = () => {
 
   return (
     <div className="dashboard-stats">
-      {/* Indicateur de chargement global */}
       {isImporting && (
         <div style={{
           position: 'fixed',
@@ -781,10 +767,10 @@ const TraitesGrid = () => {
         <button className="submit-button" onClick={() => { setPage(1); fetchItems() }}>Rechercher</button>
         
         
-        {/* Removed sort, alpha and expand controls as requested */}
         <button className="submit-button" onClick={handleNew}><Plus size={16} style={{ marginRight: 6 }} /> Nouvelle traite</button>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="submit-button" onClick={exportCSV}>Exporter CSV</button>
+          {/* ÉTAPE 3: Mettre à jour le bouton et son événement onClick */}
+          <button className="submit-button" onClick={exportExcel}>Exporter Excel</button>
           <button className="submit-button" onClick={handleImportClick}>Importer CSV</button>
           <input ref={importInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
@@ -864,7 +850,6 @@ const TraitesGrid = () => {
         </div>
       )}
       
-      {/* Modal d'importation CSV */}
     {importModalOpen && (
       <div style={{
         position: 'fixed',
@@ -907,7 +892,6 @@ const TraitesGrid = () => {
           </button>
           <h3 style={{ marginTop: 0, marginBottom: 20 }}>Configuration de l'importation CSV</h3>
           
-          {/* Aperçu des données */}
           <div style={{ marginBottom: 20 }}>
             <h4>Colonnes détectées dans le fichier CSV :</h4>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -925,7 +909,6 @@ const TraitesGrid = () => {
             </div>
           </div>
 
-          {/* Détection des doublons */}
           {(duplicates.csvDuplicates.length > 0 || duplicates.existingDuplicates.length > 0) && (
             <div style={{ marginBottom: 20 }}>
               <h4 style={{ color: '#dc2626' }}>⚠️ Doublons détectés :</h4>
@@ -972,7 +955,6 @@ const TraitesGrid = () => {
             </div>
           )}
 
-          {/* Mapping des colonnes */}
           <div style={{ marginBottom: 20 }}>
             <h4>Mapping des colonnes :</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -996,7 +978,6 @@ const TraitesGrid = () => {
             </div>
           </div>
 
-          {/* Aperçu des données */}
           {csvRecords.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <h4>Aperçu des données (3 premières lignes) :</h4>
@@ -1027,7 +1008,6 @@ const TraitesGrid = () => {
             </div>
           )}
 
-          {/* Progression de l'importation */}
           {importProgress.total > 0 && (
             <div style={{ marginBottom: 20 }}>
               <h4>Progression de l'importation :</h4>
@@ -1049,7 +1029,6 @@ const TraitesGrid = () => {
             </div>
           )}
 
-          {/* Boutons d'action */}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
             <button
               onClick={() => setImportModalOpen(false)}
@@ -1070,7 +1049,6 @@ const TraitesGrid = () => {
                 console.log('csvHeaders:', csvHeaders)
                 console.log('csvRecords:', csvRecords)
                 
-                // Vérifier que les champs requis sont mappés
                 const requiredFields = ['numero', 'nombre_traites', 'echeance', 'date_emission', 'montant', 'nom_raison_sociale']
                 const missingFields = requiredFields.filter(field => !columnMapping[field])
                 
@@ -1115,5 +1093,3 @@ const TraitesGrid = () => {
 }
 
 export default TraitesGrid
-
-
