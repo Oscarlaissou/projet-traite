@@ -13,15 +13,15 @@
     .toolbar {
       top: 0;
       display: flex;
-      flex-direction: row;
-      justify-content: space-between;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       align-items: center;
       gap: 10px;
-      padding: 10px 24px;
+      padding: 10px 16px;
       position: sticky;
-      background: #fff;
-      border-bottom: 1px solid #e5e7eb;
-      z-index: 100;
+      bottom: 0;
+      z-index: 50;
     }
 
     /* reverted layout wrapper */
@@ -31,23 +31,33 @@
       flex-direction: column;
       align-items: center;
       text-align: center;
+      width: 100%;
       gap: 6px;
+      margin: 0 auto;
     }
 
     .toolbar-left img {
-      height: 50px;
+      height: 40px;
       object-fit: contain;
-      max-width: 150px;
+      max-width: 100%;
     }
     .toolbar-left .message { color: #4b5563; font-size: 12px; }
 
-    .toolbar-actions {
+    .toolbar-right {
       display: flex;
-      gap: 8px;
       align-items: center;
+      gap: 12px;
     }
 
-    .toolbar-actions button {
+    .toolbar-right input[type="email"] {
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 14px;
+      width: 260px;
+    }
+
+    .toolbar button {
       background: #111827;
       color: #fff;
       border: none;
@@ -57,18 +67,13 @@
       transition: background 0.2s ease-in-out;
     }
 
-    .toolbar-actions button:hover {
+    .toolbar button:hover {
       background: #374151;
     }
 
-    .toolbar-actions .cancel {
-      background: #fff;
-      color: #111827;
-      border: 1px solid #e5e7eb;
-    }
-
-    .toolbar-actions .cancel:hover {
-      background: #f3f4f6;
+    .toolbar .hint {
+      color: #4b5563;
+      font-size: 13px;
     }
 
     .preview-wrapper {
@@ -89,11 +94,11 @@
       align-items: center;
       gap: 10px;
       padding: 10px 16px;
+      /* border-top: 1px solid #e5e7eb;
+      background: #fff; */
       position: sticky;
       bottom: 0;
       z-index: 50;
-      background: #fff;
-      border-top: 1px solid #e5e7eb;
     }
     .pager-footer .pager { display: inline-flex; gap: 6px; align-items: center; }
     .pager-footer .btn { background: #fff; color: #111827; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
@@ -164,14 +169,10 @@
 <body>
   <div class="toolbar">
     <div class="toolbar-left">
-      <img src="{{ asset('LOGO.png') }}" alt="Logo" />
+      <img src="{{ asset('LOGO.png') }}" alt="Logo" style="height: 60px; object-fit: contain; max-width: 100%;" />
       <span class="message">Aperçu de toutes les traites</span>
     </div>
-    <div class="toolbar-actions">
-      <button class="cancel" onclick="cancelPreview()">Annuler</button>
-      <button onclick="window.print()">Imprimer</button>
-      <button id="emailBtn" onclick="downloadAndEmail()">Transférer par mail</button>
-    </div>
+    <div class="toolbar-right"></div>
   </div>
 
 
@@ -190,6 +191,12 @@
         <button class="btn {{ $i === 1 ? 'active' : '' }}" data-page="{{ $i }}">{{ $i }}</button>
       @endfor
       <button class="btn" id="nextBtn">Suivant</button>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="cancel" onclick="cancelPreview()">Annuler</button>
+      <button class="print" onclick="window.print()">Imprimer</button>
+     
+      <button class="print" id="emailBtn" onclick="downloadAndEmail()">Transférer par mail</button>
     </div>
   </div>
 

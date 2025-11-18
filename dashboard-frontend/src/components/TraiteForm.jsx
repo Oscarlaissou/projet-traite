@@ -147,7 +147,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
         <input type="number" name="nombre_traites" value={form.nombre_traites} min={1} onChange={handleChange} required className="form-input" />
       </div>
       <div>
-        <label>Échéance</label>
+        <label>1ere Échéance</label>
         <input type="date" name="echeance" value={form.echeance} onChange={handleChange} required className="form-input" />
       </div>
       <div>

@@ -155,7 +155,7 @@ const TraiteDetailPage = () => {
             <div className="detail-grid">
               <Detail label="Numéro" value={item?.numero} />
               <Detail label="Nb traites" value={item?.nombre_traites} />
-              <Detail label="Échéance" value={formatDateDDMMYYYY(item?.echeance)} />
+              <Detail label="1ere Échéance" value={formatDateDDMMYYYY(item?.echeance)} />
               <Detail label="Émission" value={formatDateDDMMYYYY(item?.date_emission)} />
               <Detail label="Montant de crédit" value={formatMoney(item?.montant)} />
               <Detail label="Nom/Raison sociale" value={item?.nom_raison_sociale} />

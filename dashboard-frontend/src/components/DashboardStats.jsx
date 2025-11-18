@@ -38,20 +38,40 @@ const DashboardStats = () => {
 
   // --- DONNÉES MÉMORISÉES POUR LES GRAPHIQUES ---
   const traiteMonthlyDisplay = useMemo(() => {
-    return (traiteMonthlyData || []).map((d) => {
-      const [, m] = String(d.name || '').split('-').map(Number)
-      return { ...d, label: m ? monthNames[m-1] || d.name : d.name }
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    const srcArr = Array.isArray(traiteMonthlyData) ? traiteMonthlyData : []
+    const byName = new Map(srcArr.map(d => [String(d.name || ''), d]))
+    const result = Array.from({ length: 12 }, (_, idx) => {
+      const m = idx + 1
+      const name = `${selectedTraiteYear}-${String(m).padStart(2, '0')}`
+      const found = byName.get(name) || {}
+      const baseVal = found.traites ?? 0
+      const value = (selectedTraiteYear === currentYear && m > currentMonth) ? null : baseVal
+      return { name, label: monthNames[m-1], traites: value }
     })
-  }, [traiteMonthlyData, monthNames])
+    return result
+  }, [traiteMonthlyData, monthNames, selectedTraiteYear])
 
   const traiteStatusTotal = useMemo(() => (traiteStatusData || []).reduce((sum, s) => sum + (s.value || 0), 0), [traiteStatusData])
 
   const clientMonthlyDisplay = useMemo(() => {
-    return (clientMonthlyData || []).map((d) => {
-      const [, m] = String(d.name || '').split('-').map(Number)
-      return { ...d, label: m ? monthNames[m-1] || d.name : d.name }
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    const srcArr = Array.isArray(clientMonthlyData) ? clientMonthlyData : []
+    const byName = new Map(srcArr.map(d => [String(d.name || ''), d]))
+    const result = Array.from({ length: 12 }, (_, idx) => {
+      const m = idx + 1
+      const name = `${selectedClientYear}-${String(m).padStart(2, '0')}`
+      const found = byName.get(name) || {}
+      const baseVal = found.clients ?? 0
+      const value = (selectedClientYear === currentYear && m > currentMonth) ? null : baseVal
+      return { name, label: monthNames[m-1], clients: value }
     })
-  }, [clientMonthlyData, monthNames])
+    return result
+  }, [clientMonthlyData, monthNames, selectedClientYear])
 
   const clientTypeTotal = useMemo(() => (clientTypeData || []).reduce((sum, s) => sum + (s.value || 0), 0), [clientTypeData])
 

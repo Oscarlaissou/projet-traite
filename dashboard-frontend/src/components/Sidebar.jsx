@@ -147,7 +147,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
             <span className="nav-icon">
               <CreditCard size={16} />
             </span>
-            <span className="nav-text">Crédit compte</span>
+            <span className="nav-text">Comptes clients</span>
           </button>
           {activeMenuItem === "Credit compte" && (
             <div className="subitems-group">

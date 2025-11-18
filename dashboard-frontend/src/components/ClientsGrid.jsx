@@ -205,7 +205,7 @@ const ClientsGrid = () => {
         <ArrowLeft size={18} />
       </button>
 
-      <h2 className="stats-title">Grille des comptesclients</h2>
+      <h2 className="stats-title">Grille des comptes clients</h2>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <input
