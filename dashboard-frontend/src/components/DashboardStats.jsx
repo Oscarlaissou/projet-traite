@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts'
+import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import { 
   FileText, 
   TrendingUp, 
@@ -225,7 +225,14 @@ const DashboardStats = () => {
           <div className="chart-container">
             {loadingTraites ? <Loader2 size={20} className="loading-spinner" /> : (traiteMonthlyDisplay.length > 0) ? (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={traiteMonthlyDisplay}><CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" /><XAxis dataKey="label" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="traites" stroke="#e11d48" strokeWidth={3} name="Nombre de traites" /></LineChart>
+                <BarChart data={traiteMonthlyDisplay}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" />
+                  <YAxis tickFormatter={(value) => Number.isInteger(value) ? value : value.toFixed(0)} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="traites" fill="#e11d48" name="Nombre de traites" />
+                </BarChart>
               </ResponsiveContainer>
             ) : <div className="no-data">Aucune donnée à afficher</div>}
           </div>
@@ -259,7 +266,14 @@ const DashboardStats = () => {
           <div className="chart-container">
             {loadingClients ? <Loader2 size={20} className="loading-spinner" /> : (clientMonthlyDisplay.length > 0) ? (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={clientMonthlyDisplay}><CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" /><XAxis dataKey="label" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="clients" stroke="#3b82f6" strokeWidth={3} name="Nouveaux clients" /></LineChart>
+                <BarChart data={clientMonthlyDisplay}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" />
+                  <YAxis tickFormatter={(value) => Number.isInteger(value) ? value : value.toFixed(0)} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="clients" fill="#3b82f6" name="Nouveaux clients" />
+                </BarChart>
               </ResponsiveContainer>
             ) : <div className="no-data">Aucune donnée à afficher</div>}
           </div>

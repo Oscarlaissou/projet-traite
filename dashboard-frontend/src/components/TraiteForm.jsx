@@ -28,9 +28,17 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
 
   useEffect(() => {
     if (initialValue) {
-      setForm({ ...defaultForm, ...initialValue })
+      // Format the initial montant value to remove decimals
+      const formattedInitialValue = { ...initialValue };
+      if (formattedInitialValue.montant) {
+        // Convert to integer and format without decimals
+        const montantInt = Math.floor(Number(formattedInitialValue.montant));
+        formattedInitialValue.montant = montantInt.toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+      }
+      
+      setForm({ ...defaultForm, ...formattedInitialValue });
       // Initialiser la valeur brute du montant à partir de la valeur initiale
-      setRawMontant(typeof initialValue.montant === 'number' ? initialValue.montant : Number(String(initialValue.montant || '').replace(/\D+/g, '')) || 0)
+      setRawMontant(typeof initialValue.montant === 'number' ? Math.floor(initialValue.montant) : Number(String(initialValue.montant || '').replace(/\D+/g, '')) || 0)
       setMontantTouched(false)
     }
   }, [initialValue])
@@ -46,7 +54,8 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       const leftDigitsCount = leftPart.replace(/\D+/g, '').length
 
       const digitsOnly = value.replace(/\D+/g, '')
-      const formatted = digitsOnly ? formatMoney(digitsOnly) : ''
+      // Format without decimals - only whole numbers
+      const formatted = digitsOnly ? Number(digitsOnly).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) : ''
 
       setForm((f) => ({ ...f, [name]: formatted }))
       // Mettre à jour la valeur brute et le flag de modification
@@ -112,7 +121,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
           title: "Traite créée avec succès !",
           message: "Votre traite a été enregistrée avec succès.",
           numero: saved.numero || 'Auto-généré',
-          montant: formatMoney(saved.montant)
+          montant: Number(saved.montant).toLocaleString('fr-FR', { maximumFractionDigits: 0 })
         })
         setShowSuccessDialog(true)
       } else {
@@ -164,7 +173,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
           onChange={handleChange}
           required
           className="form-input"
-          placeholder="Montant en chiffres"
+          placeholder="Montant en chiffres (sans décimales)"
           ref={montantRef}
         />
       </div>

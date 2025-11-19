@@ -5,7 +5,7 @@ import { formatMoney } from "../utils/format"
 import Pagination from './Pagination'
 import "./Traites.css"
 import MonImage from "../images/image6.png"
-
+import * as XLSX from 'xlsx'
 
 const HistoriquePage = () => {
   const navigate = useNavigate()
@@ -82,32 +82,28 @@ const HistoriquePage = () => {
       return da - db;
     });
 
-    const headers = ['Date','Nom/Raison sociale','Montant','Statut','Action','Utilisateur']
-    const escapeCsv = (val) => {
-      const s = val == null ? '' : String(val)
-      return '"' + s.replace(/"/g, '""') + '"'
-    }
+    // Préparer les données pour Excel
+    const worksheetData = sortedData.map(item => ({
+      'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
+      'Nom/Raison sociale': item.nom_raison_sociale || '',
+      'Numéro Traite': item.numero_traite || '',
+      'Montant': Number(item.montant) || 0,
+      'Action': item.action || '',
+      'Utilisateur': item.username || item.user_name || item.user_email || '',
+      'Statut': item.statut || ''
+    }));
 
-    const rows = sortedData.map(item => [
-      item.date,
-      item.nom_raison_sociale,
-      item.montant,
-      item.statut,
-      item.action,
-      item.username 
-    ].map(escapeCsv).join(','))
-
-    // BOM UTF-8 pour compatibilité Excel
-    const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `historique_${mode}_${new Date().toISOString().slice(0,10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    // Créer la feuille de calcul Excel
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    
+    // Créer le classeur Excel
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Historique");
+    
+    // Générer le fichier Excel et le télécharger
+    const fileName = `historique_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   }
-
   
 
   return (
@@ -220,7 +216,7 @@ const HistoriquePage = () => {
                 marginBottom: viewportWidth < 480 ? 8 : 0
               }}
             >
-              <Download size={16} style={{ marginRight: 6 }} /> Exporter
+              <Download size={16} style={{ marginRight: 6 }} /> Exporter Excel
             </button>
             
           </div>
