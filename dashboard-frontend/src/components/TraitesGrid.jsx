@@ -33,12 +33,26 @@ const TraitesGrid = () => {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
+  const itemsPerPageForPrinting = 53 // Fixed value for printing to maintain existing behavior
   const [sort, setSort] = useState({ key: 'numero', dir: 'desc' })
   const [initialized, setInitialized] = useState(false)
   const importInputRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
-
+  
+  // États pour la fonctionnalité d'impression améliorée
+  const [printModalOpen, setPrintModalOpen] = useState(false)
+  const [printOptions, setPrintOptions] = useState({
+    printAllPages: true,
+    specificPage: 1,
+    fromPage: 1,
+    toPage: 1,
+    printCurrentView: false,
+    pageRanges: '',
+    selectedOption: 'all' // 'all', 'specific', 'range', 'current', 'pages'
+  })
+  const [isPrinting, setIsPrinting] = useState(false)
+  
   // ÉTAPE 2: Créer une référence pour le contenu à imprimer
   const componentToPrintRef = useRef(null);
   
@@ -47,8 +61,55 @@ const TraitesGrid = () => {
   const [allItemsForPrint, setAllItemsForPrint] = useState([]);
 
   // Fonction pour charger toutes les données pour l'impression
-  const loadAllItemsForPrint = async () => {
+  const loadAllItemsForPrint = async (pageOptions = null) => {
     try {
+      // Si l'option d'impression de la vue actuelle est sélectionnée
+      if (pageOptions && pageOptions.selectedOption === 'current') {
+        // Imprimer uniquement les éléments actuellement visibles
+        return items;
+      }
+      
+      // Si des plages de pages spécifiques sont demandées
+      if (pageOptions && pageOptions.selectedOption === 'pages' && pageOptions.pageRanges) {
+        const pageNumbers = parsePageRanges(pageOptions.pageRanges, pagination.last_page || 1);
+        if (pageNumbers.length > 0) {
+          // Charger les données pour chaque page spécifiée
+          const allData = [];
+          for (const pageNum of pageNumbers) {
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            if (statut) params.append('statut', statut);
+            if (from) params.append('from', from);
+            if (to) params.append('to', to);
+            if (sort?.key) params.append('sort', sort.key);
+            if (sort?.dir) params.append('dir', sort.dir);
+            
+            params.append('page', pageNum);
+            params.append('per_page', itemsPerPageForPrinting);
+            
+            const url = `${baseUrl}/api/traites?${params.toString()}`;
+            const res = await fetch(url, { headers: authHeaders() });
+            
+            if (res.ok) {
+              const data = await res.json();
+              const pageItems = data.data || data || [];
+              allData.push(...pageItems);
+            }
+          }
+          
+          // Trier les données pour l'impression (descendant sur 'numero')
+          const sortedItems = allData.slice().sort((a, b) => {
+            const an = Number(a.numero);
+            const bn = Number(b.numero);
+            if (!isNaN(an) && !isNaN(bn)) return bn - an;
+            return String(b.numero).localeCompare(String(a.numero));
+          });
+          
+          return sortedItems;
+        }
+      }
+      
+      // Pour toutes les autres options, charger les données normalement
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (statut) params.append('statut', statut);
@@ -56,7 +117,22 @@ const TraitesGrid = () => {
       if (to) params.append('to', to);
       if (sort?.key) params.append('sort', sort.key);
       if (sort?.dir) params.append('dir', sort.dir);
-      params.append('per_page', '1000'); // Charger toutes les données
+      
+      // Si des options de page sont spécifiées, les utiliser
+      if (pageOptions) {
+        if (pageOptions.selectedOption === 'all') {
+          params.append('per_page', '1000'); // Charger toutes les données
+        } else if (pageOptions.selectedOption === 'specific') {
+          params.append('page', pageOptions.specificPage);
+          params.append('per_page', itemsPerPageForPrinting);
+        } else if (pageOptions.selectedOption === 'range') {
+          // Pour imprimer une plage de pages, on charge toutes les données
+          // et on les filtrera lors de l'impression
+          params.append('per_page', '1000');
+        }
+      } else {
+        params.append('per_page', '1000'); // Par défaut, charger toutes les données
+      }
       
       const url = `${baseUrl}/api/traites?${params.toString()}`;
       const res = await fetch(url, { headers: authHeaders() });
@@ -68,18 +144,157 @@ const TraitesGrid = () => {
       const data = await res.json();
       const allItems = data.data || data || [];
       
-      // Trier les données pour l'impression (ascendant sur 'numero')
+      // Trier les données pour l'impression (descendant sur 'numero')
       const sortedItems = allItems.slice().sort((a, b) => {
         const an = Number(a.numero);
         const bn = Number(b.numero);
-        if (!isNaN(an) && !isNaN(bn)) return an - bn;
-        return String(a.numero).localeCompare(String(b.numero));
+        if (!isNaN(an) && !isNaN(bn)) return bn - an;
+        return String(b.numero).localeCompare(String(a.numero));
       });
       
       return sortedItems;
     } catch (e) {
       console.error('Erreur lors du chargement des données pour l\'impression:', e);
       throw e;
+    }
+  };
+
+  // Fonction pour formater les données pour l'impression
+  const formatDataForPrint = (items) => {
+    return items.map(item => {
+      const formattedItem = {};
+      Columns.forEach(col => {
+        let value = item[col.key];
+        if (col.key === 'echeance' || col.key === 'date_emission') {
+          value = formatDateDDMMYYYY(value);
+        } else if (col.key === 'montant') {
+          value = formatMoney(value);
+        } else if (col.key === 'statut') {
+          value = value || 'Non échu';
+        }
+        formattedItem[col.label] = value ?? '';
+      });
+      return formattedItem;
+    });
+  };
+
+  // Add a new function to parse page ranges
+  const parsePageRanges = (ranges, maxPage) => {
+    if (!ranges.trim()) return [];
+    
+    const result = [];
+    const parts = ranges.split(',');
+    
+    for (let part of parts) {
+      part = part.trim();
+      if (part.includes('-')) {
+        const [start, end] = part.split('-').map(p => parseInt(p.trim()));
+        if (!isNaN(start) && !isNaN(end) && start > 0 && end <= maxPage && start <= end) {
+          for (let i = start; i <= end; i++) {
+            if (!result.includes(i)) result.push(i);
+          }
+        }
+      } else {
+        const pageNum = parseInt(part);
+        if (!isNaN(pageNum) && pageNum > 0 && pageNum <= maxPage && !result.includes(pageNum)) {
+          result.push(pageNum);
+        }
+      }
+    }
+    
+    return result.sort((a, b) => a - b);
+  };
+  
+  // Add validation function for page ranges
+  const validatePageRanges = (ranges, maxPage) => {
+    if (!ranges.trim()) return { valid: true, message: '' };
+    
+    const parts = ranges.split(',');
+    
+    for (let part of parts) {
+      part = part.trim();
+      if (part.includes('-')) {
+        const [start, end] = part.split('-').map(p => parseInt(p.trim()));
+        if (isNaN(start) || isNaN(end)) {
+          return { valid: false, message: `Format invalide: "${part}". Utilisez des nombres séparés par un tiret.` };
+        }
+        if (start <= 0 || end <= 0) {
+          return { valid: false, message: `Les numéros de page doivent être positifs.` };
+        }
+        if (start > maxPage || end > maxPage) {
+          return { valid: false, message: `Les numéros de page ne peuvent pas dépasser ${maxPage}.` };
+        }
+        if (start > end) {
+          return { valid: false, message: `La page de début (${start}) ne peut pas être supérieure à la page de fin (${end}).` };
+        }
+      } else {
+        const pageNum = parseInt(part);
+        if (isNaN(pageNum)) {
+          return { valid: false, message: `Format invalide: "${part}". Entrez un nombre valide.` };
+        }
+        if (pageNum <= 0) {
+          return { valid: false, message: `Les numéros de page doivent être positifs.` };
+        }
+        if (pageNum > maxPage) {
+          return { valid: false, message: `Les numéros de page ne peuvent pas dépasser ${maxPage}.` };
+        }
+      }
+    }
+    
+    return { valid: true, message: '' };
+  };
+  
+  // Helper function to calculate element ranges for each page
+  const getElementRangeForPage = (pageNum) => {
+    const start = (pageNum - 1) * itemsPerPageForPrinting + 1;
+    const end = Math.min(pageNum * itemsPerPageForPrinting, pagination.total || 0);
+    return { start, end };
+  };
+  
+  // Helper function to get page numbers for specific elements
+  const getPageForElement = (elementNum) => {
+    return Math.ceil(elementNum / itemsPerPageForPrinting);
+  };
+
+  // Fonction pour ouvrir la modale d'impression
+  const openPrintModal = () => {
+    setPrintOptions({
+      printAllPages: true,
+      specificPage: page,
+      fromPage: 1,
+      toPage: pagination.last_page || 1,
+      printCurrentView: false,
+      pageRanges: '',
+      selectedOption: 'all'
+    });
+    setPrintModalOpen(true);
+  };
+
+  // Fonction d'impression avec options
+  const handlePrintWithOptions = async () => {
+    // Valider les plages de pages si spécifiées
+    if (printOptions.selectedOption === 'pages' && printOptions.pageRanges.trim()) {
+      const validation = validatePageRanges(printOptions.pageRanges, pagination.last_page || 1);
+      if (!validation.valid) {
+        alert(validation.message);
+        return;
+      }
+    }
+    
+    setIsPrinting(true);
+    try {
+      const allItems = await loadAllItemsForPrint(printOptions);
+      const formattedItems = formatDataForPrint(allItems);
+      setAllItemsForPrint(formattedItems);
+      setIsPrintingAll(true);
+      
+      // Attendre un court instant pour que les données soient mises à jour
+      setTimeout(() => {
+        // Utiliser react-to-print pour imprimer
+        handlePrint();
+      }, 100);
+    } catch (e) {
+      alert(e.message || 'Erreur lors du chargement des données pour l\'impression');
     }
   };
 
@@ -121,7 +336,7 @@ const TraitesGrid = () => {
       // Avant l'impression, charger toutes les données si nécessaire
       setIsPrintingAll(true);
       try {
-        const allItems = await loadAllItemsForPrint();
+        const allItems = await loadAllItemsForPrint(printOptions);
         setAllItemsForPrint(allItems);
       } catch (e) {
         alert(e.message || 'Erreur lors du chargement des données pour l\'impression');
@@ -131,6 +346,8 @@ const TraitesGrid = () => {
       // Après l'impression, réinitialiser l'état
       setIsPrintingAll(false);
       setAllItemsForPrint([]);
+      setIsPrinting(false);
+      setPrintModalOpen(false);
     }
   });
 
@@ -654,7 +871,7 @@ const TraitesGrid = () => {
           <button className="submit-button" onClick={exportExcel}>Exporter Excel</button>
           <button className="submit-button" onClick={handleImportClick}>Importer CSV</button>
           {/* ÉTAPE 4: Ajouter le bouton d'impression */}
-          <button className="submit-button" onClick={handlePrint}>Imprimer</button>
+          <button className="submit-button" onClick={openPrintModal}>Imprimer</button>
           <input ref={importInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
       </div>
@@ -665,52 +882,79 @@ const TraitesGrid = () => {
       ) : (
         // ÉTAPE 5: Lier la référence à la div contenant la grille
         <div ref={componentToPrintRef} className={`table-wrap`}>
-          <table className={`table-basic`}>
-            <thead>
-              <tr>
-                {Columns.map(col => {
-                  const sortableKeys = ['numero','nombre_traites','echeance','date_emission','montant','nom_raison_sociale','statut']
-                  const isSortable = sortableKeys.includes(col.key)
-                  const isActive = sort.key === col.key
-                  const arrow = isActive ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
-                  return (
-                    <th key={col.key} style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: isSortable ? 'pointer' : 'default' }} onClick={() => isSortable && handleHeaderSort(col.key)}>
-                      {col.label}{arrow}
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Utiliser allItemsForPrint lors de l'impression, sinon utiliser items */}
-              {(isPrintingAll ? allItemsForPrint : items).map(it => (
-                <tr key={it.id} onClick={(e) => !isPrintingAll && handleRowClick(it, e)} style={{ cursor: isPrintingAll ? 'default' : 'pointer' }}>
+          {/* Affichage normal du tableau */}
+          {!isPrintingAll ? (
+            <table className={`table-basic`}>
+              <thead>
+                <tr>
                   {Columns.map(col => {
-                    const val = it[col.key]
-                    if (col.key === 'statut') {
-                      const s = (val || 'Non échu').toLowerCase()
-                      const cls = s.includes('non échu') || s.includes('non e') ? 'status-non-echu' :
-                                  s.includes('échu') || s.includes('echu') ? 'status-echu' :
-                                  s.includes('impay') ? 'status-impaye' :
-                                  s.includes('rej') ? 'status-rejete' :
-                                  s.includes('pay') ? 'status-paye' : ''
-                      return (
-                        <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>
-                          <span className={`status-badge ${cls}`}>{val || 'Non échu'}</span>
-                        </td>
-                      )
-                    }
-                    const isDate = col.key === 'echeance' || col.key === 'date_emission'
-                    const isMoney = col.key === 'montant'
-                    const displayVal = isDate ? formatDateDDMMYYYY(val) : isMoney ? formatMoney(val) : (val ?? '')
+                    const sortableKeys = ['numero','nombre_traites','echeance','date_emission','montant','nom_raison_sociale','statut']
+                    const isSortable = sortableKeys.includes(col.key)
+                    const isActive = sort.key === col.key
+                    const arrow = isActive ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
                     return (
-                      <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6', whiteSpace: isMoney ? 'nowrap' : undefined }}>{displayVal}</td>
+                      <th key={col.key} style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: isSortable ? 'pointer' : 'default' }} onClick={() => isSortable && handleHeaderSort(col.key)}>
+                        {col.label}{arrow}
+                      </th>
                     )
                   })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map(it => (
+                  <tr key={it.id} onClick={(e) => handleRowClick(it, e)} style={{ cursor: 'pointer' }}>
+                    {Columns.map(col => {
+                      const val = it[col.key]
+                      if (col.key === 'statut') {
+                        const s = (val || 'Non échu').toLowerCase()
+                        const cls = s.includes('non échu') || s.includes('non e') ? 'status-non-echu' :
+                                    s.includes('échu') || s.includes('echu') ? 'status-echu' :
+                                    s.includes('impay') ? 'status-impaye' :
+                                    s.includes('rej') ? 'status-rejete' :
+                                    s.includes('pay') ? 'status-paye' : ''
+                        return (
+                          <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>
+                            <span className={`status-badge ${cls}`}>{val || 'Non échu'}</span>
+                          </td>
+                        )
+                      }
+                      const isDate = col.key === 'echeance' || col.key === 'date_emission'
+                      const isMoney = col.key === 'montant'
+                      const displayVal = isDate ? formatDateDDMMYYYY(val) : isMoney ? formatMoney(val) : (val ?? '')
+                      return (
+                        <td key={col.key} style={{ padding: 8, borderBottom: '1px solid #f3f4f6', whiteSpace: isMoney ? 'nowrap' : undefined }}>{displayVal}</td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            /* Tableau spécifique pour l'impression */
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt', tableLayout: 'auto' }}>
+              <thead>
+                <tr>
+                  {Columns.map(col => (
+                    <th key={col.key} style={{ border: '1px solid #000', padding: '4px', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allItemsForPrint.map((item, index) => (
+                  <tr key={index}>
+                    {Columns.map(col => (
+                      <td key={col.key} style={{ border: '1px solid #000', padding: '3px', wordWrap: 'break-word' }}>
+                        {item[col.label]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          
           {/* Cacher la pagination lors de l'impression */}
           {!isPrintingAll && (
             <tfoot>
@@ -726,7 +970,7 @@ const TraitesGrid = () => {
                       setPerPage(newPerPage)
                       setPage(1)
                     }}
-                    itemsPerPageOptions={[10, 20, 50, 100]}
+                    itemsPerPageOptions={[10, 20, 40, 100]}
                     showItemsPerPage={true}
                     showTotal={true}
                   />
@@ -734,6 +978,176 @@ const TraitesGrid = () => {
               </tr>
             </tfoot>
           )}
+        </div>
+      )}
+      
+      {/* Modale d'impression */}
+      {printModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: 8, padding: 24, maxWidth: '500px', width: '90%', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)', position: 'relative' }}>
+            <button aria-label="Fermer" onClick={() => setPrintModalOpen(false)} style={{ position: 'absolute', top: 8, right: 8, border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, color: 'red', lineHeight: 0 }}>
+              <X size={20} />
+            </button>
+            <h3 style={{ marginTop: 0, marginBottom: 20 }}>Options d'impression</h3>
+            
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                <input
+                  type="radio"
+                  name="printOption"
+                  checked={printOptions.selectedOption === 'all'}
+                  onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'all' }))}
+                  style={{ marginRight: 8 }}
+                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'all' }))}
+                />
+                Imprimer toutes les pages ({pagination.last_page || 1} pages)
+                <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px' }}>
+                  Total: {pagination.total || 0} éléments
+                </div>
+              </label>
+              
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                <input
+                  type="radio"
+                  name="printOption"
+                  checked={printOptions.selectedOption === 'specific'}
+                  onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'specific', specificPage: page }))}
+                  style={{ marginRight: 8 }}
+                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'specific', specificPage: page }))}
+                />
+                Imprimer une page spécifique
+              </label>
+              {printOptions.selectedOption === 'specific' && (
+                <div style={{ marginLeft: 24, marginBottom: 12 }}>
+                  <label>
+                    Page :
+                    <input
+                      type="number"
+                      min="1"
+                      max={pagination.last_page || 1}
+                      value={printOptions.specificPage}
+                      onChange={(e) => setPrintOptions(prev => ({ ...prev, specificPage: parseInt(e.target.value) || 1 }))}
+                      style={{ marginLeft: 8, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4, width: 80 }}
+                    />
+                    (sur {pagination.last_page || 1})
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Cette page contient les éléments {getElementRangeForPage(printOptions.specificPage).start} à {getElementRangeForPage(printOptions.specificPage).end}
+                    </div>
+                  </label>
+                </div>
+              )}
+              
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                <input
+                  type="radio"
+                  name="printOption"
+                  checked={printOptions.selectedOption === 'current'}
+                  onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'current' }))}
+                  style={{ marginRight: 8 }}
+                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'current' }))}
+                />
+                Imprimer la vue actuelle ({items.length} éléments)
+                <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px' }}>
+                  Page {page}: éléments {getElementRangeForPage(page).start} à {Math.min(getElementRangeForPage(page).start + items.length - 1, getElementRangeForPage(page).end)}
+                </div>
+              </label>
+              
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                <input
+                  type="radio"
+                  name="printOption"
+                  checked={printOptions.selectedOption === 'range'}
+                  onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'range', fromPage: 1, toPage: pagination.last_page || 1 }))}
+                  style={{ marginRight: 8 }}
+                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'range', fromPage: 1, toPage: pagination.last_page || 1 }))}
+                />
+                Imprimer une plage de pages
+              </label>
+              {printOptions.selectedOption === 'range' && (
+                <div style={{ marginLeft: 24 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>
+                    De la page :
+                    <input
+                      type="number"
+                      min="1"
+                      max={pagination.last_page || 1}
+                      value={printOptions.fromPage}
+                      onChange={(e) => setPrintOptions(prev => ({ ...prev, fromPage: parseInt(e.target.value) || 1 }))}
+                      style={{ marginLeft: 8, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4, width: 80 }}
+                    />
+                    {printOptions.fromPage && (
+                      <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>
+                        (Éléments {getElementRangeForPage(printOptions.fromPage).start} à {getElementRangeForPage(printOptions.fromPage).end})
+                      </span>
+                    )}
+                  </label>
+                  <label>
+                    À la page :
+                    <input
+                      type="number"
+                      min="1"
+                      max={pagination.last_page || 1}
+                      value={printOptions.toPage}
+                      onChange={(e) => setPrintOptions(prev => ({ ...prev, toPage: parseInt(e.target.value) || 1 }))}
+                      style={{ marginLeft: 8, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4, width: 80 }}
+                    />
+                    {printOptions.toPage && (
+                      <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>
+                        (Éléments {getElementRangeForPage(printOptions.toPage).start} à {getElementRangeForPage(printOptions.toPage).end})
+                      </span>
+                    )}
+                  </label>
+                </div>
+              )}
+              
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                <input
+                  type="radio"
+                  name="printOption"
+                  checked={printOptions.selectedOption === 'pages'}
+                  onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'pages', pageRanges: '' }))}
+                  style={{ marginRight: 8 }}
+                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'pages', pageRanges: '' }))}
+                />
+                Imprimer des pages spécifiques
+              </label>
+              {printOptions.selectedOption === 'pages' && (
+                <div style={{ marginLeft: 24 }}>
+                  <label>
+                    Pages (ex: 1,3,5-7) :
+                    <input
+                      type="text"
+                      value={printOptions.pageRanges}
+                      onChange={(e) => setPrintOptions(prev => ({ ...prev, pageRanges: e.target.value }))}
+                      placeholder="1,3,5-7"
+                      style={{ marginLeft: 8, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4, width: '100%' }}
+                    />
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Entrez les numéros de pages séparés par des virgules. Utilisez un tiret pour les plages (ex: 1-5).
+                      Chaque page contient 53 éléments (valeur fixe pour l'impression). Total: {pagination.last_page || 1} pages.
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Page 1: éléments 1 à 53, Page 2: éléments 54 à 106, etc.
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setPrintModalOpen(false)} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer' }}>Annuler</button>
+              <button
+                onClick={handlePrintWithOptions}
+                disabled={isPrinting}
+                style={{ padding: '8px 16px', border: 'none', borderRadius: 4, backgroundColor: isPrinting ? '#9ca3af' : '#3b82f6', color: 'white', cursor: isPrinting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isPrinting && (
+                  <div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                )}
+                {isPrinting ? 'Impression en cours...' : 'Imprimer'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       
