@@ -13,21 +13,24 @@ class UserSeeder extends Seeder
         User::create([
             'username' => 'admin',
             'password' => Hash::make('admin'),
-            'role' => 'admin'
+            'role' => 'admin',
+            'ville' => 'Douala'
         ]);
 
         // Utilisateur Test
         User::create([
             'username' => 'testuser',
             'password' => Hash::make('password123'),
-            'role' => 'user'
+            'role' => 'user',
+            'ville' => 'Yaoundé'
         ]);
 
         // Utilisateur Manager
         User::create([
             'username' => 'manager',
             'password' => Hash::make('password123'),
-            'role' => 'manager'
+            'role' => 'manager',
+            'ville' => 'Bafoussam'
         ]);
     }
 }

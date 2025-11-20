@@ -75,7 +75,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           className="logo-text"
           style={{ fontSize: "16px", fontWeight: "bold", color: "#333", textAlign: "center", marginTop: "10px" }}
         >
-          Nom de l'application
+          CFAO MOBILITY CAMEROON
         </div>
       </div>
 
@@ -113,7 +113,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                 </span>
                 <span className="nav-text">Grille de saisie</span>
               </button>
- 
+
               <button className={`nav-subitem ${activeSubItem === "Edition" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Edition"); navigate('/dashboard') }}>
                 <span className="nav-icon">
                   <Edit size={16} />
@@ -175,7 +175,13 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
       </nav>
 
       <div className="sidebar-footer">
-        <button className="nav-item">
+        <button 
+          className={`nav-item ${activeMenuItem === "Paramètres" ? "active" : ""}`}
+          onClick={() => { 
+            setActiveMenuItem("Paramètres"); 
+            navigate('/settings') 
+          }}
+        >
           <span className="nav-icon">
             <Settings size={18} />
           </span>

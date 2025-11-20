@@ -106,7 +106,7 @@ const ClientDetailPage = () => {
             <div className="detail-grid">
               <Detail label="Numéro de compte" value={client?.numero_compte} />
               <Detail label="Nom / Raison sociale" value={client?.nom_raison_sociale} />
-              <Detail label="Catégorie" value={client?.categorie} />
+              <Detail label="Type d'entreprises" value={client?.categorie} />
               <Detail label="Type de tiers" value={client?.type_tiers} />
               <Detail label="N° contribuable" value={client?.n_contribuable} />
               <Detail label="Téléphone" value={client?.telephone} />

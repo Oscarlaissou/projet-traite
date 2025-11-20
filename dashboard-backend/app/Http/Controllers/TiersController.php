@@ -538,97 +538,32 @@ class TiersController extends Controller
     }
 
     /**
-     * Retourne la liste des agences (Établissement / Service / Nom du signataire).
-     */
-    public function agences(): JsonResponse
-    {
-        if (!Schema::hasTable('agence')) {
-            return response()->json([], 200, [], JSON_UNESCAPED_UNICODE);
-        }
-
-        $columns = Schema::getColumnListing('agence');
-        $select = array_values(array_intersect($columns, ['id', 'code', 'etablissement', 'service', 'nom_signataire', 'societe']));
-        if (empty($select)) {
-            $select = ['id'];
-        }
-
-        $query = DB::table('agence')->select($select);
-        if (in_array('etablissement', $select, true)) {
-            $query->orderBy('etablissement');
-        }
-
-        $rows = $query->get();
-        return response()->json($rows, 200, [], JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
      * Import CSV pour les clients.
      */
     public function importCsv(Request $request): JsonResponse
     {
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:10240'],
-            'duplicate_action' => ['nullable', Rule::in(['skip', 'update'])],
-        ]);
-
-        $file = $request->file('file');
-        $contents = file_get_contents($file->getRealPath());
-        if (!is_string($contents) || trim($contents) === '') {
-            return response()->json(['message' => 'Fichier CSV vide.'], 422);
-        }
-
-        $delimiter = $this->detectDelimiter($contents);
-        $lines = preg_split("/\r\n|\n|\r/", trim($contents));
-        if (!$lines || count($lines) < 2) {
-            return response()->json(['message' => 'Aucune donnée détectée dans le fichier.'], 422);
-        }
-
-        $headers = str_getcsv(array_shift($lines), $delimiter);
-        $normalizedHeaders = array_map([$this, 'normalizeHeader'], $headers);
-        if (!array_filter($normalizedHeaders)) {
-            return response()->json(['message' => 'Impossible de déterminer les colonnes du fichier.'], 422);
-        }
-
+        // Récupérer les données avec le mapping déjà fait par le frontend
+        $data = $request->input('data', []);
         $duplicateAction = $request->input('duplicate_action', 'update');
+        
+        if (empty($data)) {
+            return response()->json(['message' => 'Aucune donnée à importer.'], 422);
+        }
+
         $summary = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []];
 
-        foreach ($lines as $index => $line) {
-            if (trim($line) === '') {
-                continue;
-            }
-            $values = str_getcsv($line, $delimiter);
-            $row = [];
-            foreach ($normalizedHeaders as $colIndex => $key) {
-                if (!$key) {
+        foreach ($data as $index => $item) {
+            try {
+                // Validation des données requises
+                if (empty($item['nom_raison_sociale'])) {
+                    $summary['errors'][] = sprintf('Ligne %d: Le nom ou la raison sociale est requis', $index + 1);
                     continue;
                 }
-                $row[$key] = $values[$colIndex] ?? null;
-            }
-            if (!array_filter($row, fn ($value) => $value !== null && $value !== '')) {
-                continue;
-            }
-
-            $normalized = $this->normalizeImportedRow($row);
-            $validator = Validator::make($normalized, [
-                'nom_raison_sociale' => ['required', 'string', 'max:255'],
-                'numero_compte' => ['nullable', 'string', 'max:100'],
-                'type_tiers' => ['nullable', Rule::in(['Client', 'Fournisseur'])],
-            ]);
-
-            if ($validator->fails()) {
-                $summary['errors'][] = sprintf(
-                    'Ligne %d: %s',
-                    $index + 2,
-                    implode(', ', $validator->errors()->all())
-                );
-                continue;
-            }
-
-            try {
-                $result = $this->upsertTierFromImport($normalized, $duplicateAction);
+                
+                $result = $this->upsertTierFromImport($item, $duplicateAction);
                 $summary[$result] = ($summary[$result] ?? 0) + 1;
             } catch (\Throwable $e) {
-                $summary['errors'][] = sprintf('Ligne %d: %s', $index + 2, $e->getMessage());
+                $summary['errors'][] = sprintf('Ligne %d: %s', $index + 1, $e->getMessage());
             }
         }
 
@@ -637,6 +572,11 @@ class TiersController extends Controller
 
     private function upsertTierFromImport(array $data, string $duplicateAction): string
     {
+        // Validation des données requises
+        if (empty($data['nom_raison_sociale'])) {
+            throw new \InvalidArgumentException('Le nom ou la raison sociale est requis');
+        }
+
         $tier = null;
         if (!empty($data['numero_compte'])) {
             $tier = Tier::where('numero_compte', $data['numero_compte'])->first();
@@ -645,23 +585,90 @@ class TiersController extends Controller
             $tier = Tier::where('nom_raison_sociale', $data['nom_raison_sociale'])->first();
         }
 
+        // Si on trouve un enregistrement existant et que l'action est 'skip', on le saute
         if ($tier && $duplicateAction === 'skip') {
             return 'skipped';
         }
 
+        // Générer un numéro de compte unique si non fourni
+        $numeroCompte = $data['numero_compte'] ?? null;
+        if (empty($numeroCompte)) {
+            // Générer un numéro de compte unique basé sur le nom et un timestamp
+            $base = substr(strtoupper(str_replace([' ', '-', '_', '/', '(', ')'], '', $data['nom_raison_sociale'])), 0, 8);
+            $timestamp = substr((string)time(), -5); // Prendre seulement les 5 derniers chiffres
+            $numeroCompte = $base . '-' . $timestamp;
+            
+            // S'assurer qu'il est unique et respecte la limite de 20 caractères
+            if (strlen($numeroCompte) > 20) {
+                $numeroCompte = substr($numeroCompte, 0, 20);
+            }
+            
+            // Vérifier l'unicité et ajuster si nécessaire
+            $existing = Tier::where('numero_compte', $numeroCompte)->first();
+            if ($existing) {
+                $suffix = rand(10, 99);
+                $numeroCompte = substr($numeroCompte, 0, 18) . $suffix;
+                if (strlen($numeroCompte) > 20) {
+                    $numeroCompte = substr($numeroCompte, 0, 20);
+                }
+            }
+        } else {
+            // S'assurer que le numéro fourni respecte la limite de 20 caractères
+            if (strlen($numeroCompte) > 20) {
+                $numeroCompte = substr($numeroCompte, 0, 20);
+            }
+        }
+
+        // Déterminer le type de tiers (Client par défaut)
+        $typeTiers = 'Client';
+        if (!empty($data['type_tiers'])) {
+            $typeTiers = in_array($data['type_tiers'], ['Client', 'Fournisseur']) ? $data['type_tiers'] : 'Client';
+        }
+
+        // Vérifier et normaliser la catégorie
+        $categorie = $data['categorie'] ?? self::CATEGORIES[0];
+        if (!in_array($categorie, self::CATEGORIES)) {
+            // Si la catégorie n'est pas valide, utiliser le mapping ou la première par défaut
+            $categoryMap = [
+                'IND=STE' => 'Sté Privées Hors Grp',
+                'HGP' => 'Sté Privées Hors Grp',
+                'ADM' => 'Administration',
+                'COL LOC' => 'Collectivité locale',
+                'ONG' => 'Administration Privée',
+                'IND' => 'Individuel',
+                'PG' => 'Personnel Groupe'
+            ];
+            
+            $mappedCategory = null;
+            // Recherche exacte
+            if (isset($categoryMap[$categorie])) {
+                $mappedCategory = $categoryMap[$categorie];
+            } else {
+                // Recherche partielle
+                foreach ($categoryMap as $key => $value) {
+                    if (stripos($categorie, $key) !== false) {
+                        $mappedCategory = $value;
+                        break;
+                    }
+                }
+            }
+            
+            $categorie = $mappedCategory ?? self::CATEGORIES[0];
+        }
+
         $tierPayload = [
-            'numero_compte' => $data['numero_compte'] ?? null,
+            'numero_compte' => $numeroCompte,
             'nom_raison_sociale' => $data['nom_raison_sociale'],
             'bp' => $data['bp'] ?? null,
             'ville' => $data['ville'] ?? null,
-            'pays' => $data['pays'] ?? null,
-            'adresse_geo_1' => $data['adresse_geo_1'] ?? null,
+            'pays' => $data['pays'] ?? 'Cameroun', // Valeur par défaut
+            'adresse_geo_1' => $data['adresse_geo_1'] ?? '', // Valeur par défaut vide au lieu de null
             'adresse_geo_2' => $data['adresse_geo_2'] ?? null,
             'telephone' => $data['telephone'] ?? null,
             'email' => $data['email'] ?? null,
-            'categorie' => in_array($data['categorie'] ?? '', self::CATEGORIES, true) ? $data['categorie'] : self::CATEGORIES[0],
+            'categorie' => $categorie,
             'n_contribuable' => $data['n_contribuable'] ?? null,
-            'type_tiers' => in_array($data['type_tiers'] ?? '', ['Client', 'Fournisseur'], true) ? $data['type_tiers'] : 'Client',
+            'type_tiers' => $typeTiers,
         ];
 
         if ($tier) {
@@ -682,7 +689,54 @@ class TiersController extends Controller
         }
 
         $demande = DB::table('demande_ouverture_compte')->where('id', $tierId)->first();
-        $payload = $this->buildDemandePayload($tierId, $data, $demande, $demande === null || $isCreation);
+        
+        // Construire le payload pour la demande d'ouverture de compte
+        $payload = [];
+        if ($isCreation && $this->hasDemandeColumn('id')) {
+            $payload['id'] = $tierId;
+        }
+        
+        // Mapper les champs de la demande
+        if (isset($data['date_creation'])) {
+            $payload = $this->assignDemandeValue($payload, 'date_creation', ['date_creation' => $data['date_creation']], $demande, $isCreation ? now() : null);
+        }
+        
+        if (isset($data['montant_facture'])) {
+            $payload = $this->assignDemandeValue($payload, 'montant_facture', ['montant_facture' => $data['montant_facture']], $demande);
+        }
+        
+        if (isset($data['montant_paye'])) {
+            $payload = $this->assignDemandeValue($payload, 'montant_paye', ['montant_paye' => $data['montant_paye']], $demande);
+        }
+        
+        if (isset($data['credit'])) {
+            $payload = $this->assignDemandeValue($payload, 'credit', ['credit' => $data['credit']], $demande);
+        }
+        
+        if (isset($data['motif'])) {
+            $payload = $this->assignDemandeValue($payload, 'motif', ['motif' => $data['motif']], $demande);
+        }
+        
+        if (isset($data['etablissement'])) {
+            $payload = $this->assignDemandeValue($payload, 'etablissement', ['etablissement' => $data['etablissement']], $demande);
+        }
+        
+        if (isset($data['service'])) {
+            $payload = $this->assignDemandeValue($payload, 'service', ['service' => $data['service']], $demande);
+        }
+        
+        if (isset($data['nom_signataire'])) {
+            $payload = $this->assignDemandeValue($payload, 'nom_signataire', ['nom_signataire' => $data['nom_signataire']], $demande);
+        }
+        
+        if ($isCreation && $this->hasDemandeColumn('created_at')) {
+            $payload['created_at'] = now();
+        }
+        if ($this->hasDemandeColumn('updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        $this->applyDemandeUser($payload);
 
         if (!$this->shouldPersistDemande($payload)) {
             return;
@@ -704,6 +758,44 @@ class TiersController extends Controller
                 $value = trim($value);
             }
             $normalized[$key] = $value;
+        }
+
+        // Mapping des catégories selon les spécifications
+        if (isset($normalized['categorie'])) {
+            $categoryMap = [
+                'IND=STE' => 'Sté Privées Hors Grp',
+                'HGP' => 'Sté Privées Hors Grp',
+                'ADM' => 'Administration',
+                'COL LOC' => 'Collectivité locale',
+                'ONG' => 'Administration Privée',
+                'IND' => 'Individuel',
+                'PG' => 'Personnel Groupe'
+            ];
+            
+            $originalCategory = $normalized['categorie'];
+            $mappedCategory = null;
+            
+            // Recherche exacte
+            if (isset($categoryMap[$originalCategory])) {
+                $mappedCategory = $categoryMap[$originalCategory];
+            } else {
+                // Recherche partielle
+                foreach ($categoryMap as $key => $value) {
+                    if (stripos($originalCategory, $key) !== false) {
+                        $mappedCategory = $value;
+                        break;
+                    }
+                }
+            }
+            
+            // Si aucune correspondance n'a été trouvée, utiliser la catégorie telle quelle
+            // mais vérifier qu'elle est dans les catégories valides
+            if ($mappedCategory) {
+                $normalized['categorie'] = $mappedCategory;
+            } else if (!in_array($normalized['categorie'], self::CATEGORIES)) {
+                // Si la catégorie n'est pas valide, utiliser la première par défaut
+                $normalized['categorie'] = self::CATEGORIES[0];
+            }
         }
 
         $normalized['date_creation'] = $this->parseDateValue($normalized['date_creation'] ?? null);
@@ -768,6 +860,26 @@ class TiersController extends Controller
             return null;
         }
         $normalized = strtolower(trim(Str::ascii($header)));
+        
+        // Mapping des colonnes selon les spécifications fournies
+        if (strpos($normalized, 'nom') !== false && strpos($normalized, 'tiers') !== false) {
+            return 'nom_raison_sociale';
+        } else if ($normalized === 'type') {
+            return 'categorie';
+        } else if (strpos($normalized, 'adresse') !== false && strpos($normalized, 'geo') !== false) {
+            return 'adresse_geo_1';
+        } else if ($normalized === 'bp' || strpos($normalized, 'boite') !== false) {
+            return 'bp';
+        } else if ($normalized === 'ville') {
+            return 'ville';
+        } else if ($normalized === 'telephone' || $normalized === 'tel') {
+            return 'telephone';
+        } else if (strpos($normalized, 'date') !== false && strpos($normalized, 'creation') !== false) {
+            return 'date_creation';
+        } else if (strpos($normalized, 'signataire') !== false) {
+            return 'nom_signataire';
+        }
+        
         return match ($normalized) {
             'nom', 'raison sociale', 'nom client', 'nom ou raison sociale', 'client' => 'nom_raison_sociale',
             'numero', 'numero compte', 'numero_compte' => 'numero_compte',
@@ -791,6 +903,30 @@ class TiersController extends Controller
             'nom signataire', 'nom du signataire' => 'nom_signataire',
             default => null,
         };
+    }
+
+    /**
+     * Retourne la liste des agences (Établissement / Service / Nom du signataire).
+     */
+    public function agences(): JsonResponse
+    {
+        if (!Schema::hasTable('agence')) {
+            return response()->json([], 200, [], JSON_UNESCAPED_UNICODE);
+        }
+
+        $columns = Schema::getColumnListing('agence');
+        $select = array_values(array_intersect($columns, ['id', 'code', 'etablissement', 'service', 'nom_signataire', 'societe']));
+        if (empty($select)) {
+            $select = ['id'];
+        }
+
+        $query = DB::table('agence')->select($select);
+        if (in_array('etablissement', $select, true)) {
+            $query->orderBy('etablissement');
+        }
+
+        $rows = $query->get();
+        return response()->json($rows, 200, [], JSON_UNESCAPED_UNICODE);
     }
 
     /**

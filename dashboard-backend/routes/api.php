@@ -7,6 +7,7 @@ use App\Http\Controllers\TraitesStatsController;
 use App\Http\Controllers\TraitesController;
 use App\Http\Controllers\TiersController;
 use App\Http\Controllers\ClientStatsController;
+use App\Http\Controllers\Api\UserController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
@@ -30,6 +31,21 @@ Route::post('/test-import', function() {
         ->header('Access-Control-Allow-Credentials', 'true');
 });
 
+
+// User management routes
+Route::prefix('users')->group(function () {
+    Route::get('/', [UserController::class, 'index'])->middleware('auth:sanctum');
+    Route::post('/', [UserController::class, 'store'])->middleware('auth:sanctum');
+    Route::get('/{id}', [UserController::class, 'show'])->middleware('auth:sanctum');
+    Route::put('/{id}', [UserController::class, 'update'])->middleware('auth:sanctum');
+    Route::delete('/{id}', [UserController::class, 'destroy'])->middleware('auth:sanctum');
+});
+
+// Organization settings routes
+Route::prefix('organization')->group(function () {
+    Route::get('/settings', [UserController::class, 'getOrganizationSettings'])->middleware('auth:sanctum');
+    Route::put('/settings', [UserController::class, 'updateOrganizationSettings'])->middleware('auth:sanctum');
+});
 
 // Statistiques traites
 Route::get('/traites/stats', [TraitesStatsController::class, 'stats']);

@@ -9,6 +9,7 @@ import ClientFormPage from './components/ClientFormPage';
 // AJOUTS : import des composants clients
 import ClientsGrid from './components/ClientsGrid';
 import ClientDetailPage from './components/ClientDetailPage';
+import SettingsPage from './components/SettingsPage';
 
 // Composant pour les routes protégées
 function ProtectedRoute({ children }) {
@@ -48,6 +49,15 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <Dashboard />
+                    </ProtectedRoute>
+                } 
+            />
+            
+            <Route 
+                path="/settings" 
+                element={
+                    <ProtectedRoute>
+                        <SettingsPage />
                     </ProtectedRoute>
                 } 
             />
