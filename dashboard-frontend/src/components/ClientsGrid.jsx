@@ -45,10 +45,13 @@ const ClientsGrid = () => {
   const [appliedSearch, setAppliedSearch] = useState("")
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+  const [printPerPage] = useState(53) // Nombre d'éléments par page pour l'impression
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [sort, setSort] = useState({ key: "nom_raison_sociale", dir: "asc" })
   const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState("")
+  const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) // Plage de pages à imprimer
+  const [showPrintModal, setShowPrintModal] = useState(false) // Modal pour sélectionner la plage d'impression
   const [importing, setImporting] = useState(false)
   const importInputRef = useRef(null)
   const navigate = useNavigate()
@@ -204,6 +207,100 @@ const ClientsGrid = () => {
       XLSX.writeFile(workbook, fileName)
     } catch (e) {
       alert(e.message || "Erreur inconnue lors de l'export Excel")
+    }
+  }
+  
+  // Fonction pour imprimer une plage spécifique de pages
+  const handlePrint = () => {
+    // Calculer le nombre total de pages pour l'impression
+    const totalPages = Math.ceil(pagination.total / printPerPage)
+    setSelectedPrintRange({ start: 1, end: Math.min(5, totalPages) }) // Par défaut, imprimer les 5 premières pages
+    setShowPrintModal(true)
+  }
+  
+  // Fonction pour effectuer l'impression
+  const executePrint = async () => {
+    try {
+      // Fermer le modal
+      setShowPrintModal(false)
+      
+      // Récupérer les données pour la plage de pages sélectionnée
+      const printedItems = []
+      const { start, end } = selectedPrintRange
+      
+      for (let pageNum = start; pageNum <= end; pageNum++) {
+        const params = new URLSearchParams()
+        if (appliedSearch.trim()) params.append("search", appliedSearch.trim())
+        if (sort?.key) params.append("sort", sort.key)
+        if (sort?.dir) params.append("dir", sort.dir)
+        params.append("page", String(pageNum))
+        params.append("per_page", String(printPerPage))
+        if (selectedCategory) {
+          params.append("categorie[]", selectedCategory)
+        }
+        
+        const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
+          headers: authHeaders(),
+        })
+        
+        if (!response.ok) {
+          throw new Error("Échec de la récupération des données pour l'impression")
+        }
+        
+        const payload = await response.json()
+        const data = payload?.data ?? []
+        printedItems.push(...data)
+      }
+      
+      // Créer une nouvelle fenêtre pour l'impression
+      const printWindow = window.open('', '_blank')
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Impression des clients</title>
+            <style>
+              body { font-family: Arial, sans-serif; }
+              table { border-collapse: collapse; width: 100%; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              @media print {
+                @page { size: A4; margin: 1cm; }
+                body { margin: 1cm; }
+              }
+            </style>
+          </head>
+          <body>
+            <h2>Liste des clients</h2>
+            <p>Imprimé le: ${new Date().toLocaleDateString()}</p>
+            <table>
+              <thead>
+                <tr>
+                  ${Columns.map(col => `<th>${col.label}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${printedItems.map(item => `
+                  <tr>
+                    ${Columns.map(col => `<td>${item[col.key] || ''}</td>`).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <script>
+              window.onload = function() {
+                window.print();
+                // Fermer la fenêtre après impression
+                window.onfocus = function() { 
+                  setTimeout(function() { window.close(); }, 500); 
+                }
+              }
+            </script>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+    } catch (e) {
+      alert(e.message || "Erreur lors de la préparation de l'impression")
     }
   }
   
@@ -542,6 +639,9 @@ const ClientsGrid = () => {
         <button className="submit-button" onClick={exportExcel}>
           <Download size={16} style={{ marginRight: 6 }} /> Exporter Excel
         </button>
+        <button className="submit-button" onClick={handlePrint}>
+          <Download size={16} style={{ marginRight: 6 }} /> Imprimer
+        </button>
         <button className="submit-button" onClick={handleImportClick}>
           <Upload size={16} style={{ marginRight: 6 }} /> Importer CSV
         </button>
@@ -755,6 +855,58 @@ const ClientsGrid = () => {
               >
                 {isImporting && (<div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />)}
                 {isImporting ? 'Importation en cours...' : 'Importer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modale de sélection de plage d'impression */}
+      {showPrintModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: 8, padding: 24, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)', position: 'relative' }}>
+            <button aria-label="Fermer" onClick={() => setShowPrintModal(false)} style={{ position: 'absolute', top: 8, right: 8, border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, color: 'red', lineHeight: 0 }}>
+              <X size={20} />
+            </button>
+            <h3 style={{ marginTop: 0, marginBottom: 20 }}>Sélection de la plage d'impression</h3>
+            
+            <div style={{ marginBottom: 20 }}>
+              <p>Nombre total de pages disponibles : {Math.ceil(pagination.total / printPerPage)}</p>
+              <p>Nombre total d'éléments : {pagination.total}</p>
+            </div>
+            
+            <div style={{ marginBottom: 20, display: 'flex', gap: 20 }}>
+              <div>
+                <label>Page de début :</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max={Math.ceil(pagination.total / printPerPage)}
+                  value={selectedPrintRange.start}
+                  onChange={(e) => setSelectedPrintRange(prev => ({ ...prev, start: parseInt(e.target.value) || 1 }))}
+                  style={{ width: '100px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4, marginLeft: '8px' }}
+                />
+              </div>
+              <div>
+                <label>Page de fin :</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max={Math.ceil(pagination.total / printPerPage)}
+                  value={selectedPrintRange.end}
+                  onChange={(e) => setSelectedPrintRange(prev => ({ ...prev, end: parseInt(e.target.value) || 1 }))}
+                  style={{ width: '100px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4, marginLeft: '8px' }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowPrintModal(false)} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer' }}>Annuler</button>
+              <button
+                onClick={executePrint}
+                style={{ padding: '8px 16px', border: 'none', borderRadius: 4, backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer' }}
+              >
+                Imprimer
               </button>
             </div>
           </div>

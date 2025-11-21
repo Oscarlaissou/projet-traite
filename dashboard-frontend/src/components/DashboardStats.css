@@ -117,6 +117,24 @@
   color: #6b7280;
 }
 
+/* Améliorations pour les légendes des graphiques */
+.recharts-legend-wrapper {
+  font-size: 12px !important;
+}
+
+.recharts-tooltip-label {
+  font-weight: bold;
+  color: #333;
+}
+
+.recharts-tooltip-item-list {
+  margin-top: 4px;
+}
+
+.recharts-tooltip-item {
+  font-size: 12px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   /* On ajuste également la valeur responsive pour rester cohérent */

@@ -31,9 +31,9 @@ const TraitesGrid = () => {
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
+  const [perPage, setPerPage] = useState(10) // Reste à 10 pour l'affichage normal
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
-  const itemsPerPageForPrinting = 53 // Fixed value for printing to maintain existing behavior
+  const [itemsPerPageForPrinting] = useState(53) // Fixed value for printing
   const [sort, setSort] = useState({ key: 'numero', dir: 'desc' })
   const [initialized, setInitialized] = useState(false)
   const importInputRef = useRef(null)
@@ -65,8 +65,29 @@ const TraitesGrid = () => {
     try {
       // Si l'option d'impression de la vue actuelle est sélectionnée
       if (pageOptions && pageOptions.selectedOption === 'current') {
-        // Imprimer uniquement les éléments actuellement visibles
-        return items;
+        // Pour la vue actuelle, charger les mêmes données mais avec 53 éléments par page
+        // au lieu des 10 actuellement affichés
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (statut) params.append('statut', statut);
+        if (from) params.append('from', from);
+        if (to) params.append('to', to);
+        if (sort?.key) params.append('sort', sort.key);
+        if (sort?.dir) params.append('dir', sort.dir);
+        
+        // Utiliser la même page mais avec 53 éléments au lieu de 10
+        params.append('page', page);
+        params.append('per_page', itemsPerPageForPrinting); // 53 éléments
+        
+        const url = `${baseUrl}/api/traites?${params.toString()}`;
+        const res = await fetch(url, { headers: authHeaders() });
+        
+        if (res.ok) {
+          const data = await res.json();
+          const pageItems = data.data || data || [];
+          return pageItems;
+        }
+        return [];
       }
       
       // Si des plages de pages spécifiques sont demandées
@@ -126,9 +147,36 @@ const TraitesGrid = () => {
           params.append('page', pageOptions.specificPage);
           params.append('per_page', itemsPerPageForPrinting);
         } else if (pageOptions.selectedOption === 'range') {
-          // Pour imprimer une plage de pages, on charge toutes les données
-          // et on les filtrera lors de l'impression
-          params.append('per_page', '1000');
+          // Pour imprimer une plage de pages, charger les données avec le bon per_page
+          // et les paginer correctement
+          const fromPage = pageOptions.fromPage || 1;
+          const toPage = pageOptions.toPage || 1;
+          const allData = [];
+          
+          for (let pageNum = fromPage; pageNum <= toPage; pageNum++) {
+            const pageParams = new URLSearchParams(params);
+            pageParams.append('page', pageNum);
+            pageParams.append('per_page', itemsPerPageForPrinting);
+            
+            const url = `${baseUrl}/api/traites?${pageParams.toString()}`;
+            const res = await fetch(url, { headers: authHeaders() });
+            
+            if (res.ok) {
+              const data = await res.json();
+              const pageItems = data.data || data || [];
+              allData.push(...pageItems);
+            }
+          }
+          
+          // Trier les données pour l'impression (descendant sur 'numero')
+          const sortedItems = allData.slice().sort((a, b) => {
+            const an = Number(a.numero);
+            const bn = Number(b.numero);
+            if (!isNaN(an) && !isNaN(bn)) return bn - an;
+            return String(b.numero).localeCompare(String(a.numero));
+          });
+          
+          return sortedItems;
         }
       } else {
         params.append('per_page', '1000'); // Par défaut, charger toutes les données
@@ -283,18 +331,25 @@ const TraitesGrid = () => {
     
     setIsPrinting(true);
     try {
+      // Charger directement les données pour l'impression avec 53 éléments par page
+      // sans modifier l'affichage actuel
       const allItems = await loadAllItemsForPrint(printOptions);
       const formattedItems = formatDataForPrint(allItems);
       setAllItemsForPrint(formattedItems);
+      
+      // Afficher la vue d'impression
       setIsPrintingAll(true);
       
-      // Attendre un court instant pour que les données soient mises à jour
+      // Attendre un court instant pour que les données soient mises à jour dans le DOM
       setTimeout(() => {
         // Utiliser react-to-print pour imprimer
         handlePrint();
       }, 100);
     } catch (e) {
       alert(e.message || 'Erreur lors du chargement des données pour l\'impression');
+      setIsPrinting(false);
+      setIsPrintingAll(false);
+      setAllItemsForPrint([]);
     }
   };
 
@@ -333,14 +388,7 @@ const TraitesGrid = () => {
       }
     `,
     onBeforeGetContent: async () => {
-      // Avant l'impression, charger toutes les données si nécessaire
-      setIsPrintingAll(true);
-      try {
-        const allItems = await loadAllItemsForPrint(printOptions);
-        setAllItemsForPrint(allItems);
-      } catch (e) {
-        alert(e.message || 'Erreur lors du chargement des données pour l\'impression');
-      }
+      // Ne rien faire ici, les données sont déjà chargées
     },
     onAfterPrint: () => {
       // Après l'impression, réinitialiser l'état
@@ -750,7 +798,7 @@ const TraitesGrid = () => {
       if (sort?.key) params.append('sort', sort.key)
       if (sort?.dir) params.append('dir', sort.dir)
       params.append('page', String(page))
-      params.append('per_page', String(perPage))
+      params.append('per_page', String(perPage)) // Toujours utiliser perPage (10) pour l'affichage
       const qs = params.toString()
       const res = await fetch(`${baseUrl}/api/traites${qs ? `?${qs}` : ''}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Erreur lors du chargement')
@@ -784,7 +832,11 @@ const TraitesGrid = () => {
     }
   }
 
-  useEffect(() => { if (initialized) fetchItems() }, [initialized, page, perPage, sort, from, to, statut])
+  useEffect(() => { 
+    if (initialized) {
+      fetchItems();
+    }
+  }, [initialized, page, perPage, sort, from, to, statut]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -838,8 +890,10 @@ const TraitesGrid = () => {
                 <span>{importProgress.current} / {importProgress.total}</span>
                 <span>{Math.round((importProgress.current / importProgress.total) * 100)}%</span>
               </div>
-              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.3)', borderRadius: '4px', height: '8px' }}>
-                <div style={{ backgroundColor: '#ffffff', height: '100%', borderRadius: '4px', width: `${(importProgress.current / importProgress.total) * 100}%`, transition: 'width 0.3s ease' }} />
+              <div style={{ backgroundColor: '#f3f4f6', borderRadius: 4, padding: 12 }}>
+                <div style={{ backgroundColor: '#e5e7eb', borderRadius: 4, height: 8 }}>
+                  <div style={{ backgroundColor: '#10b981', height: '100%', borderRadius: 4, width: `${(importProgress.current / importProgress.total) * 100}%`, transition: 'width 0.3s ease' }} />
+                </div>
               </div>
             </div>
           )}
@@ -970,7 +1024,7 @@ const TraitesGrid = () => {
                       setPerPage(newPerPage)
                       setPage(1)
                     }}
-                    itemsPerPageOptions={[10, 20, 40, 100]}
+                    itemsPerPageOptions={[10, 20, 53, 100, 200]} // Ajout de plus d'options incluant 53
                     showItemsPerPage={true}
                     showTotal={true}
                   />
@@ -1046,9 +1100,9 @@ const TraitesGrid = () => {
                   style={{ marginRight: 8 }}
                   onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'current' }))}
                 />
-                Imprimer la vue actuelle ({items.length} éléments)
+                Imprimer la vue actuelle
                 <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px' }}>
-                  Page {page}: éléments {getElementRangeForPage(page).start} à {Math.min(getElementRangeForPage(page).start + items.length - 1, getElementRangeForPage(page).end)}
+                  Page {page}: 53 éléments (au lieu de {items.length} actuellement affichés)
                 </div>
               </label>
               

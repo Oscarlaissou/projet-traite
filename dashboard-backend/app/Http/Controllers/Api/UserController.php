@@ -29,7 +29,6 @@ class UserController extends Controller
             'password' => 'required|string|min:8',
             'role' => 'required|string|in:admin,manager,user',
             'ville' => 'nullable|string|max:255',
-            'logo' => 'nullable|string|max:255'
         ]);
 
         $user = User::create([
@@ -37,7 +36,6 @@ class UserController extends Controller
             'password' => Hash::make($request->password),
             'role' => $request->role,
             'ville' => $request->ville,
-            'logo' => $request->logo
         ]);
 
         return response()->json($user, 201);
@@ -64,10 +62,9 @@ class UserController extends Controller
             'password' => 'nullable|string|min:8',
             'role' => 'required|string|in:admin,manager,user',
             'ville' => 'nullable|string|max:255',
-            'logo' => 'nullable|string|max:255'
         ]);
 
-        $userData = $request->only(['username', 'role', 'ville', 'logo']);
+        $userData = $request->only(['username', 'role', 'ville']);
         
         // Only update password if provided
         if ($request->filled('password')) {
@@ -102,12 +99,11 @@ class UserController extends Controller
      */
     public function getOrganizationSettings()
     {
-        // Get the first admin user or any user to get the organization settings
-        $user = User::where('role', 'admin')->first() ?? User::first();
-        
+        // For now, we'll store organization settings in the config or a dedicated table
+        // In a real application, you might want to create a separate settings table
         $settings = [
             'name' => config('app.name', 'CFAO MOBILITY CAMEROON'),
-            'logo' => $user && $user->logo ? $user->logo : config('app.logo', '/images/LOGO.png')
+            'logo' => config('app.logo', '/images/LOGO.png')
         ];
         
         return response()->json($settings);
@@ -118,25 +114,20 @@ class UserController extends Controller
      */
     public function updateOrganizationSettings(Request $request)
     {
+        // In a real application, you would save these settings to a database table
+        // For now, we'll just return the updated settings
         $request->validate([
             'name' => 'nullable|string|max:255',
             'logo' => 'nullable|string|max:255'
         ]);
-        
-        // Update the first admin user or create one if none exists
-        $adminUser = User::where('role', 'admin')->first();
-        
-        if ($adminUser) {
-            $adminUser->update([
-                'logo' => $request->input('logo', $adminUser->logo)
-            ]);
-        }
         
         $settings = [
             'name' => $request->input('name', config('app.name', 'CFAO MOBILITY CAMEROON')),
             'logo' => $request->input('logo', config('app.logo', '/images/LOGO.png'))
         ];
         
+        // In a real application, you would save these to a database
+        // For now, we just return them
         return response()->json($settings);
     }
 }

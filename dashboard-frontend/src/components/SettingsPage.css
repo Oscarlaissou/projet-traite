@@ -1,6 +1,7 @@
 .settings-page {
-  width: 100%;
   padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .settings-page h1 {
@@ -321,6 +322,31 @@
   display: none;
 }
 
+/* App layout styles */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #f8f9fa; /* Fond gris clair */
+}
+
+.app-container {
+  display: flex;
+  flex: 1;
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px;
+  margin-left: 80px; /* Adjust based on your sidebar width */
+  transition: margin-left 0.3s ease;
+  background-color: #f8f9fa; /* Fond gris clair */
+}
+
+.main-content.expanded {
+  margin-left: 260px; /* Adjust based on your expanded sidebar width */
+}
+
 /* Professional styling for forms */
 .form-section {
   background-color: white;
@@ -402,6 +428,11 @@
   
   .modal-actions button {
     width: 100%;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 10px;
   }
   
   .settings-tabs {

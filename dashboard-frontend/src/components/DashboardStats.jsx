@@ -243,10 +243,27 @@ const DashboardStats = () => {
             {loadingTraites ? <Loader2 size={20} className="loading-spinner" /> : (traiteStatusTotal > 0) ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie data={traiteStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value">
-                    {traiteStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color || '#3b82f6'} style={{ cursor: 'pointer' }} onClick={() => navigate(`/dashboard?tab=traites&statut=${encodeURIComponent(String(entry.name || '').trim())}`)} />)}
+                  <Pie 
+                    data={traiteStatusData} 
+                    cx="50%" 
+                    cy="50%" 
+                    innerRadius={50} 
+                    outerRadius={120} 
+                    paddingAngle={1} 
+                    dataKey="value"
+                    minAngle={3}
+                  >
+                    {traiteStatusData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color || '#3b82f6'} 
+                        style={{ cursor: 'pointer' }} 
+                        onClick={() => navigate(`/dashboard?tab=traites&statut=${encodeURIComponent(String(entry.name || '').trim())}`)} 
+                      />
+                    ))}
                   </Pie>
-                  <Tooltip /><Legend />
+                  <Tooltip />
+                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             ) : <div className="no-data">Aucune donnée à afficher</div>}
@@ -282,12 +299,40 @@ const DashboardStats = () => {
           <div style={{ padding: '1rem' }}><h3 style={{ margin: 0, color: '#1a365d' }}>Répartition par Type</h3></div>
           <div className="chart-container">
             {loadingClients ? <Loader2 size={20} className="loading-spinner" /> : (clientTypeTotal > 0) ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={450}>
                 <PieChart>
-                  <Pie data={clientTypeData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={5} dataKey="value" nameKey="name">
-                    {clientTypeData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                  <Pie 
+                    data={clientTypeData} 
+                    cx="50%" 
+                    cy="45%" 
+                    innerRadius={50} 
+                    outerRadius={120} 
+                    paddingAngle={1} 
+                    dataKey="value" 
+                    nameKey="name"
+                    minAngle={3}
+                  >
+                    {clientTypeData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color} 
+                      />
+                    ))}
                   </Pie>
-                  <Tooltip /><Legend />
+                  <Tooltip 
+                    formatter={(value) => [value, 'Nombre']}
+                    labelFormatter={(name) => `Type: ${name}`}
+                  />
+                  <Legend 
+                    layout="horizontal" 
+                    verticalAlign="bottom" 
+                    align="center"
+                    formatter={(value, entry, index) => (
+                      <span style={{ color: '#333', fontSize: '12px' }}>
+                        {value} ({clientTypeData[index]?.value || 0})
+                      </span>
+                    )}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : <div className="no-data">Aucune donnée à afficher</div>}
