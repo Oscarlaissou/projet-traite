@@ -16,6 +16,11 @@ const Header = () => {
     return headers
   }
 
+  const handleSubmit = (e) => {
+    e.preventDefault(); // Empêcher le rechargement de la page
+    runSearch();
+  }
+
   const runSearch = async () => {
     const query = (q || "").trim().toLowerCase()
     const originalQuery = (q || "").trim()
@@ -48,44 +53,8 @@ const Header = () => {
       return
     }
 
-    // Pour les recherches normales dans la grille, vérifier d'abord les traites
-    if (originalQuery) {
-      try {
-        const baseUrl = process.env.REACT_APP_API_URL || ""
-        const searchParams = new URLSearchParams()
-        searchParams.append('search', originalQuery)
-        searchParams.append('page', '1')
-        searchParams.append('per_page', '1') // On a juste besoin de savoir s'il y a des résultats
-        
-        const res = await fetch(`${baseUrl}/api/traites?${searchParams.toString()}`, { 
-          headers: authHeaders() 
-        })
-        
-        if (res.ok) {
-          const data = await res.json()
-          // Vérifier le total depuis la pagination Laravel
-          const total = data?.total ?? 0
-          // Vérifier aussi si data.data est vide (cas de pagination)
-          const records = data?.data ?? data ?? []
-          const hasResults = total > 0 || (Array.isArray(records) && records.length > 0)
-          
-          // Si aucun résultat dans les traites, chercher dans les clients
-          if (!hasResults) {
-            const params = new URLSearchParams()
-            params.set('tab', 'traites')
-            params.set('view', 'Clients')
-            params.set('search', originalQuery)
-            navigate(`/dashboard?${params.toString()}`)
-            return
-          }
-        }
-      } catch (error) {
-        // En cas d'erreur, continuer avec la recherche normale dans les traites
-        console.error('Erreur lors de la vérification des traites:', error)
-      }
-    }
-
-    // Recherche normale dans les traites
+    // Pour les recherches normales, toujours aller dans la grille des traites
+    // avec les paramètres de recherche
     const params = new URLSearchParams()
     params.set('tab', 'traites')
     params.set('view', 'Grille')
@@ -99,10 +68,32 @@ const Header = () => {
         <h1 className="page-title">Dashboard</h1>
       </div>
       <div className="header-center">
-        <div className="search-container">
-          <input type="text" placeholder="Search..." className="search-input" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }} />
-          <button type="button" className="search-button" onClick={runSearch} aria-label="Rechercher"><Search size={16} /></button>
-        </div>
+        <form onSubmit={handleSubmit} className="search-container">
+          <input 
+            type="text" 
+            placeholder="Search..." 
+            className="search-input" 
+            value={q} 
+            onChange={(e) => setQ(e.target.value)} 
+            onKeyDown={(e) => { 
+              if (e.key === 'Enter') {
+                e.preventDefault(); // Empêcher le rechargement de la page
+                runSearch();
+              }
+            }} 
+          />
+          <button 
+            type="submit" 
+            className="search-button" 
+            onClick={(e) => {
+              e.preventDefault(); // Empêcher le rechargement de la page
+              runSearch();
+            }} 
+            aria-label="Rechercher"
+          >
+            <Search size={16} />
+          </button>
+        </form>
       </div>
       <div className="header-right">
         <NotificationsMenu />

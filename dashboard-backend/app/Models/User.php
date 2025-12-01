@@ -6,6 +6,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Role;
+use Illuminate\Support\Facades\Log;
 
 class User extends Authenticatable
 {
@@ -71,17 +72,40 @@ class User extends Authenticatable
         // Get direct permissions
         $directPermissions = $this->directPermissions()->pluck('name')->toArray();
         
-        // Merge and remove duplicates
-        $allPermissions = array_unique(array_merge($rolePermissions, $directPermissions));
+        // If user has direct permissions, use only those (override role permissions)
+        // Otherwise, use role permissions
+        if (!empty($directPermissions)) {
+            return $directPermissions;
+        }
         
-        return $allPermissions;
+        return $rolePermissions;
     }
     
     public function setPermissions(array $permissions)
     {
+        // Log the incoming permissions for debugging
+        Log::info('Setting user permissions', [
+            'user_id' => $this->id,
+            'incoming_permissions' => $permissions
+        ]);
+        
         // Sync direct permissions
         $permissionModels = Permission::whereIn('name', $permissions)->get();
+        
+        // Log the found permission models
+        Log::info('Found permission models', [
+            'count' => $permissionModels->count(),
+            'permission_names' => $permissionModels->pluck('name')->toArray()
+        ]);
+        
         $this->directPermissions()->sync($permissionModels->pluck('id')->toArray());
+        
+        // Log the final state
+        $finalPermissions = $this->directPermissions()->pluck('name')->toArray();
+        Log::info('Final user permissions after sync', [
+            'user_id' => $this->id,
+            'permissions' => $finalPermissions
+        ]);
     }
     
     // Method to ensure role_id is synced with role name

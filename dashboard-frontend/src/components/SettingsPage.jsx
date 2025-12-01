@@ -3,11 +3,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
-import Can from './Can';
+import Can from './Can'; // Import the Can component
 import './SettingsPage.css';
 
 const SettingsPage = () => {
-  const { user, hasPermission, updateOrganizationSettings } = useAuth();
+  const { user, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [activeMenuItem, setActiveMenuItem] = useState('Paramètres');
   const [activeSubItem, setActiveSubItem] = useState(null);
@@ -15,9 +15,8 @@ const SettingsPage = () => {
   const [users, setUsers] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [organizationSettings, setOrganizationSettings] = useState({
-    name: '',
-    logo: '',
-    logoPreview: ''
+    name: 'CFAO MOBILITY CAMEROON',
+    logo: '/images/LOGO.png'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -28,7 +27,7 @@ const SettingsPage = () => {
   const [newUser, setNewUser] = useState({
     username: '',
     password: '',
-    role: 'admin',
+    role: 'admin', // Default to admin role
     ville: ''
   });
   
@@ -124,11 +123,7 @@ const SettingsPage = () => {
       
       if (res.ok) {
         const data = await res.json();
-        setOrganizationSettings({
-          name: data.name || '',
-          logo: data.logo || '',
-          logoPreview: data.logo || ''
-        });
+        setOrganizationSettings(data);
       }
     } catch (err) {
       console.error('Error fetching organization settings:', err);
@@ -170,27 +165,13 @@ const SettingsPage = () => {
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validation basique
-      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/svg+xml'];
-      if (!validTypes.includes(file.type)) {
-        setError('Format de fichier non valide. Utilisez JPG, PNG, GIF ou SVG.');
-        return;
-      }
-      
-      if (file.size > 2048 * 1024) {
-        setError('Le fichier est trop volumineux. Maximum 2MB.');
-        return;
-      }
-      
-      // Créer un aperçu local
+      // In a real application, you would upload the file to the server
+      // For now, we'll just create a local URL
       const logoUrl = URL.createObjectURL(file);
       setOrganizationSettings(prev => ({
         ...prev,
-        logoPreview: logoUrl
+        logo: logoUrl
       }));
-      
-      // Effacer les messages d'erreur
-      setError('');
     }
   };
 
@@ -205,49 +186,25 @@ const SettingsPage = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      
-      // Ajouter le nom
-      formData.append('name', organizationSettings.name || '');
-      
-      // Ajouter le logo s'il y en a un nouveau
-      const logoFile = fileInputRef.current?.files[0];
-      if (logoFile) {
-        formData.append('logo', logoFile);
-      }
-      
       const res = await fetch(`${baseUrl}/api/organization/settings`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Accept': 'application/json',
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: formData
+        body: JSON.stringify(organizationSettings)
       });
       
       if (res.ok) {
         const data = await res.json();
-        setOrganizationSettings({
-          name: data.name || '',
-          logo: data.logo || '',
-          logoPreview: data.logo || ''
-        });
-        
-        // Mettre à jour le contexte d'authentification
-        updateOrganizationSettings(data);
-        
+        setOrganizationSettings(data);
         setSuccess('Paramètres de l\'organisation mis à jour avec succès');
-        
-        // Réinitialiser l'input file
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
       } else {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Échec de la mise à jour');
+        throw new Error('Failed to update organization settings');
       }
     } catch (err) {
-      setError(err.message || 'Erreur lors de la mise à jour des paramètres');
+      setError('Erreur lors de la mise à jour des paramètres de l\'organisation');
       console.error('Error saving organization settings:', err);
     } finally {
       setLoading(false);
@@ -282,7 +239,7 @@ const SettingsPage = () => {
           ville: ''
         });
         setSuccess('Utilisateur créé avec succès');
-        fetchUsers();
+        fetchUsers(); // Refresh the user list
       } else {
         const errorData = await res.json();
         throw new Error(errorData.message || 'Failed to create user');
@@ -308,6 +265,7 @@ const SettingsPage = () => {
   const startPermissionsEdit = (user) => {
     setPermissionsTabUser(user);
     setActiveTab('user-permissions');
+    // Fetch user permissions
     fetchUserPermissions(user.id);
   };
 
@@ -323,6 +281,7 @@ const SettingsPage = () => {
       
       if (res.ok) {
         const data = await res.json();
+        // Update userPermissions state with user's current permissions
         setUserPermissions(prev => {
           const updated = { ...prev };
           Object.keys(updated).forEach(permission => {
@@ -361,7 +320,7 @@ const SettingsPage = () => {
         setUsers(prev => prev.map(u => u.id === data.id ? data : u));
         setEditingUser(null);
         setSuccess('Utilisateur mis à jour avec succès');
-        fetchUsers();
+        fetchUsers(); // Refresh the user list
       } else {
         const errorData = await res.json();
         throw new Error(errorData.message || 'Failed to update user');
@@ -396,9 +355,10 @@ const SettingsPage = () => {
       if (res.ok) {
         const data = await res.json();
         setSuccess('Permissions mises à jour avec succès');
+        // Close the permissions tab and go back to users list
         setActiveTab('users');
         setPermissionsTabUser(null);
-        fetchUsers();
+        fetchUsers(); // Refresh the user list
       } else {
         const errorData = await res.json();
         throw new Error(errorData.message || 'Failed to update permissions');
@@ -524,36 +484,29 @@ const SettingsPage = () => {
                           value={organizationSettings.name}
                           onChange={handleOrganizationSettingsChange}
                           className="form-control"
-                          placeholder="Entrez le nom de l'organisation"
                         />
                       </div>
                       
                       <div className="form-group">
                         <label>Logo de l'organisation</label>
                         <div className="logo-upload-container">
-                          {(organizationSettings.logoPreview || organizationSettings.logo) ? (
-                            <img 
-                              src={organizationSettings.logoPreview || organizationSettings.logo} 
-                              alt="Logo de l'organisation" 
-                              className="logo-preview"
-                            />
-                          ) : (
-                            <div className="no-logo-placeholder">
-                              <span>Aucun logo</span>
-                            </div>
-                          )}
+                          <img 
+                            src={organizationSettings.logo} 
+                            alt="Logo de l'organisation" 
+                            className="logo-preview"
+                          />
                           <button 
                             type="button" 
                             className="upload-button"
                             onClick={triggerFileInput}
                           >
-                            {organizationSettings.logo ? 'Changer le logo' : 'Ajouter un logo'}
+                            Changer le logo
                           </button>
                           <input
                             type="file"
                             ref={fileInputRef}
                             onChange={handleLogoUpload}
-                            accept="image/jpeg,image/png,image/jpg,image/gif,image/svg+xml"
+                            accept="image/*"
                             className="file-input"
                           />
                         </div>
@@ -594,26 +547,24 @@ const SettingsPage = () => {
                           
                           <div className="form-group">
                             <label htmlFor="password">Mot de passe</label>
-                            <div className="password-input-wrapper">
-                              <input
-                                type={showNewUserPassword ? 'text' : 'password'}
-                                id="password"
-                                name="password"
-                                value={newUser.password}
-                                onChange={handleNewUserChange}
-                                className="form-control"
-                                required
-                                minLength="8"
-                              />
-                              <button 
-                                type="button" 
-                                className="toggle-password"
-                                onClick={() => setShowNewUserPassword(!showNewUserPassword)}
-                                title={showNewUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                              >
-                                {showNewUserPassword ? '👁️' : '👁️‍🗨️'}
-                              </button>
-                            </div>
+                            <input
+                              type={showNewUserPassword ? 'text' : 'password'}
+                              id="password"
+                              name="password"
+                              value={newUser.password}
+                              onChange={handleNewUserChange}
+                              className="form-control"
+                              required
+                              minLength="8"
+                            />
+                            <button 
+                              type="button" 
+                              className="toggle-password"
+                              onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                              title={showNewUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                            >
+                              {showNewUserPassword ? '👁️' : '👁️‍🗨️'}
+                            </button>
                           </div>
                         </div>
                         
@@ -734,25 +685,23 @@ const SettingsPage = () => {
                             
                             <div className="form-group">
                               <label htmlFor="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
-                              <div className="password-input-wrapper">
-                                <input
-                                  type={showEditUserPassword ? 'text' : 'password'}
-                                  id="edit-password"
-                                  name="password"
-                                  value={editForm.password}
-                                  onChange={handleEditUserChange}
-                                  className="form-control"
-                                  minLength="8"
-                                />
-                                <button 
-                                  type="button" 
-                                  className="toggle-password"
-                                  onClick={() => setShowEditUserPassword(!showEditUserPassword)}
-                                  title={showEditUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                                >
-                                  {showEditUserPassword ? '👁️' : '👁️‍🗨️'}
-                                </button>
-                              </div>
+                              <input
+                                type={showEditUserPassword ? 'text' : 'password'}
+                                id="edit-password"
+                                name="password"
+                                value={editForm.password}
+                                onChange={handleEditUserChange}
+                                className="form-control"
+                                minLength="8"
+                              />
+                              <button 
+                                type="button" 
+                                className="toggle-password"
+                                onClick={() => setShowEditUserPassword(!showEditUserPassword)}
+                                title={showEditUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                              >
+                                {showEditUserPassword ? '👁️' : '👁️‍🗨️'}
+                              </button>
                             </div>
                             
                             <div className="form-group">

@@ -335,12 +335,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f8f9fa; /* Fond gris clair */
-}
-
-.app-container {
-  display: flex;
-  flex: 1;
+  /* background-color: #f8f9fa; */ /* Removed gray background that was interfering with dashboard */
 }
 
 .main-content {
@@ -348,7 +343,7 @@
   padding: 20px;
   margin-left: 80px; /* Adjust based on your sidebar width */
   transition: margin-left 0.3s ease;
-  background-color: #f8f9fa; /* Fond gris clair */
+  /* background-color: #f8f9fa; */ /* Removed gray background that was interfering with dashboard */
 }
 
 .main-content.expanded {

@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Permission;
 use App\Models\OrganizationSetting;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
-
 
 class UserController extends Controller
 {
@@ -87,6 +88,17 @@ class UserController extends Controller
         }
 
         $user->update($userData);
+        
+        // Si le rôle a changé, supprimer les permissions directes pour utiliser celles du rôle
+        if ($user->wasChanged('role') || $user->wasChanged('role_id')) {
+            // Supprimer toutes les permissions directes
+            $user->directPermissions()->detach();
+            
+            Log::info('User role changed, cleared direct permissions', [
+                'user_id' => $user->id,
+                'new_role' => $request->role
+            ]);
+        }
 
         return response()->json($user);
     }
@@ -125,6 +137,13 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         $permissions = $user->getPermissions();
+        
+        // Log the permissions for debugging
+        Log::info('Getting user permissions', [
+            'user_id' => $id,
+            'permissions' => $permissions
+        ]);
+        
         return response()->json($permissions);
     }
     
@@ -140,12 +159,26 @@ class UserController extends Controller
             'permissions.*' => 'string|exists:permissions,name'
         ]);
         
+        // Log the incoming permissions for debugging
+        Log::info('Updating user permissions', [
+            'user_id' => $id,
+            'incoming_permissions' => $request->permissions
+        ]);
+        
         // Set user permissions
         $user->setPermissions($request->permissions);
         
+        // Get updated permissions to confirm
+        $updatedPermissions = $user->getPermissions();
+        
+        Log::info('User permissions updated', [
+            'user_id' => $id,
+            'updated_permissions' => $updatedPermissions
+        ]);
+        
         return response()->json([
             'message' => 'Permissions updated successfully',
-            'permissions' => $user->getPermissions()
+            'permissions' => $updatedPermissions
         ]);
     }
     
@@ -215,7 +248,7 @@ class UserController extends Controller
         $response = [
             'id' => $settings->id,
             'name' => $settings->name,
-             'logo' => $settings->logo ? url('storage/' . $settings->logo) : null, // Changé ici
+        'logo' => $settings->logo ? url('storage/' . $settings->logo) : null, // Changé ici
             'created_at' => $settings->created_at,
             'updated_at' => $settings->updated_at
         ];
