@@ -47,6 +47,11 @@ const DashboardStats = () => {
   const [clientTypeData, setClientTypeData] = useState([])
   const [selectedClientYear, setSelectedClientYear] = useState(new Date().getFullYear())
   const [clientAvailableYears, setClientAvailableYears] = useState([new Date().getFullYear()])
+  
+  // --- ÉTATS POUR LES CLIENTS EN ATTENTE ---
+  const [pendingClientsCount, setPendingClientsCount] = useState(0)
+  const [loadingPendingClients, setLoadingPendingClients] = useState(true)
+  const [errorPendingClients, setErrorPendingClients] = useState("")
 
   const monthNames = useMemo(() => ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'], [])
 
@@ -183,6 +188,45 @@ const DashboardStats = () => {
     return () => { isMounted = false }
   }, [selectedClientYear])
 
+  // --- FETCH DES CLIENTS EN ATTENTE ---
+  useEffect(() => {
+    let isMounted = true
+    const fetchPendingClientsCount = async () => {
+      // Don't fetch data if user shouldn't see dashboard stats
+      if (!shouldShowDashboardStats()) return;
+      
+      setLoadingPendingClients(true)
+      setErrorPendingClients("")
+      try {
+        const baseUrl = process.env.REACT_APP_API_URL || ''
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+
+        const res = await fetch(`${baseUrl}/api/pending-clients`, { headers })
+        
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json()
+          setPendingClientsCount(data.count || 0)
+        } else {
+          throw new Error("Erreur de chargement des clients en attente")
+        }
+      } catch (e) {
+        if (isMounted) setErrorPendingClients(e.message || "Erreur inconnue")
+      } finally {
+        if (isMounted) setLoadingPendingClients(false)
+      }
+    }
+    
+    // Only fetch pending clients for admin users
+    if (hasPermission('access_dashboard')) {
+      fetchPendingClientsCount()
+    }
+    
+    return () => { isMounted = false }
+  }, [hasPermission])
+
   // --- DONNÉES DES CARTES ---
   const traiteCardsData = [
     { icon: FileText, title: "Traites totales", value: traiteStats.total, color: "#3B82F6", bgColor: "#EFF6FF", permission: "view_traites", onClick: () => navigate('/dashboard?tab=traites') },
@@ -198,6 +242,11 @@ const DashboardStats = () => {
     { icon: UserPlus, title: "Comptes clients/jour", value: clientStats.perDay, color: "#10B981", bgColor: "#ECFDF5", permission: "view_clients" },
     { icon: Calendar, title: "Comptes clients/mois", value: clientStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF", permission: "view_clients" },
     
+  ]
+
+  // --- DONNÉES DES CARTES POUR LES CLIENTS EN ATTENTE ---
+  const pendingClientsCardData = [
+    { icon: Loader2, title: "Clients en attente", value: pendingClientsCount, color: "#F59E0B", bgColor: "#FFFBEB", permission: "manage_pending_clients", onClick: () => navigate('/dashboard?tab=credit&view=PendingClients') }
   ]
 
   // If user shouldn't see dashboard stats, show a simple message
@@ -241,6 +290,18 @@ const DashboardStats = () => {
               <div className="card-content">
                 <p className="card-title">{card.title}</p>
                 <p className="card-value">{loadingClients ? <Loader2 size={16} className="loading-spinner" /> : (typeof card.value === 'number' ? card.value.toLocaleString() : card.value)}</p>
+              </div>
+            </div>
+          </Can>
+        ))}
+        {/* Cartes des Clients en Attente */}
+        {pendingClientsCardData.map((card, index) => (
+          <Can key={`pending-client-${index}`} permission={card.permission}>
+            <div className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default' }}>
+              <div className="card-icon-container" style={{ backgroundColor: card.bgColor }}><card.icon size={20} color={card.color} /></div>
+              <div className="card-content">
+                <p className="card-title">{card.title}</p>
+                <p className="card-value">{loadingPendingClients ? <Loader2 size={16} className="loading-spinner" /> : card.value.toLocaleString()}</p>
               </div>
             </div>
           </Can>

@@ -157,9 +157,14 @@
   font-weight: 500;
 }
 
+.role-super_admin {
+  background-color: #dc3545;
+  color: white;
+}
+
 .role-admin {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: #dbeafe;
+  color: #1f2c49;
 }
 
 .role-manager {

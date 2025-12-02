@@ -8,6 +8,7 @@ use App\Http\Controllers\TraitesController;
 use App\Http\Controllers\TiersController;
 use App\Http\Controllers\ClientStatsController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\PendingClientsController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
@@ -104,4 +105,13 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Mettre à jour les paramètres de l'organisation (utilisez POST pour FormData)
     Route::post('/organization/settings', [UserController::class, 'updateOrganizationSettings']);
+});
+
+// Routes pour les clients en attente
+Route::prefix('pending-clients')->group(function () {
+    Route::get('/', [PendingClientsController::class, 'index'])->middleware('auth:sanctum');
+    Route::post('/', [PendingClientsController::class, 'store'])->middleware('auth:sanctum');
+    Route::get('/{pendingClient}', [PendingClientsController::class, 'show'])->middleware('auth:sanctum');
+    Route::delete('/{pendingClient}', [PendingClientsController::class, 'destroy'])->middleware('auth:sanctum');
+    Route::post('/{pendingClient}/approve', [PendingClientsController::class, 'approve'])->middleware('auth:sanctum');
 });

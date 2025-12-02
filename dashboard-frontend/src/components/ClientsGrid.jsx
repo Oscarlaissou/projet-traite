@@ -717,21 +717,26 @@ const ClientsGrid = () => {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={Columns.length}>
-                  <Pagination
-                    currentPage={pagination.current_page || page}
-                    totalPages={pagination.last_page || 1}
-                    totalItems={pagination.total || 0}
-                    itemsPerPage={perPage}
-                    onPageChange={(newPage) => setPage(newPage)}
-                    onItemsPerPageChange={(newPerPage) => {
-                      setPerPage(newPerPage)
-                      setPage(1)
-                    }}
-                    itemsPerPageOptions={[10, 20, 50, 100]}
-                    showItemsPerPage={true}
-                    showTotal={true}
-                  />
+                <td colSpan={Columns.length} style={{ textAlign: "center", padding: "0.75rem", backgroundColor: "#f9fafb", borderTop: "2px solid #e5e7eb" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+                    <div style={{ fontWeight: 500, color: "#374151" }}>
+                      Total: {pagination.total || 0} client{pagination.total !== 1 ? 's' : ''}
+                    </div>
+                    <Pagination
+                      currentPage={pagination.current_page || page}
+                      totalPages={pagination.last_page || 1}
+                      totalItems={pagination.total || 0}
+                      itemsPerPage={perPage}
+                      onPageChange={(newPage) => setPage(newPage)}
+                      onItemsPerPageChange={(newPerPage) => {
+                        setPerPage(newPerPage)
+                        setPage(1)
+                      }}
+                      itemsPerPageOptions={[10, 20, 50, 100]}
+                      showItemsPerPage={true}
+                      showTotal={true}
+                    />
+                  </div>
                 </td>
               </tr>
             </tfoot>

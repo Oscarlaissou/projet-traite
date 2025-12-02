@@ -30,6 +30,11 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        // Vérifier s'il y a déjà un super_admin et si on essaie d'en créer un autre
+        if ($request->role === 'super_admin' && User::where('role', 'super_admin')->exists()) {
+            return response()->json(['error' => 'Il ne peut y avoir qu\'un seul super administrateur'], 400);
+        }
+        
         $request->validate([
             'username' => 'required|string|max:255|unique:users',
             'password' => 'required|string|min:8',
@@ -67,6 +72,11 @@ class UserController extends Controller
     public function update(Request $request, string $id)
     {
         $user = User::findOrFail($id);
+        
+        // Vérifier s'il y a déjà un super_admin et si on essaie d'en créer un autre
+        if ($request->role === 'super_admin' && User::where('role', 'super_admin')->where('id', '!=', $id)->exists()) {
+            return response()->json(['error' => 'Il ne peut y avoir qu\'un seul super administrateur'], 400);
+        }
 
         $request->validate([
             'username' => ['required', 'string', 'max:255', Rule::unique('users')->ignore($user->id)],
@@ -110,10 +120,9 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         
-        // Prevent deleting the last admin user
-        $adminCount = User::where('role', 'admin')->count();
-        if ($user->role === 'admin' && $adminCount <= 1) {
-            return response()->json(['error' => 'Cannot delete the last administrator'], 400);
+        // Prevent deleting super admin
+        if ($user->role === 'super_admin') {
+            return response()->json(['error' => 'Cannot delete the super administrator'], 400);
         }
         
         $user->delete();
@@ -201,7 +210,7 @@ class UserController extends Controller
         $response = [
             'id' => $settings->id,
             'name' => $settings->name,
-            'logo' => $settings->logo ? url('storage/' . $settings->logo) : null, // Changé ici
+            'logo' => $settings->logo ? url('storage/' . $settings->logo) : null,
             'created_at' => $settings->created_at,
             'updated_at' => $settings->updated_at
         ];
@@ -214,45 +223,57 @@ class UserController extends Controller
      */
     public function updateOrganizationSettings(Request $request)
     {
-        $request->validate([
-            'name' => 'nullable|string|max:255',
-            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
-        ]);
-        
-        // Récupérer ou créer les paramètres
-        $settings = OrganizationSetting::first();
-        if (!$settings) {
-            $settings = new OrganizationSetting();
-        }
-        
-        // Mettre à jour le nom
-        if ($request->has('name')) {
-            $settings->name = $request->name;
-        }
-        
-        // Gérer l'upload du logo
-        if ($request->hasFile('logo')) {
-            // Supprimer l'ancien logo si il existe
-            if ($settings->logo && Storage::disk('public')->exists($settings->logo)) {
-                Storage::disk('public')->delete($settings->logo);
+        try {
+            $request->validate([
+                'name' => 'nullable|string|max:255',
+                'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+            ]);
+            
+            // Récupérer ou créer les paramètres
+            $settings = OrganizationSetting::first();
+            if (!$settings) {
+                $settings = new OrganizationSetting();
             }
             
-            // Stocker le nouveau logo
-            $logoPath = $request->file('logo')->store('logos', 'public');
-            $settings->logo = $logoPath;
+            // Mettre à jour le nom
+            if ($request->has('name')) {
+                $settings->name = $request->name;
+            }
+            
+            // Gérer l'upload du logo
+            if ($request->hasFile('logo')) {
+                // Supprimer l'ancien logo si il existe
+                if ($settings->logo && Storage::disk('public')->exists($settings->logo)) {
+                    Storage::disk('public')->delete($settings->logo);
+                }
+                
+                // Stocker le nouveau logo
+                $logoPath = $request->file('logo')->store('logos', 'public');
+                $settings->logo = $logoPath;
+            }
+            
+            $settings->save();
+            
+            // Retourner l'URL complète du logo
+            $response = [
+                'id' => $settings->id,
+                'name' => $settings->name,
+                'logo' => $settings->logo ? url('storage/' . $settings->logo) : null,
+                'created_at' => $settings->created_at,
+                'updated_at' => $settings->updated_at
+            ];
+            
+            return response()->json($response);
+        } catch (\Exception $e) {
+            Log::error('Error updating organization settings: ' . $e->getMessage(), [
+                'exception' => $e,
+                'request_data' => $request->all()
+            ]);
+            
+            return response()->json([
+                'error' => 'Failed to update organization settings',
+                'message' => $e->getMessage()
+            ], 500);
         }
-        
-        $settings->save();
-        
-        // Retourner l'URL complète du logo
-        $response = [
-            'id' => $settings->id,
-            'name' => $settings->name,
-        'logo' => $settings->logo ? url('storage/' . $settings->logo) : null, // Changé ici
-            'created_at' => $settings->created_at,
-            'updated_at' => $settings->updated_at
-        ];
-        
-        return response()->json($response);
     }
 }

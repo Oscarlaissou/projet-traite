@@ -5,23 +5,27 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import Can from './Can'; // Import the Can component
 import './SettingsPage.css';
+import Pagination from './Pagination'; // Import the Pagination component
 
 const SettingsPage = () => {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, updateOrganizationSettings } = useAuth();
   const navigate = useNavigate();
   const [activeMenuItem, setActiveMenuItem] = useState('Paramètres');
   const [activeSubItem, setActiveSubItem] = useState(null);
   const [activeTab, setActiveTab] = useState('organization');
   const [users, setUsers] = useState([]);
   const [permissions, setPermissions] = useState([]);
+  const [page, setPage] = useState(1); // Add pagination state
+  const [perPage, setPerPage] = useState(5); // Change from 10 to 5 items per page
   const [organizationSettings, setOrganizationSettings] = useState({
     name: 'CFAO MOBILITY CAMEROON',
-    logo: '/images/LOGO.png'
+    logo: '/logo192.png'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef(null);
+  const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
   // Form states for user management
   const [newUser, setNewUser] = useState({
@@ -35,10 +39,10 @@ const SettingsPage = () => {
   const [showNewUserPassword, setShowNewUserPassword] = useState(false);
   const [showEditUserPassword, setShowEditUserPassword] = useState(false);
   
-  // Roles data
+  // Define roles with descriptions
   const roles = [
-    { name: 'traites_manager', description: 'Gestionnaire de traites' },
-    { name: 'clients_manager', description: 'Gestionnaire de clients' },
+    { name: 'traites_manager', description: 'Gestionnaire des traites' },
+    { name: 'clients_manager', description: 'Gestionnaire des clients' },
     { name: 'admin', description: 'Administrateur' },
     { name: 'super_admin', description: 'Super Administrateur' }
   ];
@@ -56,8 +60,6 @@ const SettingsPage = () => {
   
   // State for permissions tab
   const [permissionsTabUser, setPermissionsTabUser] = useState(null);
-
-  const baseUrl = process.env.REACT_APP_API_URL || '';
 
   // Fetch users, permissions and organization settings
   useEffect(() => {
@@ -162,21 +164,74 @@ const SettingsPage = () => {
     }));
   };
 
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // In a real application, you would upload the file to the server
-      // For now, we'll just create a local URL
+      // Créer une URL locale pour l'aperçu immédiat
       const logoUrl = URL.createObjectURL(file);
       setOrganizationSettings(prev => ({
         ...prev,
         logo: logoUrl
       }));
+      
+      // Envoyer automatiquement le nouveau logo au serveur
+      saveOrganizationSettingsWithLogo(file);
     }
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
+  const saveOrganizationSettingsWithLogo = async (logoFile) => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Créer un FormData avec le nom actuel et le nouveau logo
+      const formData = new FormData();
+      formData.append('name', organizationSettings.name || '');
+      if (logoFile) {
+        formData.append('logo', logoFile);
+      }
+      
+      const res = await fetch(`${baseUrl}/api/organization/settings`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setOrganizationSettings(data);
+        setSuccess('Logo mis à jour avec succès');
+        
+        // Mettre à jour le logo dans le contexte d'authentification
+        updateOrganizationSettings(data);
+        
+        // Réinitialiser l'input file
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to update organization settings');
+      }
+    } catch (err) {
+      setError('Erreur lors de la mise à jour du logo: ' + err.message);
+      console.error('Error saving organization logo:', err);
+      
+      // En cas d'erreur, revenir au logo précédent
+      fetchOrganizationSettings();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveOrganizationSettings = async () => {
@@ -186,26 +241,34 @@ const SettingsPage = () => {
     
     try {
       const token = localStorage.getItem('token');
+      
+      // Créer un FormData pour le nom seulement (pas de logo)
+      const formData = new FormData();
+      formData.append('name', organizationSettings.name || '');
+      
       const res = await fetch(`${baseUrl}/api/organization/settings`, {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(organizationSettings)
+        body: formData
       });
       
       if (res.ok) {
         const data = await res.json();
         setOrganizationSettings(data);
-        setSuccess('Paramètres de l\'organisation mis à jour avec succès');
+        setSuccess('Nom de l\'organisation mis à jour avec succès');
+        
+        // Mettre à jour le logo dans le contexte d'authentification
+        updateOrganizationSettings(data);
       } else {
-        throw new Error('Failed to update organization settings');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to update organization settings');
       }
     } catch (err) {
-      setError('Erreur lors de la mise à jour des paramètres de l\'organisation');
-      console.error('Error saving organization settings:', err);
+      setError('Erreur lors de la mise à jour du nom: ' + err.message);
+      console.error('Error saving organization name:', err);
     } finally {
       setLoading(false);
     }
@@ -579,7 +642,11 @@ const SettingsPage = () => {
                               className="form-control"
                             >
                               {roles.map(role => (
-                                <option key={role.name} value={role.name}>
+                                <option 
+                                  key={role.name} 
+                                  value={role.name}
+                                  disabled={role.name === 'super_admin' && users.some(u => u.role === 'super_admin')}
+                                >
                                   {role.description}
                                 </option>
                               ))}
@@ -650,7 +717,7 @@ const SettingsPage = () => {
                                       <button 
                                         className="delete-button"
                                         onClick={() => deleteUser(user.id)}
-                                        disabled={user.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1}
+                                        disabled={user.role === 'super_admin'}
                                       >
                                         Supprimer
                                       </button>
@@ -660,6 +727,31 @@ const SettingsPage = () => {
                               </tr>
                             ))}
                           </tbody>
+                          <tfoot>
+                            <tr>
+                              <td colSpan="4" style={{ textAlign: "center", padding: "0.75rem", backgroundColor: "#f9fafb", borderTop: "2px solid #e5e7eb" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+                                  <div style={{ fontWeight: 500, color: "#374151" }}>
+                                    Total: {users.length} utilisateur{users.length !== 1 ? 's' : ''}
+                                  </div>
+                                  <Pagination
+                                    currentPage={page}
+                                    totalPages={Math.ceil(users.length / perPage) || 1}
+                                    totalItems={users.length}
+                                    itemsPerPage={perPage}
+                                    onPageChange={(newPage) => setPage(newPage)}
+                                    onItemsPerPageChange={(newPerPage) => {
+                                      setPerPage(newPerPage);
+                                      setPage(1);
+                                    }}
+                                    itemsPerPageOptions={[5, 10, 20, 50]}
+                                    showItemsPerPage={true}
+                                    showTotal={true}
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
@@ -714,7 +806,11 @@ const SettingsPage = () => {
                                 className="form-control"
                               >
                                 {roles.map(role => (
-                                  <option key={role.name} value={role.name}>
+                                  <option 
+                                    key={role.name} 
+                                    value={role.name}
+                                    disabled={role.name === 'super_admin' && users.some(u => u.role === 'super_admin' && u.id !== editingUser.id)}
+                                  >
                                     {role.description}
                                   </option>
                                 ))}
@@ -758,7 +854,7 @@ const SettingsPage = () => {
                                       setEditingUser(null);
                                     }
                                   }}
-                                  disabled={editingUser.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1}
+                                  disabled={editingUser.role === 'super_admin'}
                                 >
                                   Supprimer
                                 </button>

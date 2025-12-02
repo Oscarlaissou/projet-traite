@@ -188,6 +188,15 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                     <span className="nav-text">Nouveau compte client</span>
                   </button>
                 </Can>
+                {/* Afficher "Clients en attente" seulement si l'utilisateur a la permission */}
+                {hasPermission('manage_pending_clients') && (
+                  <button className={`nav-subitem ${activeSubItem === "PendingClients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("PendingClients"); navigate('/dashboard?tab=credit&view=PendingClients') }}>
+                    <span className="nav-icon">
+                      <Users size={16} />
+                    </span>
+                    <span className="nav-text">Clients en attente</span>
+                  </button>
+                )}
               </div>
             )}
           </Can>

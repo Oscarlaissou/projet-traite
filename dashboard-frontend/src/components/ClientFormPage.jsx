@@ -212,21 +212,37 @@ const ClientFormPage = () => {
         nom_signataire,
       }
 
-      const url = id ? `${baseUrl}/api/tiers/${id}` : `${baseUrl}/api/tiers`
-      const method = id ? "PUT" : "POST"
-      const res = await fetch(url, {
-        method,
-        headers: authHeaders(),
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) {
-        const msg = await res.text()
-        throw new Error(msg || (id ? "Échec de la mise à jour du client" : "Échec de la création du client"))
-      }
-      // Redirection: en édition -> détail, en création -> grille
+      // For new clients, save to pending clients table
+      // For existing clients (with id), update directly in tiers table
       if (id) {
+        // Update existing client directly
+        const url = `${baseUrl}/api/tiers/${id}`
+        const method = "PUT"
+        const res = await fetch(url, {
+          method,
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const msg = await res.text()
+          throw new Error(msg || "Échec de la mise à jour du client")
+        }
+        // Redirection: en édition -> détail
         navigate(`/clients/${id}`)
       } else {
+        // Save new client to pending clients table
+        const url = `${baseUrl}/api/pending-clients`
+        const method = "POST"
+        const res = await fetch(url, {
+          method,
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const msg = await res.text()
+          throw new Error(msg || "Échec de la création du client en attente")
+        }
+        // Redirection: en création -> grille clients
         navigate("/dashboard?tab=credit&view=GestionClients")
       }
     } catch (err) {

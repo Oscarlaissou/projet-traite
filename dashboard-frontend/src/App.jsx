@@ -10,6 +10,7 @@ import ClientFormPage from './components/ClientFormPage';
 import ClientsGrid from './components/ClientsGrid';
 import ClientDetailPage from './components/ClientDetailPage';
 import SettingsPage from './components/SettingsPage';
+import PendingClientsGrid from './components/PendingClientsGrid';
 
 // Composant pour les routes protégées
 function ProtectedRoute({ children }) {
@@ -131,6 +132,15 @@ function AppRoutes() {
                 }
             />
             {/* ------------------------------------------------------------------ */}
+
+            <Route 
+                path="/pending-clients" 
+                element={
+                    <ProtectedRoute>
+                        <PendingClientsGrid />
+                    </ProtectedRoute>
+                } 
+            />
 
             <Route 
                 path="/notifications" 
