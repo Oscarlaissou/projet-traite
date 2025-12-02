@@ -38,6 +38,7 @@ const DashboardStats = () => {
   const [traiteStatusData, setTraiteStatusData] = useState([])
   const [selectedTraiteYear, setSelectedTraiteYear] = useState(new Date().getFullYear())
   const [traiteAvailableYears, setTraiteAvailableYears] = useState([new Date().getFullYear()])
+  const [recentBillsCount, setRecentBillsCount] = useState(0)
 
   // --- ÉTATS POUR LES STATS DES CLIENTS ---
   const [loadingClients, setLoadingClients] = useState(true)
@@ -226,13 +227,78 @@ const DashboardStats = () => {
     
     return () => { isMounted = false }
   }, [hasPermission])
+  
+  // --- FETCH DES TRAITES RÉCENTES ---
+  useEffect(() => {
+    let isMounted = true
+    const fetchRecentBillsCount = async () => {
+      // Don't fetch data if user shouldn't see dashboard stats
+      if (!shouldShowDashboardStats()) return;
+      
+      try {
+        const baseUrl = process.env.REACT_APP_API_URL || ''
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+        
+        // Fetch bills created in the last 5 minutes
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+        const fromDate = fiveMinutesAgo.toISOString().split('T')[0]
+        
+        const p = new URLSearchParams()
+        p.append('per_page', '100')
+        p.append('page', '1')
+        p.append('sort', 'created_at')
+        p.append('dir', 'desc')
+        p.append('from', fromDate)
+        
+        const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers })
+        
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json()
+          const bills = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
+          
+          // Filter for truly recent bills (created in last 5 minutes)
+          const now = new Date()
+          const cutoffTime = new Date(now.getTime() - 5 * 60 * 1000)
+          const recent = bills.filter(bill => {
+            const createdAt = new Date(bill.created_at)
+            return createdAt >= cutoffTime
+          })
+          
+          setRecentBillsCount(recent.length)
+        }
+      } catch (e) {
+        console.error('Error fetching recent bills:', e)
+      }
+    }
+    
+    // Only fetch recent bills for users with permission
+    if (hasPermission('access_dashboard')) {
+      fetchRecentBillsCount()
+      const interval = setInterval(fetchRecentBillsCount, 5000) // Refresh every 5 seconds
+      return () => clearInterval(interval)
+    }
+    
+    return () => { isMounted = false }
+  }, [hasPermission])
 
   // --- DONNÉES DES CARTES ---
   const traiteCardsData = [
     { icon: FileText, title: "Traites totales", value: traiteStats.total, color: "#3B82F6", bgColor: "#EFF6FF", permission: "view_traites", onClick: () => navigate('/dashboard?tab=traites') },
     { icon: TrendingUp, title: "Traites/jour", value: traiteStats.perDay, color: "#FFBB7F", bgColor: "#FEF2F2", permission: "view_traites" },
     { icon: Calendar, title: "Traites/mois", value: traiteStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF", permission: "view_traites" },
-    { icon: CheckCircle, title: "Traites échues", value: traiteStats.overdue, color: "#2AAD4D", bgColor: "#ECFDF5", permission: "view_traites", onClick: () => navigate(`/dashboard?tab=traites&statut=${encodeURIComponent('Échu')}`) }
+    { 
+      icon: CheckCircle, 
+      title: "Traites échues", 
+      value: traiteStats.overdue, 
+      color: "#2AAD4D", 
+      bgColor: "#ECFDF5", 
+      permission: "view_traites", 
+      onClick: () => navigate(`/dashboard?tab=traites&statut=${encodeURIComponent('Échu')}`),
+      badge: recentBillsCount > 0 ? recentBillsCount : null
+    }
   ]
 
   const formatCredit = (value) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(value || 0)
@@ -246,7 +312,16 @@ const DashboardStats = () => {
 
   // --- DONNÉES DES CARTES POUR LES CLIENTS EN ATTENTE ---
   const pendingClientsCardData = [
-    { icon: Loader2, title: "Clients en attente", value: pendingClientsCount, color: "#F59E0B", bgColor: "#FFFBEB", permission: "manage_pending_clients", onClick: () => navigate('/dashboard?tab=credit&view=PendingClients') }
+    { 
+      icon: Loader2, 
+      title: "Clients en attente", 
+      value: pendingClientsCount, 
+      color: "#F59E0B", 
+      bgColor: "#FFFBEB", 
+      permission: "manage_pending_clients", 
+      onClick: () => navigate('/dashboard?tab=credit&view=PendingClients'),
+      badge: pendingClientsCount > 0 ? pendingClientsCount : null
+    }
   ]
 
   // If user shouldn't see dashboard stats, show a simple message
@@ -273,12 +348,32 @@ const DashboardStats = () => {
         {/* Cartes des Traites */}
         {traiteCardsData.map((card, index) => (
           <Can key={`traite-${index}`} permission={card.permission}>
-            <div className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default' }}>
+            <div className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default', position: 'relative' }}>
               <div className="card-icon-container" style={{ backgroundColor: card.bgColor }}><card.icon size={20} color={card.color} /></div>
               <div className="card-content">
                 <p className="card-title">{card.title}</p>
                 <p className="card-value">{loadingTraites ? <Loader2 size={16} className="loading-spinner" /> : card.value.toLocaleString()}</p>
               </div>
+              {card.badge && (
+                <span className="badge" style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '-8px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  borderRadius: '9999px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  minWidth: '20px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {card.badge}
+                </span>
+              )}
             </div>
           </Can>
         ))}
@@ -297,12 +392,32 @@ const DashboardStats = () => {
         {/* Cartes des Clients en Attente */}
         {pendingClientsCardData.map((card, index) => (
           <Can key={`pending-client-${index}`} permission={card.permission}>
-            <div className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default' }}>
+            <div className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default', position: 'relative' }}>
               <div className="card-icon-container" style={{ backgroundColor: card.bgColor }}><card.icon size={20} color={card.color} /></div>
               <div className="card-content">
                 <p className="card-title">{card.title}</p>
                 <p className="card-value">{loadingPendingClients ? <Loader2 size={16} className="loading-spinner" /> : card.value.toLocaleString()}</p>
               </div>
+              {card.badge && (
+                <span className="badge" style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '-8px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  borderRadius: '9999px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  minWidth: '20px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {card.badge}
+                </span>
+              )}
             </div>
           </Can>
         ))}
@@ -397,7 +512,7 @@ const DashboardStats = () => {
             </div>
           </div>
           <div className="stat-card chart-card" style={{ padding: 0 }}>
-            <div style={{ padding: '1rem' }}><h3 style={{ margin: 0, color: '#1a365d' }}>Répartition par Type</h3></div>
+            <div style={{ padding: '1rem' }}><h3 style={{ margin: 0, color: '#1a365d' }}>Repartition par Type</h3></div>
             <div className="chart-container">
               {loadingClients ? <Loader2 size={20} className="loading-spinner" /> : (clientTypeTotal > 0) ? (
                 <ResponsiveContainer width="100%" height={450}>

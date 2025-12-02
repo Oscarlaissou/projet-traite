@@ -1,5 +1,4 @@
-"use client"
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import "./Sidebar.css"
 import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit, History, ChevronLeft, ChevronRight, Plus } from "lucide-react"
@@ -17,6 +16,9 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
       return false
     }
   })
+  
+  const [pendingClientsCount, setPendingClientsCount] = useState(0)
+  const [recentBillsCount, setRecentBillsCount] = useState(0)
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -33,6 +35,81 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
       try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
     }
   }, [activeSubItem])
+
+  // Fetch pending clients count
+  useEffect(() => {
+    const fetchPendingClients = async () => {
+      try {
+        const baseUrl = process.env.REACT_APP_API_URL || ''
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+        
+        const res = await fetch(`${baseUrl}/api/pending-clients`, { headers })
+        if (res.ok) {
+          const data = await res.json()
+          setPendingClientsCount(data.count || 0)
+        }
+      } catch (e) {
+        console.error('Error fetching pending clients:', e)
+        setPendingClientsCount(0)
+      }
+    }
+    
+    // Only fetch for users with permission to manage pending clients
+    if (hasPermission('manage_pending_clients')) {
+      fetchPendingClients()
+      const interval = setInterval(fetchPendingClients, 5000) // Refresh every 5 seconds
+      return () => clearInterval(interval)
+    }
+  }, [hasPermission])
+  
+  // Fetch recent bills count
+  useEffect(() => {
+    const fetchRecentBills = async () => {
+      try {
+        const baseUrl = process.env.REACT_APP_API_URL || ''
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+        
+        // Fetch bills created in the last 5 minutes
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+        const fromDate = fiveMinutesAgo.toISOString().split('T')[0]
+        
+        const p = new URLSearchParams()
+        p.append('per_page', '100')
+        p.append('page', '1')
+        p.append('sort', 'created_at')
+        p.append('dir', 'desc')
+        p.append('from', fromDate)
+        
+        const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers })
+        if (res.ok) {
+          const data = await res.json()
+          const bills = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
+          
+          // Filter for truly recent bills (created in last 5 minutes)
+          const now = new Date()
+          const cutoffTime = new Date(now.getTime() - 5 * 60 * 1000)
+          const recent = bills.filter(bill => {
+            const createdAt = new Date(bill.created_at)
+            return createdAt >= cutoffTime
+          })
+          
+          setRecentBillsCount(recent.length)
+        }
+      } catch (e) {
+        console.error('Error fetching recent bills:', e)
+        setRecentBillsCount(0)
+      }
+    }
+    
+    // Only fetch for users with permission to view bills
+    if (hasPermission('view_traites')) {
+      fetchRecentBills()
+      const interval = setInterval(fetchRecentBills, 5000) // Refresh every 5 seconds
+      return () => clearInterval(interval)
+    }
+  }, [hasPermission])
 
   const handleLogout = async () => {
     try {
@@ -114,7 +191,22 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
               <span className="nav-icon">
                 <Briefcase size={16} />
               </span>
-              <span className="nav-text">Gestion Traites</span>
+              <span className="nav-text">
+                Gestion Traites
+                {recentBillsCount > 0 && (
+                  <span className="badge" style={{
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    borderRadius: '9999px',
+                    padding: '2px 6px',
+                    fontSize: '12px',
+                    marginLeft: '8px',
+                    fontWeight: 'bold'
+                  }}>
+                    {recentBillsCount}
+                  </span>
+                )}
+              </span>
             </button>
           </Can>
           <Can permission="view_traites">
@@ -194,7 +286,22 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                     <span className="nav-icon">
                       <Users size={16} />
                     </span>
-                    <span className="nav-text">Clients en attente</span>
+                    <span className="nav-text">
+                      Clients en attente
+                      {pendingClientsCount > 0 && (
+                        <span className="badge" style={{
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          borderRadius: '9999px',
+                          padding: '2px 6px',
+                          fontSize: '12px',
+                          marginLeft: '8px',
+                          fontWeight: 'bold'
+                        }}>
+                          {pendingClientsCount}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 )}
               </div>
