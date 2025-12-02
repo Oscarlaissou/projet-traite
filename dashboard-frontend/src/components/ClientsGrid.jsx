@@ -13,7 +13,7 @@ const Columns = [
   { key: "bp", label: "BP" },
   { key: "ville", label: "Ville" },
   { key: "pays", label: "Pays" },
-  { key: "categorie", label: "Catégorie" },
+  { key: "categorie", label: "Catégorie" }
 ]
 
 const DEFAULT_CATEGORIES = [
@@ -48,7 +48,7 @@ const ClientsGrid = () => {
   const [perPage, setPerPage] = useState(10)
   const [printPerPage] = useState(53) // Nombre d'éléments par page pour l'impression
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
-  const [sort, setSort] = useState({ key: "nom_raison_sociale", dir: "asc" })
+  const [sort, setSort] = useState({ key: "nom_raison_sociale", dir: "asc" }) // Default sort by nom_raison_sociale
   const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) // Plage de pages à imprimer
@@ -671,6 +671,7 @@ const ClientsGrid = () => {
                 {Columns.map((col) => {
                   const isSortable = ["nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
                   const isActive = sort.key === col.key
+                  // Show appropriate arrow based on sort direction
                   const arrow = isActive ? (sort.dir === "asc" ? " ↑" : " ↓") : ""
                   return (
                     <th

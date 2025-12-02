@@ -3,6 +3,7 @@ import { Users, Calendar, Search as SearchIcon, Download } from "lucide-react"
 import Pagination from "./Pagination"
 import "./Traites.css"
 import MonImage from "../images/image6.png"
+import * as XLSX from 'xlsx'
 
 const ClientsHistoriquePage = () => {
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || "", [])
@@ -19,6 +20,43 @@ const ClientsHistoriquePage = () => {
   const [perPage, setPerPage] = useState(6)
   const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440)
   const [globalQuery, setGlobalQuery] = useState("")
+
+  // Fonction pour formater les changements pour l'export
+  const formatChangesForCSV = (changes) => {
+    if (!changes || typeof changes !== 'object') return '';
+    
+    const fieldLabels = {
+      'numero_compte': 'N° compte',
+      'nom_raison_sociale': 'Nom/Raison sociale',
+      'bp': 'BP',
+      'ville': 'Ville',
+      'pays': 'Pays',
+      'adresse_geo_1': 'Adresse 1',
+      'adresse_geo_2': 'Adresse 2',
+      'telephone': 'Téléphone',
+      'email': 'Email',
+      'categorie': 'Catégorie',
+      'n_contribuable': 'N° contribuable',
+      'type_tiers': 'Type',
+      'etablissement': 'Établissement',
+      'service': 'Service',
+      'nom_signataire': 'Signataire',
+      'montant_facture': 'Montant facturé',
+      'montant_paye': 'Montant payé',
+      'credit': 'Crédit',
+      'motif': 'Motif'
+    };
+    
+    const items = [];
+    for (const [key, value] of Object.entries(changes)) {
+      const label = fieldLabels[key] || key;
+      const oldVal = value.old || value.from || 'vide';
+      const newVal = value.new || value.to || 'vide';
+      items.push(`${label}: ${oldVal} -> ${newVal}`);
+    }
+    
+    return items.length > 0 ? items.join(' | ') : '';
+  };
 
   const fetchData = async () => {
     setLoading(true)
@@ -71,63 +109,35 @@ const ClientsHistoriquePage = () => {
       return da - db
     })
     
-    // Fonction pour formater les changements pour CSV
-    const formatChangesForCSV = (changes) => {
-      if (!changes || typeof changes !== 'object') return '';
-      
-      const fieldLabels = {
-        'numero_compte': 'N° compte',
-        'nom_raison_sociale': 'Nom/Raison sociale',
-        'bp': 'BP',
-        'ville': 'Ville',
-        'pays': 'Pays',
-        'adresse_geo_1': 'Adresse 1',
-        'adresse_geo_2': 'Adresse 2',
-        'telephone': 'Téléphone',
-        'email': 'Email',
-        'categorie': 'Catégorie',
-        'n_contribuable': 'N° contribuable',
-        'type_tiers': 'Type',
-        'etablissement': 'Établissement',
-        'service': 'Service',
-        'nom_signataire': 'Signataire',
-        'montant_facture': 'Montant facturé',
-        'montant_paye': 'Montant payé',
-        'credit': 'Crédit',
-        'motif': 'Motif'
-      };
-      
-      const items = [];
-      for (const [key, value] of Object.entries(changes)) {
-        const label = fieldLabels[key] || key;
-        const oldVal = value.old || value.from || 'vide';
-        const newVal = value.new || value.to || 'vide';
-        items.push(`${label}: ${oldVal} -> ${newVal}`);
-      }
-      
-      return items.length > 0 ? items.join(' | ') : '';
-    };
+    // Préparer les données pour Excel
+    const worksheetData = sorted.map(item => ({
+      'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
+      'Nom/Raison sociale': item.nom_raison_sociale || '',
+      'Action': item.action || '',
+      'Utilisateur': item.username + (item.original_creator && item.username !== item.original_creator ? ` (Initialement par: ${item.original_creator})` : ''),
+      'Détails': item.action === 'Modification' ? formatChangesForCSV(item.changes) : ''
+    }));
     
-    const headers = ['Date', 'Nom/Raison sociale', 'Action', 'Utilisateur', 'Détails']
-    const esc = (val) => {
-      const s = val == null ? '' : String(val)
-      return '"' + s.replace(/"/g, '""') + '"'
-    }
-    const csvRows = sorted.map(item => [
-      item.date,
-      item.nom_raison_sociale,
-      item.action,
-      item.username,
-      item.action === 'Modification' ? formatChangesForCSV(item.changes) : ''
-    ].map(esc).join(','))
-    const csv = '\uFEFF' + [headers.join(','), ...csvRows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `historique_clients_${mode}_${new Date().toISOString().slice(0,10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    // Créer la feuille de calcul Excel
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    
+    // Ajuster la largeur des colonnes
+    const colWidths = [
+      { wch: 15 }, // Date
+      { wch: 25 }, // Nom/Raison sociale
+      { wch: 15 }, // Action
+      { wch: 30 }, // Utilisateur
+      { wch: 40 }  // Détails
+    ];
+    worksheet['!cols'] = colWidths;
+    
+    // Créer le classeur Excel
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Historique Clients");
+    
+    // Générer le fichier Excel et le télécharger
+    const fileName = `historique_clients_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   }
 
   const filteredRows = React.useMemo(() => {
@@ -139,7 +149,7 @@ const ClientsHistoriquePage = () => {
         dateStr,
         item.nom_raison_sociale || '',
         item.action || '',
-        item.username || '',
+        (item.username || '') + (item.original_creator && item.username !== item.original_creator ? ` (Initialement par: ${item.original_creator})` : ''),
       ].join(' ')
       return fields.toLowerCase().includes(q)
     })
@@ -210,7 +220,7 @@ const ClientsHistoriquePage = () => {
           </>
         )}
         <button className="submit-button" onClick={fetchData}><SearchIcon size={16} style={{ marginRight: 6 }} /> Rechercher</button>
-        <button className="submit-button" onClick={handleExport} disabled={!rows.length}><Download size={16} style={{ marginRight: 6 }} /> Exporter</button>
+        <button className="submit-button" onClick={handleExport} disabled={!rows.length}><Download size={16} style={{ marginRight: 6 }} /> Exporter Excel</button>
       </div>
       {/* <div style={{ marginBottom: 12 }}>
         <input
@@ -288,7 +298,14 @@ const ClientsHistoriquePage = () => {
                     <td style={{ whiteSpace: 'nowrap' }}>{r.date ? new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''}</td>
                     <td>{r.nom_raison_sociale || ''}</td>
                     <td>{r.action || ''}</td>
-                    <td>{r.username || ''}</td>
+                    <td>
+                      {r.username || ''}
+                      {r.original_creator && r.username !== r.original_creator && (
+                        <div style={{ fontSize: '0.85em', color: '#6b7280', marginTop: '2px' }}>
+                          Initialement par: {r.original_creator}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ fontSize: '0.85em', maxWidth: '300px' }}>
                       {r.action === 'Modification' ? formatChanges(r.changes) : '-'}
                     </td>

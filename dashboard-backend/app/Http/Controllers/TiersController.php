@@ -971,6 +971,13 @@ class TiersController extends Controller
             $action = $act?->action ?? 'Création';
             $user = $act?->user; // peut être null
             $displayUser = $user?->username ?? null;
+            $originalCreator = null;
+            
+            // Vérifier si nous avons des informations sur le créateur original
+            if ($act && $act->changes && isset($act->changes['original_creator']['username'])) {
+                $originalCreator = $act->changes['original_creator']['username'];
+            }
+            
             // La date est toujours celle de l'activité (obligatoire maintenant)
             $date = $act && $act->created_at ? $act->created_at->toDateTimeString() : now()->toDateTimeString();
             
@@ -982,6 +989,7 @@ class TiersController extends Controller
                 'nom_raison_sociale' => $t->nom_raison_sociale,
                 'action' => $action,
                 'username' => $displayUser,
+                'original_creator' => $originalCreator,
                 'changes' => $changes, // Ajout des changements
             ];
         })

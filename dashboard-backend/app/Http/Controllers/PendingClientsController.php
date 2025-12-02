@@ -161,6 +161,31 @@ class PendingClientsController extends Controller
                     }
                 }
 
+                // Enregistrer l'activité de création avec les informations de l'utilisateur d'origine
+                try {
+                    $originalCreator = $pendingClient->createdBy;
+                    $originalUsername = $originalCreator ? ($originalCreator->username ?? $originalCreator->name ?? $originalCreator->email ?? 'Utilisateur') : null;
+                    $approvingUser = \Illuminate\Support\Facades\Auth::user();
+                    
+                    $changes = null;
+                    if ($originalUsername) {
+                        $changes = [
+                            'original_creator' => [
+                                'username' => $originalUsername
+                            ]
+                        ];
+                    }
+                    
+                    \App\Models\TierActivity::create([
+                        'tier_id' => $newTier->id,
+                        'user_id' => optional($approvingUser)->id,
+                        'action' => 'Création',
+                        'changes' => $changes,
+                    ]);
+                } catch (\Throwable $e) {
+                    // ignore logging failures
+                }
+
                 // Supprimer le client en attente
                 $pendingClient->delete();
 
