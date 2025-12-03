@@ -1,21 +1,18 @@
 import React, { useState } from "react"
 import "./Header.css"
-import { Search, ChevronDown } from "lucide-react"
+import { Search } from "lucide-react"
 import NotificationsMenu from "./NotificationsMenu"
 import NotificationsBanner from "./NotificationsBanner"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "../hooks/useAuth" // Import useAuth hook
 
 const Header = () => {
   const navigate = useNavigate()
+  const { user } = useAuth() // Get user from auth context
   const [q, setQ] = useState("")
   
-  const authHeaders = () => {
-    const token = localStorage.getItem("token")
-    const headers = { Accept: "application/json" }
-    if (token) headers.Authorization = `Bearer ${token}`
-    return headers
-  }
-
+  console.log('Header - user:', user)
+  
   const handleSubmit = (e) => {
     e.preventDefault(); // Empêcher le rechargement de la page
     runSearch();
@@ -99,10 +96,10 @@ const Header = () => {
         <NotificationsMenu />
         <div className="user-profile">
           <div className="user-avatar">
-            <img src="/logo512.png" alt="User Avatar" />
+            <img src="/person.png" alt="User Avatar" />
           </div>
-          <span className="user-name">Aiden Max</span>
-          <ChevronDown className="dropdown-arrow" size={12} />
+          <span className="user-name">Bienvenue, {user?.username || 'Utilisateur'}</span>
+          
         </div>
       </div>
     </header>

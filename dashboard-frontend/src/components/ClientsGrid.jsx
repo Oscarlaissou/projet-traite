@@ -48,7 +48,7 @@ const ClientsGrid = () => {
   const [perPage, setPerPage] = useState(10)
   const [printPerPage] = useState(53) // Nombre d'éléments par page pour l'impression
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
-  const [sort, setSort] = useState({ key: "nom_raison_sociale", dir: "asc" }) // Default sort by nom_raison_sociale
+  const [sort, setSort] = useState({ key: "created_at", dir: "desc" }) // Default sort by created_at descending
   const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) // Plage de pages à imprimer
@@ -78,6 +78,7 @@ const ClientsGrid = () => {
   }
 
   const fetchClients = async () => {
+    console.log('Fetching clients with sort:', sort);
     setLoading(true)
     setError("")
     try {
@@ -87,10 +88,18 @@ const ClientsGrid = () => {
       if (sort?.dir) params.append("dir", sort.dir)
       params.append("page", String(page))
       params.append("per_page", String(perPage))
+      // Send the correct parameter based on what we're filtering by
       if (selectedCategory) {
-        params.append("categorie[]", selectedCategory)
+        // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
+        if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+          params.append("type_tiers", selectedCategory)
+        } else {
+          params.append("categorie", selectedCategory)
+        }
       }
 
+      console.log('Request URL:', `${baseUrl}/api/tiers?${params.toString()}`);
+      
       const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
         headers: authHeaders(),
       })
@@ -100,6 +109,7 @@ const ClientsGrid = () => {
       }
 
       const payload = await response.json()
+      console.log('Response data:', payload);
       const data = payload?.data ?? []
 
       setItems(Array.isArray(data) ? data : [])
@@ -125,8 +135,14 @@ const ClientsGrid = () => {
       if (sort?.key) params.append("sort", sort.key)
       if (sort?.dir) params.append("dir", sort.dir)
       params.append("per_page", "1000")
+      // Send the correct parameter based on what we're filtering by
       if (selectedCategory) {
-        params.append("categorie[]", selectedCategory)
+        // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
+        if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+          params.append("type_tiers", selectedCategory)
+        } else {
+          params.append("categorie", selectedCategory)
+        }
       }
 
       const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
@@ -169,8 +185,14 @@ const ClientsGrid = () => {
       if (sort?.key) params.append("sort", sort.key)
       if (sort?.dir) params.append("dir", sort.dir)
       params.append("per_page", "1000")
+      // Send the correct parameter based on what we're filtering by
       if (selectedCategory) {
-        params.append("categorie[]", selectedCategory)
+        // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
+        if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+          params.append("type_tiers", selectedCategory)
+        } else {
+          params.append("categorie", selectedCategory)
+        }
       }
 
       const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
@@ -236,8 +258,14 @@ const ClientsGrid = () => {
         if (sort?.dir) params.append("dir", sort.dir)
         params.append("page", String(pageNum))
         params.append("per_page", String(printPerPage))
+        // Send the correct parameter based on what we're filtering by
         if (selectedCategory) {
-          params.append("categorie[]", selectedCategory)
+          // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
+          if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+            params.append("type_tiers", selectedCategory)
+          } else {
+            params.append("categorie", selectedCategory)
+          }
         }
         
         const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
@@ -542,10 +570,28 @@ const ClientsGrid = () => {
   const handleHeaderSort = (key) => {
     setPage(1)
     setSort((current) => {
-      if (current.key === key) {
-        return { key, dir: current.dir === "asc" ? "desc" : "asc" }
-      }
-      return { key, dir: "asc" }
+   // Si on clique sur nom ou raison_sociale, on trie toujours par ID
+if (key === "nom_raison_sociale") {
+  return { 
+    key: "id", 
+    dir: current.key === "id" && current.dir === "asc" ? "desc" : "asc" 
+  }
+}
+
+// Si on clique sur la colonne ID, on trie par ID
+if (key === "id") {
+  return { 
+    key: "id", 
+    dir: current.key === "id" && current.dir === "desc" ? "asc" : "desc" 
+  }
+}
+
+// Pour toutes les autres colonnes, on trie par cette colonne
+if (current.key === key) {
+  return { key, dir: current.dir === "asc" ? "desc" : "asc" }
+}
+
+return { key, dir: "asc" }
     })
   }
 
@@ -553,7 +599,7 @@ const ClientsGrid = () => {
     setSearch("")
     setAppliedSearch("")
     setSelectedCategory("")
-    setSort({ key: "nom_raison_sociale", dir: "asc" })
+    setSort({ key: "created_at", dir: "desc" })
     setPage(1)
   }
 
@@ -567,7 +613,9 @@ const ClientsGrid = () => {
     const params = new URLSearchParams(location.search)
     const tab = params.get('tab')
     const view = params.get('view')
-    if (tab === 'traites' && view === 'Clients') {
+    
+    // Handle search parameter for both 'traites' and 'credit' tabs
+    if ((tab === 'traites' && view === 'Clients') || (tab === 'credit' && view === 'GestionClients')) {
       const urlSearch = params.get('search') || ''
       if (urlSearch && urlSearch !== search) {
         setSearch(urlSearch)
@@ -575,6 +623,21 @@ const ClientsGrid = () => {
         setPage(1)
       }
     }
+    
+    // Handle category parameter (for dashboard statistics chart navigation)
+    const urlCategory = params.get('categorie')
+    if (urlCategory && urlCategory !== selectedCategory) {
+      setSelectedCategory(urlCategory)
+      setPage(1)
+    }
+    
+    // Handle type_tiers parameter (for dashboard statistics chart navigation by type)
+    const urlTypeTiers = params.get('type_tiers')
+    if (urlTypeTiers && urlTypeTiers !== selectedCategory) {
+      setSelectedCategory(urlTypeTiers)
+      setPage(1)
+    }
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search])
 
@@ -669,8 +732,9 @@ const ClientsGrid = () => {
             <thead>
               <tr>
                 {Columns.map((col) => {
-                  const isSortable = ["nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
-                  const isActive = sort.key === col.key
+                  const isSortable = ["id", "nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
+                  // Show arrow on nom_raison_sociale when sorting by ID
+                  const isActive = sort.key === col.key || (sort.key === "id" && col.key === "nom_raison_sociale")
                   // Show appropriate arrow based on sort direction
                   const arrow = isActive ? (sort.dir === "asc" ? " ↑" : " ↓") : ""
                   return (

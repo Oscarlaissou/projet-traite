@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { Bell, AlertTriangle, Clock, Users, FileText } from "lucide-react"
+import { Bell, AlertTriangle, Clock } from "lucide-react"
 import { useLocation, useNavigate } from "react-router-dom"
 
 const NotificationsMenu = () => {
@@ -9,9 +9,8 @@ const NotificationsMenu = () => {
   const [error, setError] = useState("")
   const [items, setItems] = useState([])
   const [todayItems, setTodayItems] = useState([])
+  const [pendingClients, setPendingClients] = useState([]) // Add pending clients state
   const [count, setCount] = useState(0)
-  const [pendingClientsCount, setPendingClientsCount] = useState(0)
-  const [recentBills, setRecentBills] = useState([])
   const menuRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -159,7 +158,18 @@ const NotificationsMenu = () => {
         return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
       })()
 
-      const [rowsTodayRaw, upcomingRows] = await Promise.all([p1, p2])
+      // 3) Fetch pending clients data
+      const p3 = (async () => {
+        const res = await fetch(`${baseUrl}/api/pending-clients`, { headers: authHeaders() })
+        if (!res.ok) return []
+        const data = await res.json()
+        return Array.isArray(data?.data) ? data.data : []
+      })()
+
+      const [rowsTodayRaw, upcomingRows, pendingClients] = await Promise.all([p1, p2, p3])
+      console.log('NotificationsMenu - today data:', rowsTodayRaw.length, 'items')
+      console.log('NotificationsMenu - upcoming data:', upcomingRows.length, 'items')
+      console.log('NotificationsMenu - pending clients data:', pendingClients.length, 'items')
 
       // Construire sections pour à venir avec l'existant
       const { mapped } = computeNotifications(upcomingRows)
@@ -177,77 +187,33 @@ const NotificationsMenu = () => {
         items: sec.items.filter(it => !dismissed.has(it.id))
       }))
       const filteredToday = rowsTodayRaw.filter(it => notPaid(it.statut) && !dismissed.has(it.id))
+      console.log('NotificationsMenu - filtered today data:', filteredToday.length, 'items')
+      console.log('NotificationsMenu - filtered sections data:', filteredSections)
+
+      // Store pending clients for display
+      setPendingClients(pendingClients)
 
       // Mettre à jour état et badge
       setItems(filteredSections)
       setTodayItems(filteredToday)
-      const newCount = filteredSections.reduce((acc, sec) => acc + sec.items.length, 0) + filteredToday.length
+      const newCount = filteredSections.reduce((acc, sec) => acc + sec.items.length, 0) + filteredToday.length + pendingClients.length
+      console.log('NotificationsMenu - total count:', newCount)
       setCount(newCount)
     } catch (e) {
+      console.error('NotificationsMenu - error:', e)
       setError(e.message || 'Erreur inconnue')
       setItems([])
       setTodayItems([])
+      setPendingClients([])
       setCount(0)
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchPendingClients = async () => {
-    try {
-      const res = await fetch(`${baseUrl}/api/pending-clients`, { headers: authHeaders() })
-      if (!res.ok) throw new Error('Erreur chargement (clients en attente)')
-      const data = await res.json()
-      const clientCount = data?.count || 0
-      setPendingClientsCount(clientCount)
-    } catch (e) {
-      console.error('Erreur chargement clients en attente:', e.message || 'Erreur inconnue')
-      setPendingClientsCount(0)
-    }
-  }
-
-  const fetchRecentBills = async () => {
-    try {
-      // Fetch bills created in the last 5 minutes
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
-      const fromDate = fiveMinutesAgo.toISOString().split('T')[0]
-      
-      const p = new URLSearchParams()
-      p.append('per_page', '100')
-      p.append('page', '1')
-      p.append('sort', 'created_at')
-      p.append('dir', 'desc')
-      p.append('from', fromDate)
-      
-      const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
-      if (!res.ok) throw new Error('Erreur chargement (traites récentes)')
-      const data = await res.json()
-      const bills = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
-      
-      // Filter for truly recent bills (created in last 5 minutes)
-      const now = new Date()
-      const cutoffTime = new Date(now.getTime() - 5 * 60 * 1000)
-      const recent = bills.filter(bill => {
-        const createdAt = new Date(bill.created_at)
-        return createdAt >= cutoffTime
-      })
-      
-      setRecentBills(recent)
-    } catch (e) {
-      console.error('Erreur chargement traites récentes:', e.message || 'Erreur inconnue')
-      setRecentBills([])
-    }
-  }
-
   useEffect(() => {
     fetchData()
-    fetchPendingClients()
-    fetchRecentBills()
-    const id = setInterval(() => {
-      fetchData()
-      fetchPendingClients()
-      fetchRecentBills()
-    }, 5000) // refresh chaque 5s
+    const id = setInterval(fetchData, 5000) // refresh chaque 5s
     return () => clearInterval(id)
   }, [])
 
@@ -279,14 +245,6 @@ const NotificationsMenu = () => {
       setOpen(true)
     }
   }, [location.search])
-
-  // Compter le nombre total de notifications
-  useEffect(() => {
-    const todayCount = todayItems.length
-    const otherCount = items.reduce((sum, section) => sum + section.items.length, 0)
-    const recentBillsCount = recentBills.length
-    setCount(todayCount + otherCount + pendingClientsCount + recentBillsCount)
-  }, [todayItems, items, pendingClientsCount, recentBills])
 
   // Fermer au clic extérieur
   useEffect(() => {
@@ -326,6 +284,28 @@ const NotificationsMenu = () => {
       {open && (
         <div className="notif-menu">
           <div className="notif-header">Notifications</div>
+          {pendingClients.length > 0 && (
+            <div className="notif-pending-clients" style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}>
+              <div className="notif-section-title" style={{ fontWeight: 600, color: '#f59e0b', marginBottom: 8 }}>
+                Clients en attente
+              </div>
+              <div 
+                className="notif-item" 
+                onClick={() => {
+                  setOpen(false);
+                  navigate('/dashboard?tab=credit&view=PendingClients');
+                }} 
+                style={{ cursor: 'pointer', padding: '8px', backgroundColor: '#fff7ed', borderRadius: 4, marginBottom: 8 }}
+              >
+                <div className="notif-item-label" style={{ fontWeight: 600, color: '#92400e' }}>
+                  {pendingClients.length} client{pendingClients.length > 1 ? 's' : ''} en attente d'approbation
+                </div>
+                <div className="notif-item-sub" style={{ color: '#b45309', fontSize: '0.875rem' }}>
+                  Cliquez pour consulter
+                </div>
+              </div>
+            </div>
+          )}
           {todayItems.length > 0 && (
             <div className="notif-today-cards" style={{ padding: 8 }}>
               {todayItems.map(it => (
@@ -338,7 +318,7 @@ const NotificationsMenu = () => {
           )}
           {loading && <div className="notif-empty">Chargement...</div>}
           {error && <div className="notif-error">{error}</div>}
-          {!loading && !error && items.length === 0 && (
+          {!loading && !error && items.length === 0 && pendingClients.length === 0 && todayItems.length === 0 && (
             <div className="notif-empty">Aucune notification</div>
           )}
           {!loading && !error && items.map(section => (
@@ -354,30 +334,6 @@ const NotificationsMenu = () => {
               </ul>
             </div>
           ))}
-          {recentBills.length > 0 && (
-            <div className="notif-section">
-              <div className="notif-section-title"><FileText size={16} /> <span style={{ marginLeft: 6 }}>Nouvelles traites</span></div>
-              <ul className="notif-list">
-                {recentBills.map(bill => (
-                  <li key={bill.id} className="notif-item" onClick={() => { setOpen(false); navigate(`/traites/${bill.id}`); }} style={{ cursor: 'pointer' }}>
-                    <div className="notif-item-label">{bill.numero} • {bill.nom_raison_sociale}</div>
-                    <div className="notif-item-sub">Traite créée récemment</div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {pendingClientsCount > 0 && (
-            <div className="notif-section">
-              <div className="notif-section-title"><Users size={16} /> <span style={{ marginLeft: 6 }}>Clients en attente</span></div>
-              <ul className="notif-list">
-                <li className="notif-item" onClick={() => { setOpen(false); navigate('/dashboard?tab=credit&view=PendingClients'); }} style={{ cursor: 'pointer' }}>
-                  <div className="notif-item-label">{pendingClientsCount} nouveau(x) client(s) en attente</div>
-                  <div className="notif-item-sub">Cliquez pour voir les détails</div>
-                </li>
-              </ul>
-            </div>
-          )}
         </div>
       )}
     </div>

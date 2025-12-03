@@ -267,6 +267,7 @@ const DashboardStats = () => {
             return createdAt >= cutoffTime
           })
           
+          console.log('Recent bills count:', recent.length)
           setRecentBillsCount(recent.length)
         }
       } catch (e) {
@@ -282,8 +283,8 @@ const DashboardStats = () => {
     }
     
     return () => { isMounted = false }
-  }, [hasPermission])
-
+  }, [hasPermission, shouldShowDashboardStats])
+  
   // --- DONNÉES DES CARTES ---
   const traiteCardsData = [
     { icon: FileText, title: "Traites totales", value: traiteStats.total, color: "#3B82F6", bgColor: "#EFF6FF", permission: "view_traites", onClick: () => navigate('/dashboard?tab=traites') },
