@@ -8,10 +8,13 @@ import { useAuth } from "../hooks/useAuth" // Import useAuth hook
 
 const Header = () => {
   const navigate = useNavigate()
-  const { user } = useAuth() // Get user from auth context
+  const { user, hasPermission } = useAuth() // Get user and permissions from auth context
   const [q, setQ] = useState("")
   
   console.log('Header - user:', user)
+  
+  // Only show NotificationsBanner to users who can manage pending clients
+  const canManagePendingClients = hasPermission('manage_pending_clients');
   
   const handleSubmit = (e) => {
     e.preventDefault(); // Empêcher le rechargement de la page
@@ -60,7 +63,7 @@ const Header = () => {
   }
   return (
     <header className="header">
-      <NotificationsBanner />
+      {canManagePendingClients && <NotificationsBanner />}
       <div className="header-left">
         <h1 className="page-title">Dashboard</h1>
       </div>

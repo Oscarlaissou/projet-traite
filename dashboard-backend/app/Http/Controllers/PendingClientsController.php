@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\PendingClient;
 use App\Models\Tier;
+use App\Models\User;
+use App\Notifications\ClientApprovedNotification;
+use App\Notifications\ClientRejectedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +40,10 @@ class PendingClientsController extends Controller
                 'nullable',
                 'string',
                 'max:100',
+                // Vérifier que le numéro de compte n'existe pas déjà dans les tiers existants
+                Rule::unique('tiers', 'numero_compte'),
+                // Vérifier que le numéro de compte n'existe pas déjà dans les clients en attente
+                Rule::unique('pending_clients', 'numero_compte')
             ],
             'nom_raison_sociale' => ['required', 'string', 'max:255'],
             'bp' => ['nullable', 'string', 'max:255'],
@@ -112,6 +119,13 @@ class PendingClientsController extends Controller
     public function approve(PendingClient $pendingClient)
     {
         try {
+            // Vérifier si un client avec le même numéro de compte existe déjà
+            if ($pendingClient->numero_compte && Tier::where('numero_compte', $pendingClient->numero_compte)->exists()) {
+                return response()->json([
+                    'message' => 'Un client avec ce numéro de compte existe déjà.',
+                ], 400);
+            }
+
             // Utilisation d'une transaction pour garantir que les deux opérations réussissent ou échouent ensemble.
             $tier = DB::transaction(function () use ($pendingClient) {
                 // 1. Préparer les données pour la création du Tiers.
@@ -186,20 +200,183 @@ class PendingClientsController extends Controller
                     // ignore logging failures
                 }
 
+                // Envoyer une notification à l'utilisateur qui a créé le client en attente
+                // Ne pas envoyer de notification à l'utilisateur qui approuve le client
+                if ($pendingClient->created_by && $pendingClient->created_by != Auth::id()) {
+                    $creator = User::find($pendingClient->created_by);
+                    if ($creator) {
+                        $creator->notify(new ClientApprovedNotification(
+                            $pendingClient->nom_raison_sociale,
+                            $pendingClient->numero_compte
+                        ));
+                    }
+                }
+
                 // Supprimer le client en attente
                 $pendingClient->delete();
 
                 return $newTier;
             });
 
+            // Broadcast event to update pending clients count
+            broadcast(new \App\Events\PendingClientsCountUpdated());
+
             // Si la transaction a réussi, renvoyer le Tiers avec un statut 201 Created.
             return response()->json($tier, 201, [], JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
             // Si une erreur survient (validation, contrainte BDD, etc.), la transaction est annulée.
             // On renvoie un message d'erreur clair au front-end.
+            \Log::error('Error approving pending client: ' . $e->getMessage(), [
+                'exception' => $e,
+                'pending_client_id' => $pendingClient->id,
+                'pending_client_data' => $pendingClient->toArray()
+            ]);
+            
             return response()->json([
                 'message' => 'Une erreur est survenue lors de l\'approbation du client.',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Reject a pending client and notify the creator.
+     */
+    public function reject(PendingClient $pendingClient, Request $request)
+    {
+        // Validate that the pending client exists
+        if (!$pendingClient || !$pendingClient->exists) {
+            \Log::error('Pending client not found', [
+                'pending_client_id' => $request->route('pendingClient')
+            ]);
+            
+            return response()->json([
+                'message' => 'Client en attente non trouvé.'
+            ], 404);
+        }
+        
+        // Validate user authentication
+        $user = Auth::user();
+        if (!$user) {
+            \Log::error('User not authenticated when trying to reject pending client', [
+                'pending_client_id' => $pendingClient->id
+            ]);
+            
+            return response()->json([
+                'message' => 'Utilisateur non authentifié.'
+            ], 401);
+        }
+        
+        // Validate user permissions
+        if (!$user->hasPermission('manage_pending_clients')) {
+            \Log::error('User does not have permission to reject pending clients', [
+                'user_id' => $user->id,
+                'pending_client_id' => $pendingClient->id
+            ]);
+            
+            return response()->json([
+                'message' => 'Permission refusée.'
+            ], 403);
+        }
+        
+        try {
+            \Log::info('Starting client rejection process', [
+                'pending_client_id' => $pendingClient->id,
+                'pending_client_name' => $pendingClient->nom_raison_sociale,
+                'created_by' => $pendingClient->created_by,
+                'current_user_id' => Auth::id()
+            ]);
+            
+            $validated = $request->validate([
+                'reason' => ['nullable', 'string', 'max:1000']
+            ]);
+
+            $reason = $validated['reason'] ?? null;
+            $clientName = $pendingClient->nom_raison_sociale;
+
+            // Envoyer une notification à l'utilisateur qui a créé le client en attente
+            // Ne pas envoyer de notification à l'utilisateur qui rejette le client
+            if ($pendingClient->created_by && $pendingClient->created_by != Auth::id()) {
+                \Log::info('Sending rejection notification to creator', [
+                    'creator_id' => $pendingClient->created_by
+                ]);
+                try {
+                    $creator = User::find($pendingClient->created_by);
+                    if ($creator) {
+                        $creator->notify(new ClientRejectedNotification($clientName, $reason));
+                        \Log::info('Rejection notification sent successfully');
+                    } else {
+                        \Log::warning('Creator not found for notification', [
+                            'creator_id' => $pendingClient->created_by
+                        ]);
+                    }
+                } catch (\Exception $notificationError) {
+                    \Log::error('Error sending rejection notification: ' . $notificationError->getMessage(), [
+                        'exception' => $notificationError,
+                        'pending_client_id' => $pendingClient->id,
+                        'creator_id' => $pendingClient->created_by
+                    ]);
+                    // Continue with the process even if notification fails
+                }
+            } else {
+                \Log::info('Skipping notification - same user or no creator', [
+                    'created_by' => $pendingClient->created_by,
+                    'current_user_id' => Auth::id()
+                ]);
+            }
+
+            // Supprimer le client en attente
+            \Log::info('Deleting pending client', [
+                'pending_client_id' => $pendingClient->id
+            ]);
+            
+            try {
+                $pendingClient->delete();
+                \Log::info('Pending client deleted successfully', [
+                    'pending_client_id' => $pendingClient->id
+                ]);
+            } catch (\Exception $deleteError) {
+                \Log::error('Error deleting pending client: ' . $deleteError->getMessage(), [
+                    'exception' => $deleteError,
+                    'pending_client_id' => $pendingClient->id
+                ]);
+                throw new \Exception('Failed to delete pending client: ' . $deleteError->getMessage());
+            }
+
+            // Broadcast event to update pending clients count
+            \Log::info('Broadcasting pending clients count update');
+            try {
+                broadcast(new \App\Events\PendingClientsCountUpdated());
+                \Log::info('Pending clients count update broadcasted successfully');
+            } catch (\Exception $broadcastError) {
+                \Log::error('Error broadcasting pending clients count update: ' . $broadcastError->getMessage(), [
+                    'exception' => $broadcastError
+                ]);
+                // Continue with the process even if broadcast fails
+            }
+
+            \Log::info('Client rejection completed successfully', [
+                'pending_client_id' => $pendingClient->id
+            ]);
+            
+            return response()->json([
+                'message' => 'Client en attente rejeté avec succès.'
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            \Log::error('Error rejecting pending client: ' . $e->getMessage(), [
+                'exception' => $e,
+                'pending_client_id' => $pendingClient->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Une erreur est survenue lors du rejet du client en attente.',
+                'error' => $e->getMessage(),
+                'details' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                ] : null
             ], 500);
         }
     }

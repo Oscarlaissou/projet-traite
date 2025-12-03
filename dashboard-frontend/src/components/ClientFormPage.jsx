@@ -239,8 +239,14 @@ const ClientFormPage = () => {
           body: JSON.stringify(payload),
         })
         if (!res.ok) {
-          const msg = await res.text()
-          throw new Error(msg || "Échec de la création du client en attente")
+          const errorData = await res.json()
+          // Check if it's a duplicate account number error
+          if (errorData.message && errorData.message.includes('numero_compte')) {
+            throw new Error("Un client avec ce numéro de compte existe déjà.")
+          } else {
+            const msg = errorData.message || "Échec de la création du client en attente"
+            throw new Error(msg)
+          }
         }
         // Redirection: en création -> grille clients
         navigate("/dashboard?tab=credit&view=GestionClients")
@@ -252,7 +258,6 @@ const ClientFormPage = () => {
     }
   }
 
-  // DÉBUT DES AJOUTS
   const formatNumber = (value) => {
     if (!value) return ""
     const stringValue = String(value).replace(/\s/g, "")
@@ -265,7 +270,6 @@ const ClientFormPage = () => {
       setter(value)
     }
   }
-  // FIN DES AJOUTS
 
   return (
     <div className="dashboard-stats">

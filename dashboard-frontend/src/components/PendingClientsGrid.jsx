@@ -6,6 +6,89 @@ import "./ClientsGrid.css"
 import { useAuth } from "../hooks/useAuth" // Importer le hook d'authentification
 import Pagination from "./Pagination" // Importer le composant Pagination
 
+// Composant personnalisé pour le popup de rejet
+const RejectModal = ({ isOpen, onClose, onConfirm, clientName }) => {
+  const [reason, setReason] = useState("")
+  
+  if (!isOpen) return null
+  
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    }}>
+      <div style={{
+        backgroundColor: 'white',
+        padding: '24px',
+        borderRadius: '8px',
+        maxWidth: '500px',
+        width: '90%',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+      }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
+          Rejeter le client "{clientName}"
+        </h3>
+        <p style={{ margin: '0 0 16px 0', color: '#6b7280' }}>
+          Veuillez indiquer la raison du rejet (optionnel):
+        </p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Entrez la raison du rejet..."
+          style={{
+            width: '100%',
+            minHeight: '100px',
+            padding: '12px',
+            borderRadius: '6px',
+            border: '1px solid #d1d5db',
+            fontSize: '14px',
+            marginBottom: '20px',
+            resize: 'vertical'
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#9ca3af',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => onConfirm(reason)}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            Rejeter
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const PendingClientsGrid = () => {
   const [pendingClients, setPendingClients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -13,6 +96,8 @@ const PendingClientsGrid = () => {
   const [selectedClient, setSelectedClient] = useState(null)
   const [page, setPage] = useState(1) // Ajout de l'état pour la pagination
   const [perPage, setPerPage] = useState(10) // Ajout de l'état pour les éléments par page
+  const [showRejectModal, setShowRejectModal] = useState(false) // État pour le modal de rejet
+  const [clientToReject, setClientToReject] = useState(null) // Client à rejeter
   const navigate = useNavigate()
   const { hasPermission } = useAuth() // Utiliser le hook d'authentification
   
@@ -56,7 +141,7 @@ const PendingClientsGrid = () => {
     } else {
       setLoading(false)
     }
-  }, [canManagePendingClients])
+  }, [canManagePendingClients, page, perPage])
 
   const handleApprove = async (clientId) => {
     try {
@@ -75,39 +160,74 @@ const PendingClientsGrid = () => {
         // Refresh the list
         fetchPendingClients()
         setSelectedClient(null)
+        // Trigger a custom event to update the pending clients count in other components
+        window.dispatchEvent(new Event('pendingClientsCountChanged'))
       } else {
         const errorData = await res.json()
-        throw new Error(errorData.message || "Erreur lors de l'approbation du client")
+        if (res.status === 400) {
+          // Client already exists
+          throw new Error(errorData.message || "Ce client existe déjà dans le système.")
+        } else {
+          throw new Error(errorData.message || "Erreur lors de l'approbation du client")
+        }
       }
     } catch (err) {
       setError(err.message || "Erreur inconnue")
     }
   }
 
-  const handleReject = async (clientId) => {
+  // Fonction pour ouvrir le modal de rejet
+  const openRejectModal = (client) => {
+    setClientToReject(client)
+    setShowRejectModal(true)
+  }
+
+  // Fonction pour fermer le modal de rejet
+  const closeRejectModal = () => {
+    setShowRejectModal(false)
+    setClientToReject(null)
+  }
+
+  // Fonction pour confirmer le rejet
+  const confirmReject = async (reason) => {
+    if (!clientToReject) return
+    
     try {
       const token = localStorage.getItem("token")
       const headers = { 
         "Accept": "application/json",
-        "Authorization": `Bearer ${token}`
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
       }
       
-      const res = await fetch(`${baseUrl}/api/pending-clients/${clientId}`, {
-        method: "DELETE",
-        headers
+      const res = await fetch(`${baseUrl}/api/pending-clients/${clientToReject.id}/reject`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ reason: reason || null })
       })
+      
+      console.log('Reject response:', res.status, res.statusText);
       
       if (res.ok) {
         // Refresh the list
         fetchPendingClients()
         setSelectedClient(null)
+        // Trigger a custom event to update the pending clients count in other components
+        window.dispatchEvent(new Event('pendingClientsCountChanged'))
+        closeRejectModal()
       } else {
-        const errorData = await res.json()
-        throw new Error(errorData.message || "Erreur lors du rejet du client")
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Reject error response:', errorData);
+        throw new Error(errorData.message || `Erreur lors du rejet du client (HTTP ${res.status})`)
       }
     } catch (err) {
       setError(err.message || "Erreur inconnue")
+      closeRejectModal()
     }
+  }
+
+  const handleReject = (client) => {
+    openRejectModal(client)
   }
 
   // Si l'utilisateur n'a pas la permission, afficher un message
@@ -149,6 +269,14 @@ const PendingClientsGrid = () => {
   return (
     <div className="dashboard-stats">
       <h2 className="stats-title">Clients en attente d'approbation</h2>
+      
+      {/* Modal de rejet */}
+      <RejectModal 
+        isOpen={showRejectModal}
+        onClose={closeRejectModal}
+        onConfirm={confirmReject}
+        clientName={clientToReject?.nom_raison_sociale || ''}
+      />
       
       {selectedClient ? (
         <div className="client-detail-container">
@@ -275,7 +403,7 @@ const PendingClientsGrid = () => {
                 <button 
                   className="submit-button" 
                   style={{ backgroundColor: "#EF4444" }}
-                  onClick={() => handleReject(selectedClient.id)}
+                  onClick={() => handleReject(selectedClient)}
                 >
                   <XCircle size={16} style={{ marginRight: 8 }} />
                   Rejeter

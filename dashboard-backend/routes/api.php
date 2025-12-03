@@ -46,6 +46,12 @@ Route::prefix('users')->group(function () {
     Route::put('/{id}/permissions', [UserController::class, 'updateUserPermissions'])->middleware('auth:sanctum');
 });
 
+// User notifications routes
+Route::prefix('user')->group(function () {
+    Route::get('/notifications', [UserController::class, 'getNotifications'])->middleware('auth:sanctum');
+    Route::post('/notifications/{id}/read', [UserController::class, 'markNotificationAsRead'])->middleware('auth:sanctum');
+});
+
 // Permissions routes
 Route::get('/permissions', [UserController::class, 'getPermissions'])->middleware('auth:sanctum');
 
@@ -114,4 +120,5 @@ Route::prefix('pending-clients')->group(function () {
     Route::get('/{pendingClient}', [PendingClientsController::class, 'show'])->middleware('auth:sanctum');
     Route::delete('/{pendingClient}', [PendingClientsController::class, 'destroy'])->middleware('auth:sanctum');
     Route::post('/{pendingClient}/approve', [PendingClientsController::class, 'approve'])->middleware('auth:sanctum');
+    Route::post('/{pendingClient}/reject', [PendingClientsController::class, 'reject'])->middleware('auth:sanctum');
 });

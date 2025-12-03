@@ -1,5 +1,5 @@
 "use client"
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import "./Sidebar.css"
 import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit, History, ChevronLeft, ChevronRight, Plus } from "lucide-react"
@@ -17,6 +17,70 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
       return false
     }
   })
+  const [pendingClientsCount, setPendingClientsCount] = useState(0) // State for pending clients count
+  const [loadingPendingClients, setLoadingPendingClients] = useState(false) // Loading state
+
+  // Fetch pending clients count
+  const fetchPendingClientsCount = async () => {
+    // Only fetch if user has permission to manage pending clients
+    if (!hasPermission('manage_pending_clients')) {
+      setPendingClientsCount(0)
+      return
+    }
+    
+    setLoadingPendingClients(true)
+    try {
+      const baseUrl = process.env.REACT_APP_API_URL || ''
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+
+      const res = await fetch(`${baseUrl}/api/pending-clients`, { headers })
+      
+      if (res.ok) {
+        const data = await res.json()
+        const count = Array.isArray(data?.data) ? data.data.length : 0
+        setPendingClientsCount(count)
+      } else {
+        setPendingClientsCount(0)
+      }
+    } catch (e) {
+      console.error('Error fetching pending clients count:', e)
+      setPendingClientsCount(0)
+    } finally {
+      setLoadingPendingClients(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchPendingClientsCount()
+    
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchPendingClientsCount, 5000)
+    return () => clearInterval(interval)
+  }, [hasPermission])
+
+  // Listen for WebSocket events to update pending clients count
+  useEffect(() => {
+    // Only listen for events if user has permission to manage pending clients
+    if (!hasPermission('manage_pending_clients')) {
+      return
+    }
+
+    // Listen for custom event when pending clients count changes
+    const handlePendingClientsCountChange = () => {
+      fetchPendingClientsCount()
+    }
+    
+    window.addEventListener('pendingClientsCountChanged', handlePendingClientsCountChange)
+    
+    // Create a polling mechanism as fallback
+    const interval = setInterval(fetchPendingClientsCount, 5000)
+    
+    return () => {
+      window.removeEventListener('pendingClientsCountChanged', handlePendingClientsCountChange)
+      clearInterval(interval)
+    }
+  }, [hasPermission])
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -194,36 +258,41 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                     <span className="nav-icon">
                       <Users size={16} />
                     </span>
-                    <span className="nav-text">Clients en attente</span>
+                    <span className="nav-text">
+                      Clients en attente
+                      {pendingClientsCount > 0 && (
+                        <span className="pending-count-badge">
+                          {loadingPendingClients ? '...' : pendingClientsCount}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 )}
               </div>
             )}
           </Can>
         </div>
+
+
       </nav>
 
       <div className="sidebar-footer">
-        {/* Only show settings button if user has manage_company_info or manage_users permission */}
+        {/* Show settings button if user has manage_company_info or manage_users permission */}
         {(hasPermission('manage_company_info') || hasPermission('manage_users')) && (
-          <button 
-            className={`nav-item ${activeMenuItem === "Paramètres" ? "active" : ""}`}
-            onClick={() => { 
-              setActiveMenuItem("Paramètres"); 
-              navigate('/settings') 
-            }}
+          <button
+            className={`nav-item ${activeMenuItem === "Parametres" ? "active" : ""}`}
+            onClick={() => { setActiveMenuItem("Parametres"); navigate('/settings') }}
+            style={{ marginBottom: '10px', width: '100%' }}
           >
             <span className="nav-icon">
-              <Settings size={18} />
+              <Settings size={16} />
             </span>
             <span className="nav-text">Paramètres</span>
           </button>
         )}
         <button className="logout-button" onClick={handleLogout}>
-          <span className="logout-icon">
-            <LogOut size={18} />
-          </span>
-          <span className="logout-text">Déconnexion</span>
+          <LogOut size={16} />
+          <span>Déconnexion</span>
         </button>
       </div>
     </aside>

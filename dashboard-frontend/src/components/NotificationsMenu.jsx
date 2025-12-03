@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { Bell, AlertTriangle, Clock } from "lucide-react"
 import { useLocation, useNavigate } from "react-router-dom"
+import { useAuth } from "../hooks/useAuth" // Import useAuth hook
 
 const NotificationsMenu = () => {
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000', [])
@@ -10,10 +11,22 @@ const NotificationsMenu = () => {
   const [items, setItems] = useState([])
   const [todayItems, setTodayItems] = useState([])
   const [pendingClients, setPendingClients] = useState([]) // Add pending clients state
+  const [userNotifications, setUserNotifications] = useState([]) // Add user notifications state
   const [count, setCount] = useState(0)
   const menuRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
+  const { hasPermission } = useAuth() // Get hasPermission function from auth context
+  
+  // Fonction utilitaire pour vérifier les permissions
+  const userHasPermission = (permission) => {
+    try {
+      return hasPermission(permission)
+    } catch (e) {
+      console.error('Error checking permission:', e)
+      return false
+    }
+  }
 
   const authHeaders = () => {
     const token = localStorage.getItem('token')
@@ -158,18 +171,69 @@ const NotificationsMenu = () => {
         return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
       })()
 
-      // 3) Fetch pending clients data
+      // 3) Fetch pending clients data (seulement pour les admins)
       const p3 = (async () => {
+        // Vérifier si l'utilisateur a la permission de gérer les clients en attente
+        const hasPermission = userHasPermission('manage_pending_clients')
+        if (!hasPermission) {
+          return []
+        }
+        
         const res = await fetch(`${baseUrl}/api/pending-clients`, { headers: authHeaders() })
         if (!res.ok) return []
         const data = await res.json()
         return Array.isArray(data?.data) ? data.data : []
       })()
 
-      const [rowsTodayRaw, upcomingRows, pendingClients] = await Promise.all([p1, p2, p3])
+      // 4) Fetch user notifications (seulement pour les utilisateurs qui ont des permissions)
+      const p4 = (async () => {
+        // Vérifier si l'utilisateur a des permissions spéciales (pas pour les simples gestionnaires)
+        const hasSpecialPermissions = userHasPermission('manage_pending_clients') || 
+                                 userHasPermission('access_dashboard') || 
+                                 userHasPermission('view_traites') || 
+                                 userHasPermission('view_clients')
+    
+        console.log('Checking user permissions for notifications:', {
+          hasManagePendingClients: userHasPermission('manage_pending_clients'),
+          hasAccessDashboard: userHasPermission('access_dashboard'),
+          hasViewTraites: userHasPermission('view_traites'),
+          hasViewClients: userHasPermission('view_clients'),
+          hasSpecialPermissions
+        })
+    
+        if (!hasSpecialPermissions) {
+          console.log('User does not have special permissions, skipping user notifications')
+          return []
+        }
+    
+        // Les utilisateurs avec la permission 'manage_pending_clients' ne doivent pas voir les notifications système
+        // car ils sont ceux qui effectuent les actions d'approbation/rejet
+        const canManagePendingClients = userHasPermission('manage_pending_clients');
+        if (canManagePendingClients) {
+          console.log('User can manage pending clients, skipping system notifications');
+          return [];
+        }
+    
+        console.log('Fetching user notifications...')
+        const res = await fetch(`${baseUrl}/api/user/notifications`, { headers: authHeaders() })
+        console.log('User notifications response status:', res.status)
+    
+        if (!res.ok) {
+          console.error('Failed to fetch user notifications:', res.status, res.statusText)
+          return []
+        }
+    
+        const data = await res.json()
+        console.log('User notifications fetched:', data.length)
+        
+        return Array.isArray(data) ? data : [];
+      })()
+
+      const [rowsTodayRaw, upcomingRows, pendingClients, userNotifications] = await Promise.all([p1, p2, p3, p4])
       console.log('NotificationsMenu - today data:', rowsTodayRaw.length, 'items')
       console.log('NotificationsMenu - upcoming data:', upcomingRows.length, 'items')
       console.log('NotificationsMenu - pending clients data:', pendingClients.length, 'items')
+      console.log('NotificationsMenu - user notifications:', userNotifications.length, 'items')
 
       // Construire sections pour à venir avec l'existant
       const { mapped } = computeNotifications(upcomingRows)
@@ -190,13 +254,17 @@ const NotificationsMenu = () => {
       console.log('NotificationsMenu - filtered today data:', filteredToday.length, 'items')
       console.log('NotificationsMenu - filtered sections data:', filteredSections)
 
-      // Store pending clients for display
+      // Store pending clients and user notifications for display
       setPendingClients(pendingClients)
+      setUserNotifications(userNotifications)
 
       // Mettre à jour état et badge
       setItems(filteredSections)
       setTodayItems(filteredToday)
-      const newCount = filteredSections.reduce((acc, sec) => acc + sec.items.length, 0) + filteredToday.length + pendingClients.length
+      const newCount = filteredSections.reduce((acc, sec) => acc + sec.items.length, 0) + 
+                      filteredToday.length + 
+                      pendingClients.length + 
+                      userNotifications.length
       console.log('NotificationsMenu - total count:', newCount)
       setCount(newCount)
     } catch (e) {
@@ -205,6 +273,7 @@ const NotificationsMenu = () => {
       setItems([])
       setTodayItems([])
       setPendingClients([])
+      setUserNotifications([])
       setCount(0)
     } finally {
       setLoading(false)
@@ -231,12 +300,20 @@ const NotificationsMenu = () => {
         const currentItems = typeof items === 'object' ? items : []
         const nextItemsCount = itemsCount(currentItems)
         const nextTodayCount = Math.max(0, (Array.isArray(todayItems) ? todayItems.length : 0) - 0)
-        return nextItemsCount + nextTodayCount
+        const nextPendingCount = Math.max(0, (Array.isArray(pendingClients) ? pendingClients.length : 0) - 0)
+        const nextUserNotificationsCount = Math.max(0, (Array.isArray(userNotifications) ? userNotifications.length : 0) - 0)
+        return nextItemsCount + nextTodayCount + nextPendingCount + nextUserNotificationsCount
       })
     }
     window.addEventListener('dismissed_notifs_changed', onExternalDismiss)
     return () => window.removeEventListener('dismissed_notifs_changed', onExternalDismiss)
   }, [])
+  
+  // Réagir aux changements de permissions ou d'utilisateur
+  useEffect(() => {
+    // Refetch data when permissions change
+    fetchData()
+  }, [hasPermission])
 
   // Ouvrir via sidebar: ?tab=notifications
   useEffect(() => {
@@ -284,6 +361,70 @@ const NotificationsMenu = () => {
       {open && (
         <div className="notif-menu">
           <div className="notif-header">Notifications</div>
+          {userNotifications.length > 0 && (
+            <div className="notif-user-notifications" style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}>
+              <div className="notif-section-title" style={{ fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                Notifications système
+              </div>
+              {userNotifications.slice(0, 5).map(notification => {
+                // Determine background color based on notification type
+                const isApproval = notification.data && notification.data.type === 'client_approved';
+                const isRejection = notification.data && notification.data.type === 'client_rejected';
+                
+                let backgroundColor = '#10a54e'; // Default green
+                let titleColor = '#ffffff';
+                let subtitleColor = '#ffffff';
+                
+                if (isRejection) {
+                  backgroundColor = '#ef4444'; // Red for rejections
+                } else if (isApproval) {
+                  backgroundColor = '#10a54e'; // Green for approvals
+                }
+                
+                return (
+                  <div 
+                    key={notification.id} 
+                    className="notif-item" 
+                    onClick={async () => {
+                      // Mark notification as read
+                      try {
+                        const res = await fetch(`${baseUrl}/api/user/notifications/${notification.id}/read`, {
+                          method: 'POST',
+                          headers: authHeaders()
+                        });
+                        if (res.ok) {
+                          // Remove notification from list
+                          setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
+                          setCount(prev => Math.max(0, prev - 1));
+                          
+                          // If this is a client approval notification, navigate to the clients page
+                          if (notification.data && notification.data.type === 'client_approved') {
+                            // Close the notification menu
+                            setOpen(false);
+                            // Navigate to the clients management page
+                            navigate('/dashboard?tab=credit&view=GestionClients');
+                          }
+                        }
+                      } catch (e) {
+                        console.error('Error deleting notification:', e);
+                      }
+                    }} 
+                    style={{ cursor: 'pointer', padding: '8px', backgroundColor, borderRadius: 4, marginBottom: 8 }}
+                  >
+                    <div className="notif-item-label" style={{ fontWeight: 600, color: titleColor }}>
+                      {notification.data.message}
+                    </div>
+                    <div className="notif-item-sub" style={{ color: subtitleColor, fontSize: '0.875rem' }}>
+                      {new Date(notification.created_at).toLocaleDateString('fr-FR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {pendingClients.length > 0 && (
             <div className="notif-pending-clients" style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}>
               <div className="notif-section-title" style={{ fontWeight: 600, color: '#f59e0b', marginBottom: 8 }}>
@@ -318,7 +459,7 @@ const NotificationsMenu = () => {
           )}
           {loading && <div className="notif-empty">Chargement...</div>}
           {error && <div className="notif-error">{error}</div>}
-          {!loading && !error && items.length === 0 && pendingClients.length === 0 && todayItems.length === 0 && (
+          {!loading && !error && items.length === 0 && pendingClients.length === 0 && todayItems.length === 0 && userNotifications.length === 0 && (
             <div className="notif-empty">Aucune notification</div>
           )}
           {!loading && !error && items.map(section => (

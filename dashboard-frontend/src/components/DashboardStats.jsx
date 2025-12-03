@@ -19,6 +19,18 @@ const DashboardStats = () => {
   const navigate = useNavigate()
   const { hasPermission } = useAuth() // Get user permissions
 
+  // Add a new state to track the refresh timestamp
+  const [refreshTimestamp, setRefreshTimestamp] = useState(Date.now())
+
+  // Add a new useEffect for periodic refresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTimestamp(Date.now())
+    }, 180000) // 3 minutes
+    
+    return () => clearInterval(interval)
+  }, [])
+
   // Check if user should see dashboard stats (this needs to be declared before any hooks)
   const shouldShowDashboardStats = () => {
     // Show dashboard stats only if user has dashboard access AND has access to both traites and clients
@@ -120,7 +132,7 @@ const DashboardStats = () => {
 
         if (resStats.ok) setTraiteStats(await resStats.json())
         else throw new Error("Erreur de chargement des stats traites")
-        
+      
         const monthlyPayload = resMonthly.ok ? await resMonthly.json() : []
         setTraiteMonthlyData(Array.isArray(monthlyPayload) ? monthlyPayload : [])
 
@@ -140,7 +152,7 @@ const DashboardStats = () => {
     }
     fetchTraiteStats()
     return () => { isMounted = false }
-  }, [selectedTraiteYear])
+  }, [selectedTraiteYear, refreshTimestamp]) // Add refreshTimestamp as dependency
 
   // --- FETCH DES DONNÉES POUR LES CLIENTS ---
   useEffect(() => {
@@ -167,7 +179,7 @@ const DashboardStats = () => {
 
         if (resStats.ok) setClientStats(await resStats.json())
         else throw new Error("Erreur de chargement des stats clients")
-        
+      
         const monthlyPayload = resMonthly.ok ? await resMonthly.json() : []
         setClientMonthlyData(Array.isArray(monthlyPayload) ? monthlyPayload : [])
         
@@ -178,7 +190,7 @@ const DashboardStats = () => {
         const yearsArray = Array.isArray(yearsPayload) ? yearsPayload : [new Date().getFullYear()]
         setClientAvailableYears(yearsArray)
         if (!yearsArray.includes(selectedClientYear) && yearsArray.length > 0) setSelectedClientYear(yearsArray[0])
-        
+      
       } catch (e) {
         if (isMounted) setErrorClients(e.message || "Erreur inconnue")
       } finally {
@@ -187,7 +199,7 @@ const DashboardStats = () => {
     }
     fetchClientStats()
     return () => { isMounted = false }
-  }, [selectedClientYear])
+  }, [selectedClientYear, refreshTimestamp]) // Add refreshTimestamp as dependency
 
   // --- FETCH DES CLIENTS EN ATTENTE ---
   useEffect(() => {
@@ -204,7 +216,7 @@ const DashboardStats = () => {
         const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
 
         const res = await fetch(`${baseUrl}/api/pending-clients`, { headers })
-        
+      
         if (!isMounted) return;
 
         if (res.ok) {
@@ -219,15 +231,15 @@ const DashboardStats = () => {
         if (isMounted) setLoadingPendingClients(false)
       }
     }
-    
+  
     // Only fetch pending clients for admin users
     if (hasPermission('access_dashboard')) {
       fetchPendingClientsCount()
     }
-    
-    return () => { isMounted = false }
-  }, [hasPermission])
   
+    return () => { isMounted = false }
+  }, [hasPermission, refreshTimestamp]) // Add refreshTimestamp as dependency
+
   // --- FETCH DES TRAITES RÉCENTES ---
   useEffect(() => {
     let isMounted = true
@@ -283,8 +295,8 @@ const DashboardStats = () => {
     }
     
     return () => { isMounted = false }
-  }, [hasPermission, shouldShowDashboardStats])
-  
+  }, [hasPermission, shouldShowDashboardStats, refreshTimestamp]) // Add refreshTimestamp as dependency
+
   // --- DONNÉES DES CARTES ---
   const traiteCardsData = [
     { icon: FileText, title: "Traites totales", value: traiteStats.total, color: "#3B82F6", bgColor: "#EFF6FF", permission: "view_traites", onClick: () => navigate('/dashboard?tab=traites') },

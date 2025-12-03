@@ -276,4 +276,32 @@ class UserController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * Get user notifications
+     */
+    public function getNotifications(Request $request)
+    {
+        $user = $request->user();
+        $notifications = $user->notifications()->orderBy('created_at', 'desc')->get();
+        
+        return response()->json($notifications);
+    }
+    
+    /**
+     * Mark notification as read and delete it
+     */
+    public function markNotificationAsRead(Request $request, $id)
+    {
+        $user = $request->user();
+        $notification = $user->notifications()->where('id', $id)->first();
+        
+        if ($notification) {
+            // Delete the notification instead of just marking it as read
+            $notification->delete();
+            return response()->json(['message' => 'Notification deleted']);
+        }
+        
+        return response()->json(['error' => 'Notification not found'], 404);
+    }
 }
