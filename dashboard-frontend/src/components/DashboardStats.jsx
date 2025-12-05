@@ -318,8 +318,8 @@ const DashboardStats = () => {
 
   const clientCardsData = [
     { icon: Users, title: "Clients totaux", value: clientStats.total, color: "#3B82F6", bgColor: "#EFF6FF", permission: "view_clients", onClick: () => navigate('/dashboard?tab=credit&view=GestionClients') },
-    { icon: UserPlus, title: "Comptes clients/jour", value: clientStats.perDay, color: "#10B981", bgColor: "#ECFDF5", permission: "view_clients" },
-    { icon: Calendar, title: "Comptes clients/mois", value: clientStats.perMonth, color: "#8B5CF6", bgColor: "#F5F3FF", permission: "view_clients" },
+    { icon: UserPlus, title: "Comptes clients/jour", value: clientStats.perDay || 0, color: "#10B981", bgColor: "#ECFDF5", permission: "view_clients" },
+    { icon: Calendar, title: "Comptes clients/mois", value: clientStats.perMonth || 0, color: "#8B5CF6", bgColor: "#F5F3FF", permission: "view_clients" },
     
   ]
 
@@ -455,7 +455,7 @@ const DashboardStats = () => {
                   <BarChart data={traiteMonthlyDisplay}>
                     <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
                     <XAxis dataKey="label" />
-                    <YAxis tickFormatter={(value) => Number.isInteger(value) ? value : value.toFixed(0)} />
+                    <YAxis tickFormatter={(value) => Number.isInteger(value) ? value : value.toFixed(0)} allowDecimals={false} />
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="traites" fill="#e11d48" name="Nombre de traites" />
@@ -515,7 +515,7 @@ const DashboardStats = () => {
                   <BarChart data={clientMonthlyDisplay}>
                     <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
                     <XAxis dataKey="label" />
-                    <YAxis tickFormatter={(value) => Number.isInteger(value) ? value : value.toFixed(0)} />
+                    <YAxis tickFormatter={(value) => Number.isInteger(value) ? value : value.toFixed(0)} allowDecimals={false} />
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="clients" fill="#3b82f6" name="Nouveaux clients" />

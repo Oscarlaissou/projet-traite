@@ -9,14 +9,6 @@ class PendingClient extends Model
 {
     use HasFactory;
 
-    /**
-     * The table associated with the model.
-     */
-    protected $table = 'pending_clients';
-
-    /**
-     * The attributes that are mass assignable.
-     */
     protected $fillable = [
         'numero_compte',
         'nom_raison_sociale',
@@ -38,34 +30,68 @@ class PendingClient extends Model
         'etablissement',
         'service',
         'nom_signataire',
-        'created_by',
+        'created_by'
     ];
 
-    /**
-     * The attributes that should be cast.
-     */
     protected $casts = [
         'date_creation' => 'date',
         'montant_facture' => 'decimal:2',
         'montant_paye' => 'decimal:2',
-        'credit' => 'decimal:2',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'credit' => 'decimal:2'
     ];
 
-    /**
-     * Get the user who created the pending client.
-     */
+    // Générer automatiquement le numéro de compte avant la création
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($client) {
+            // Générer un numéro de compte séquentiel si aucun n'est fourni
+            if (empty($client->numero_compte)) {
+                $client->numero_compte = static::generateSequentialAccountNumber();
+            }
+        });
+    }
+
+    // Méthode pour générer un numéro de compte séquentiel simple (0001, 0002, etc.)
+    public static function generateSequentialAccountNumber()
+    {
+        // Obtenir le dernier numéro de compte de la table tiers
+        $lastTier = \App\Models\Tier::orderBy('id', 'desc')->first();
+        
+        // Obtenir le dernier numéro de compte de la table pending_clients
+        $lastPendingClient = static::orderBy('id', 'desc')->first();
+        
+        // Déterminer le dernier ID utilisé
+        $lastId = 0;
+        if ($lastTier && $lastTier->numero_compte) {
+            // Essayer d'extraire le numéro du compte existant
+            $tierNumber = intval($lastTier->numero_compte);
+            if ($tierNumber > 0) {
+                $lastId = max($lastId, $tierNumber);
+            }
+        }
+        
+        if ($lastPendingClient && $lastPendingClient->numero_compte) {
+            // Essayer d'extraire le numéro du compte existant
+            $pendingNumber = intval($lastPendingClient->numero_compte);
+            if ($pendingNumber > 0) {
+                $lastId = max($lastId, $pendingNumber);
+            }
+        }
+        
+        // Incrémenter pour obtenir le prochain numéro
+        $nextId = $lastId + 1;
+        
+        // Formater le numéro de compte avec un padding de 4 chiffres (0001, 0002, etc.)
+        $numero = str_pad($nextId, 4, '0', STR_PAD_LEFT);
+        
+        return $numero;
+    }
+
+    // Relation avec l'utilisateur qui a créé le client
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-    
-    /**
-     * Accesseur pour s'assurer que created_by_id est toujours disponible
-     */
-    public function getCreatedByIdAttribute()
-    {
-        return $this->created_by;
     }
 }

@@ -20,20 +20,23 @@ class ClientStatsController extends Controller
             $today = $now->toDateString();
             $monthStart = $now->copy()->startOfMonth()->toDateString();
 
-            $dateSource = $this->resolveDateSource();
-            $creditSource = $this->resolveCreditSource();
-
             $total = Tier::query()->count();
-            $perDay = $this->countForDate($dateSource, function ($builder, $column) use ($today) {
-                return $builder->whereDate($column, $today)->count();
-            });
-            $perMonth = $this->countForDate($dateSource, function ($builder, $column) use ($monthStart, $today) {
-                return $builder->whereBetween($column, [$monthStart, $today])->count();
-            });
+            
+            // Comptes sur la date de création de la table demande_ouverture_compte pour le jour en cours
+            $perDay = DB::table('demande_ouverture_compte')
+                ->whereDate('date_creation', $today)
+                ->count();
+                
+            // Comptes sur la date de création de la table demande_ouverture_compte pour le mois en cours
+            $perMonth = DB::table('demande_ouverture_compte')
+                ->whereBetween('date_creation', [$monthStart, $now->toDateString()])
+                ->count();
 
-            $totalCredit = $creditSource
-                ? (float) $this->baseBuilder($creditSource)->sum($creditSource['column'])
-                : 0;
+            // Vérifier si la colonne credit existe avant de l'utiliser
+            $totalCredit = 0;
+            if (Schema::hasColumn('tiers', 'credit')) {
+                $totalCredit = (float) Tier::sum('credit');
+            }
 
             return response()->json([
                 'total' => $total,
@@ -58,17 +61,23 @@ class ClientStatsController extends Controller
     public function availableYears(Request $request)
     {
         try {
-            $dateSource = $this->resolveDateSource();
-            if (!$dateSource) {
-                return response()->json([(int) date('Y')]);
+            // Vérifier si la table existe
+            if (!Schema::hasTable('demande_ouverture_compte')) {
+                // Si la table n'existe pas, utiliser la table tiers
+                $years = Tier::query()
+                    ->selectRaw('DISTINCT YEAR(date_creation) as year')
+                    ->whereNotNull('date_creation')
+                    ->orderBy('year', 'desc')
+                    ->pluck('year')
+                    ->toArray();
+            } else {
+                $years = DB::table('demande_ouverture_compte')
+                    ->selectRaw('DISTINCT YEAR(date_creation) as year')
+                    ->whereNotNull('date_creation')
+                    ->orderBy('year', 'desc')
+                    ->pluck('year')
+                    ->toArray();
             }
-
-            $years = $this->baseBuilder($dateSource)
-                ->selectRaw("DISTINCT YEAR({$dateSource['column']}) as year")
-                ->whereNotNull($dateSource['column'])
-                ->orderBy('year', 'desc')
-                ->pluck('year')
-                ->toArray();
 
             $currentYear = (int) date('Y');
             if (!in_array($currentYear, $years)) {
@@ -88,32 +97,44 @@ class ClientStatsController extends Controller
     public function monthly(Request $request)
     {
         try {
-            $dateSource = $this->resolveDateSource();
-            if (!$dateSource) {
-                return response()->json([], 200);
-            }
-
             $year = (int) $request->get('year', date('Y'));
             
-            $rows = $this->baseBuilder($dateSource)
-                ->selectRaw("DATE_FORMAT({$dateSource['column']}, '%Y-%m') as ym, COUNT(*) as total")
-                ->whereYear($dateSource['column'], $year)
-                ->groupBy('ym')
-                ->orderBy('ym')
-                ->get();
+            // Vérifier si la table existe
+            if (!Schema::hasTable('demande_ouverture_compte')) {
+                // Si la table n'existe pas, utiliser la table tiers
+                $rows = Tier::query()
+                    ->selectRaw("DATE_FORMAT(date_creation, '%Y-%m') as ym, COUNT(*) as total")
+                    ->whereYear('date_creation', $year)
+                    ->groupBy('ym')
+                    ->orderBy('ym')
+                    ->get();
+            } else {
+                $rows = DB::table('demande_ouverture_compte')
+                    ->selectRaw("DATE_FORMAT(date_creation, '%Y-%m') as ym, COUNT(*) as total")
+                    ->whereYear('date_creation', $year)
+                    ->groupBy('ym')
+                    ->orderBy('ym')
+                    ->get();
+            }
 
+            // Créer un tableau avec tous les mois de l'année (même ceux sans données)
             $months = [];
             for ($i = 1; $i <= 12; $i++) {
                 $monthKey = sprintf('%04d-%02d', $year, $i);
                 $months[$monthKey] = 0;
             }
             
+            // Remplir avec les données existantes
             foreach ($rows as $row) {
                 $months[$row->ym] = (int) $row->total;
             }
 
+            // Convertir en tableau de données pour le graphique
             $data = array_map(function($ym, $total) {
-                return ['name' => $ym, 'clients' => $total];
+                return [
+                    'name' => $ym,
+                    'clients' => $total,
+                ];
             }, array_keys($months), array_values($months));
 
             return response()->json($data);
@@ -128,8 +149,7 @@ class ClientStatsController extends Controller
     public function typeBreakdown(Request $request)
     {
         try {
-            $rows = Tier::query()
-                ->selectRaw('COALESCE(type_tiers, "Non défini") as type, COUNT(*) as value')
+            $rows = Tier::selectRaw('COALESCE(type_tiers, "Non défini") as type, COUNT(*) as value')
                 ->groupBy('type')
                 ->get();
 
@@ -157,52 +177,6 @@ class ClientStatsController extends Controller
         } catch (\Throwable $e) {
             return response()->json([], 200);
         }
-    }
-
-    private function resolveDateSource(): ?array
-    {
-        if (Schema::hasColumn('tiers', 'created_at')) {
-            return ['table' => 'tiers', 'column' => 'created_at'];
-        }
-        if (Schema::hasColumn('tiers', 'date_creation')) {
-            return ['table' => 'tiers', 'column' => 'date_creation'];
-        }
-        if (Schema::hasTable('demande_ouverture_compte')) {
-            if (Schema::hasColumn('demande_ouverture_compte', 'date_creation')) {
-                return ['table' => 'demande_ouverture_compte', 'column' => 'date_creation'];
-            }
-            if (Schema::hasColumn('demande_ouverture_compte', 'created_at')) {
-                return ['table' => 'demande_ouverture_compte', 'column' => 'created_at'];
-            }
-        }
-        return null;
-    }
-
-    private function resolveCreditSource(): ?array
-    {
-        if (Schema::hasColumn('tiers', 'credit')) {
-            return ['table' => 'tiers', 'column' => 'credit'];
-        }
-        if (Schema::hasTable('demande_ouverture_compte') && Schema::hasColumn('demande_ouverture_compte', 'credit')) {
-            return ['table' => 'demande_ouverture_compte', 'column' => 'credit'];
-        }
-        return null;
-    }
-
-    private function baseBuilder(array $source)
-    {
-        return $source['table'] === 'tiers'
-            ? Tier::query()
-            : DB::table($source['table']);
-    }
-
-    private function countForDate(?array $source, callable $callback): int
-    {
-        if (!$source) {
-            return 0;
-        }
-        $builder = $this->baseBuilder($source);
-        return (int) $callback($builder, $source['column']);
     }
 
     private function normalizeType(?string $raw): string
