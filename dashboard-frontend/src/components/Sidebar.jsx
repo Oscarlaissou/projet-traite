@@ -197,12 +197,14 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                   </span>
                   <span className="nav-text">Edition</span>
                 </button>
-                <button className={`nav-subitem ${activeSubItem === "Historique" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique"); navigate('/dashboard') }}>
-                  <span className="nav-icon">
-                    <History size={16} />
-                  </span>
-                  <span className="nav-text">Historique</span>
-                </button>
+                <Can permission="manage_pending_clients">
+                  <button className={`nav-subitem ${activeSubItem === "Historique" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique"); navigate('/dashboard') }}>
+                    <span className="nav-icon">
+                      <History size={16} />
+                    </span>
+                    <span className="nav-text">Historique</span>
+                  </button>
+                </Can>
                 <button className={`nav-subitem ${activeSubItem === "Notification" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Notification"); navigate('/notifications') }}>
                   <span className="nav-icon">
                     <Bell size={16} />
@@ -238,12 +240,14 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                   </span>
                   <span className="nav-text">Gestion des comptes clients</span>
                 </button>
-                <button className={`nav-subitem ${activeSubItem === "Historique clients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique clients"); navigate('/dashboard?tab=credit&view=HistoriqueClients') }}>
-                  <span className="nav-icon">
-                    <History size={16} />
-                  </span>
-                  <span className="nav-text">Historique comptes clients</span>
-                </button>
+                <Can permission="manage_pending_clients">
+                  <button className={`nav-subitem ${activeSubItem === "Historique clients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique clients"); navigate('/dashboard?tab=credit&view=HistoriqueClients') }}>
+                    <span className="nav-icon">
+                      <History size={16} />
+                    </span>
+                    <span className="nav-text">Historique comptes clients</span>
+                  </button>
+                </Can>
                 <Can permission="create_clients">
                   <button className={`nav-subitem ${activeSubItem === "Nouveau client" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Nouveau client"); navigate('/dashboard?tab=credit&view=NewClient') }}>
                     <span className="nav-icon">

@@ -4,8 +4,10 @@ import Pagination from "./Pagination"
 import "./Traites.css"
 import MonImage from "../images/image6.png"
 import * as XLSX from 'xlsx'
+import { useAuth } from "../hooks/useAuth" // Importer le hook d'authentification
 
 const ClientsHistoriquePage = () => {
+  const { hasPermission } = useAuth() // Utiliser le hook d'authentification
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || "", [])
   const [mode, setMode] = useState("client") // 'client' | 'mois'
   const [rows, setRows] = useState([])
@@ -20,6 +22,9 @@ const ClientsHistoriquePage = () => {
   const [perPage, setPerPage] = useState(6)
   const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440)
   const [globalQuery, setGlobalQuery] = useState("")
+
+  // Vérifier si l'utilisateur a la permission d'accéder à l'historique
+  const canViewHistory = hasPermission('manage_pending_clients')
 
   // Fonction pour formater les changements pour l'export
   const formatChangesForCSV = (changes) => {
@@ -59,6 +64,11 @@ const ClientsHistoriquePage = () => {
   };
 
   const fetchData = async () => {
+    // Ne pas charger les données si l'utilisateur n'a pas la permission
+    if (!canViewHistory) {
+      return;
+    }
+    
     setLoading(true)
     setError("")
     try {
@@ -73,7 +83,14 @@ const ClientsHistoriquePage = () => {
       const res = await fetch(`${baseUrl}/api/tiers/historique?${params.toString()}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` }
       })
-      if (!res.ok) throw new Error("Échec du chargement de l'historique")
+      
+      // Améliorer la gestion des erreurs
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMessage = errorData.message || `Erreur ${res.status}: ${res.statusText}`;
+        throw new Error(errorMessage);
+      }
+      
       const data = await res.json()
       const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
       const sorted = arr.slice().sort((a, b) => {
@@ -84,7 +101,8 @@ const ClientsHistoriquePage = () => {
       setRows(sorted)
       setPage(1)
     } catch (e) {
-      setError(e.message || "Erreur inconnue")
+      console.error('Erreur lors du chargement de l\'historique:', e);
+      setError(e.message || "Erreur inconnue lors du chargement de l'historique")
     } finally {
       setLoading(false)
     }
@@ -93,7 +111,7 @@ const ClientsHistoriquePage = () => {
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, search, selectedMonth])
+  }, [mode, search, selectedMonth, canViewHistory])
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth)
@@ -101,43 +119,75 @@ const ClientsHistoriquePage = () => {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const handleExport = () => {
-    if (!rows.length) return
-    const sorted = rows.slice().sort((a, b) => {
-      const da = a && a.date ? new Date(a.date).getTime() : 0
-      const db = b && b.date ? new Date(b.date).getTime() : 0
-      return da - db
-    })
-    
-    // Préparer les données pour Excel
-    const worksheetData = sorted.map(item => ({
-      'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
-      'Nom/Raison sociale': item.nom_raison_sociale || '',
-      'Action': item.action || '',
-      'Utilisateur': item.username + (item.original_creator && item.username !== item.original_creator ? ` (Initialement par: ${item.original_creator})` : ''),
-      'Détails': item.action === 'Modification' ? formatChangesForCSV(item.changes) : ''
-    }));
-    
-    // Créer la feuille de calcul Excel
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    
-    // Ajuster la largeur des colonnes
-    const colWidths = [
-      { wch: 15 }, // Date
-      { wch: 25 }, // Nom/Raison sociale
-      { wch: 15 }, // Action
-      { wch: 30 }, // Utilisateur
-      { wch: 40 }  // Détails
-    ];
-    worksheet['!cols'] = colWidths;
-    
-    // Créer le classeur Excel
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Historique Clients");
-    
-    // Générer le fichier Excel et le télécharger
-    const fileName = `historique_clients_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams()
+      params.append('type', mode)
+      if (mode === 'client') {
+        if (search.trim()) params.append('nom_raison_sociale', search.trim())
+      } else {
+        params.append('month', selectedMonth)
+      }
+      
+      // Utiliser la route d'exportation qui retourne toutes les activités
+      const res = await fetch(`${baseUrl}/api/tiers/export-historique?${params.toString()}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` }
+      })
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMessage = errorData.message || `Erreur ${res.status}: ${res.statusText}`;
+        throw new Error(errorMessage);
+      }
+      
+      const data = await res.json()
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+      
+      // Trier TOUTES les données par date descendante (du plus récent au plus ancien)
+      // Tous types d'actions confondus (création et modification)
+      const sortedData = arr.slice().sort((a, b) => {
+        const da = a && a.date ? new Date(a.date).getTime() : 0
+        const db = b && b.date ? new Date(b.date).getTime() : 0
+        return db - da // Tri descendant - les plus récentes en premier
+      })
+      
+      // Préparer les données pour Excel
+      const worksheetData = sortedData.map(item => ({
+        'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
+        'Numéro de compte': item.numero_compte || '',
+        'Nom/Raison sociale': item.nom_raison_sociale || '',
+        'Action': item.action || '',
+        'Utilisateur': item.username + (item.original_creator && item.username !== item.original_creator ? ` (Initialement par: ${item.original_creator})` : ''),
+        'Détails': item.action === 'Modification' ? formatChangesForCSV(item.changes) : '',
+        'Type': item.is_summary_row ? 'Récapitulatif' : 'Détail'
+      }));
+      
+      // Créer la feuille de calcul Excel
+      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+      
+      // Ajuster la largeur des colonnes
+      const colWidths = [
+        { wch: 15 }, // Date
+        { wch: 20 }, // Numéro de compte
+        { wch: 25 }, // Nom/Raison sociale
+        { wch: 15 }, // Action
+        { wch: 30 }, // Utilisateur
+        { wch: 40 }, // Détails
+        { wch: 15 }  // Type
+      ];
+      worksheet['!cols'] = colWidths;
+      
+      // Créer le classeur Excel
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Historique Clients");
+      
+      // Générer le fichier Excel et le télécharger
+      const fileName = `historique_clients_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (e) {
+      console.error('Erreur lors de l\'exportation de l\'historique:', e);
+      alert(e.message || "Erreur inconnue lors de l'exportation de l'historique");
+    }
   }
 
   const filteredRows = React.useMemo(() => {
@@ -158,6 +208,20 @@ const ClientsHistoriquePage = () => {
   useEffect(() => {
     setPage(1)
   }, [filteredRows])
+
+  // Afficher un message si l'utilisateur n'a pas la permission
+  if (!canViewHistory) {
+    return (
+      <div className="dashboard-stats">
+        <h2 className="stats-title">Historique des comptes clients</h2>
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <div className="error-message">
+            Vous n'avez pas la permission d'accéder à l'historique des comptes clients.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-stats">
@@ -240,6 +304,7 @@ const ClientsHistoriquePage = () => {
             <thead>
               <tr>
                 <th>Date</th>
+                <th>Numéro de compte</th>
                 <th>Nom/Raison sociale</th>
                 <th>Action</th>
                 <th>Utilisateur</th>
@@ -296,6 +361,7 @@ const ClientsHistoriquePage = () => {
                 ) : currentRows.map((r, idx) => (
                   <tr key={(r.date || '') + '_' + idx}>
                     <td style={{ whiteSpace: 'nowrap' }}>{r.date ? new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''}</td>
+                    <td>{r.numero_compte || ''}</td>
                     <td>{r.nom_raison_sociale || ''}</td>
                     <td>{r.action || ''}</td>
                     <td>

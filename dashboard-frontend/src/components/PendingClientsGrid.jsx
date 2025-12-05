@@ -89,20 +89,269 @@ const RejectModal = ({ isOpen, onClose, onConfirm, clientName }) => {
   )
 }
 
+// Composant pour l'édition d'un client
+const ClientEditForm = ({ client, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    numero_compte: client.numero_compte || "",
+    nom_raison_sociale: client.nom_raison_sociale || "",
+    bp: client.bp || "",
+    ville: client.ville || "",
+    pays: client.pays || "",
+    adresse_geo_1: client.adresse_geo_1 || "",
+    adresse_geo_2: client.adresse_geo_2 || "",
+    telephone: client.telephone || "",
+    email: client.email || "",
+    categorie: client.categorie || "",
+    n_contribuable: client.n_contribuable || "",
+    type_tiers: client.type_tiers || "",
+    date_creation: client.date_creation ? client.date_creation.slice(0, 10) : "",
+    montant_facture: client.montant_facture || "",
+    montant_paye: client.montant_paye || "",
+    credit: client.credit || "",
+    motif: client.motif || "",
+    etablissement: client.etablissement || "",
+    service: client.service || "",
+    nom_signataire: client.nom_signataire || ""
+  });
+
+  const CATEGORIES = [
+    "Sté Privées Hors Grp",
+    "Société Groupe",
+    "Individuel",
+    "Personnel Groupe",
+    "Administration",
+    "Collectivité locale",
+    "Entreprise Publique",
+    "Administration Privée",
+  ];
+
+  const TYPE_TIERS = ["Client", "Fournisseur"];
+
+  const handleChange = (field) => (e) => {
+    setFormData({
+      ...formData,
+      [field]: e.target.value
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <>
+      <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Numéro de compte</label>
+          <input 
+            value={formData.numero_compte} 
+            onChange={handleChange('numero_compte')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Nom / Raison sociale *</label>
+          <input 
+            value={formData.nom_raison_sociale} 
+            onChange={handleChange('nom_raison_sociale')} 
+            className="search-input" 
+            required 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>BP</label>
+          <input 
+            value={formData.bp} 
+            onChange={handleChange('bp')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Ville</label>
+          <input 
+            value={formData.ville} 
+            onChange={handleChange('ville')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Pays</label>
+          <input 
+            value={formData.pays} 
+            onChange={handleChange('pays')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Adresse géo 1</label>
+          <input 
+            value={formData.adresse_geo_1} 
+            onChange={handleChange('adresse_geo_1')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Adresse géo 2</label>
+          <input 
+            value={formData.adresse_geo_2} 
+            onChange={handleChange('adresse_geo_2')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Téléphone</label>
+          <input 
+            value={formData.telephone} 
+            onChange={handleChange('telephone')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Email</label>
+          <input 
+            type="email" 
+            value={formData.email} 
+            onChange={handleChange('email')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Type d'entreprises</label>
+          <select 
+            value={formData.categorie} 
+            onChange={handleChange('categorie')} 
+            className="search-input" 
+            required
+          >
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>N° contribuable</label>
+          <input 
+            value={formData.n_contribuable} 
+            onChange={handleChange('n_contribuable')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Type de tiers</label>
+          <select 
+            value={formData.type_tiers} 
+            onChange={handleChange('type_tiers')} 
+            className="search-input" 
+            required
+          >
+            {TYPE_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Date de création</label>
+          <input 
+            type="date" 
+            value={formData.date_creation} 
+            onChange={handleChange('date_creation')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Montant facturé</label>
+          <input 
+            type="number" 
+            value={formData.montant_facture} 
+            onChange={handleChange('montant_facture')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Montant payé</label>
+          <input 
+            type="number" 
+            value={formData.montant_paye} 
+            onChange={handleChange('montant_paye')} 
+            className="search-input" 
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Crédit</label>
+          <input 
+            type="number" 
+            value={formData.credit} 
+            onChange={handleChange('credit')} 
+            className="search-input" 
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Établissement</label>
+          <input 
+            value={formData.etablissement} 
+            onChange={handleChange('etablissement')} 
+            className="search-input" 
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Service</label>
+          <input 
+            value={formData.service} 
+            onChange={handleChange('service')} 
+            className="search-input" 
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Nom du signataire</label>
+          <input 
+            value={formData.nom_signataire} 
+            onChange={handleChange('nom_signataire')} 
+            className="search-input" 
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label>Motif</label>
+          <textarea 
+            value={formData.motif} 
+            onChange={handleChange('motif')} 
+            className="search-input" 
+            rows={3} 
+          />
+        </div>
+        
+        <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+          <button type="button" className="submit-button" style={{ backgroundColor: "#9ca3af" }} onClick={onCancel}>
+            Annuler
+          </button>
+          <button type="submit" className="submit-button" style={{ backgroundColor: "#10B981" }}>
+            Sauvegarder
+          </button>
+        </div>
+      </form>
+    </>
+  );
+};
+
 const PendingClientsGrid = () => {
   const [pendingClients, setPendingClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedClient, setSelectedClient] = useState(null)
+  const [isEditing, setIsEditing] = useState(false) // Nouvel état pour le mode d'édition
   const [page, setPage] = useState(1) // Ajout de l'état pour la pagination
   const [perPage, setPerPage] = useState(10) // Ajout de l'état pour les éléments par page
   const [showRejectModal, setShowRejectModal] = useState(false) // État pour le modal de rejet
   const [clientToReject, setClientToReject] = useState(null) // Client à rejeter
   const navigate = useNavigate()
-  const { hasPermission } = useAuth() // Utiliser le hook d'authentification
+  const { hasPermission, user } = useAuth() // Utiliser le hook d'authentification
   
   // Vérifier si l'utilisateur a la permission de gérer les clients en attente
   const canManagePendingClients = hasPermission('manage_pending_clients')
+  
+  // Vérifier si l'utilisateur est un administrateur
+  const isAdmin = user && (user.role === 'admin' || user.role === 'super_admin')
   
   const baseUrl = process.env.REACT_APP_API_URL || ''
 
@@ -230,6 +479,72 @@ const PendingClientsGrid = () => {
     openRejectModal(client)
   }
 
+  // Fonction pour basculer en mode édition
+  const handleEdit = () => {
+    setIsEditing(true)
+  }
+
+  // Fonction pour annuler l'édition
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+  }
+
+  // Fonction pour sauvegarder les modifications (à implémenter)
+  const handleSaveEdit = async (updatedClientData) => {
+    try {
+      const token = localStorage.getItem("token")
+      const headers = { 
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+      
+      // Convertir les champs numériques
+      const payload = {
+        ...updatedClientData,
+        montant_facture: updatedClientData.montant_facture ? Number(updatedClientData.montant_facture) : null,
+        montant_paye: updatedClientData.montant_paye ? Number(updatedClientData.montant_paye) : null,
+        credit: updatedClientData.credit ? Number(updatedClientData.credit) : null
+      };
+      
+      // Pour la modification d'un client en attente, nous allons supprimer le client existant 
+      // et en créer un nouveau avec les données mises à jour
+      // Comme l'API ne supporte pas PUT sur pending-clients, 
+      // nous allons supprimer le client existant et en créer un nouveau
+      // avec les données mises à jour
+      const deleteRes = await fetch(`${baseUrl}/api/pending-clients/${selectedClient.id}`, {
+        method: "DELETE",
+        headers
+      });
+      
+      if (!deleteRes.ok) {
+        throw new Error("Erreur lors de la suppression du client existant");
+      }
+      
+      // Créer un nouveau client en attente avec les données mises à jour
+      const createRes = await fetch(`${baseUrl}/api/pending-clients`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+      
+      if (createRes.ok) {
+        const updatedClient = await createRes.json()
+        // Mettre à jour la liste des clients
+        fetchPendingClients()
+        // Mettre à jour le client sélectionné
+        setSelectedClient(updatedClient.data || updatedClient)
+        // Sortir du mode édition
+        setIsEditing(false)
+      } else {
+        const errorData = await createRes.json()
+        throw new Error(errorData.message || "Erreur lors de la création du client mis à jour")
+      }
+    } catch (err) {
+      setError(err.message || "Erreur inconnue")
+    }
+  }
+
   // Si l'utilisateur n'a pas la permission, afficher un message
   if (!canManagePendingClients) {
     return (
@@ -297,117 +612,138 @@ const PendingClientsGrid = () => {
           </div>
           
           <div className="client-detail-content">
-            <div className="detail-section">
-              <h4>Informations du client</h4>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <label>Nom/Raison sociale:</label>
-                  <span>{selectedClient.nom_raison_sociale}</span>
+            {isEditing ? (
+              <ClientEditForm 
+                client={selectedClient}
+                onSave={handleSaveEdit}
+                onCancel={handleCancelEdit}
+              />
+            ) : (
+              <>
+                <div className="detail-section">
+                  <h4>Informations du client</h4>
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <label>Nom/Raison sociale:</label>
+                      <span>{selectedClient.nom_raison_sociale}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Numéro de compte:</label>
+                      <span>{selectedClient.numero_compte || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>BP:</label>
+                      <span>{selectedClient.bp || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Ville:</label>
+                      <span>{selectedClient.ville || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Pays:</label>
+                      <span>{selectedClient.pays || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Adresse géo 1:</label>
+                      <span>{selectedClient.adresse_geo_1 || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Adresse géo 2:</label>
+                      <span>{selectedClient.adresse_geo_2 || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Téléphone:</label>
+                      <span>{selectedClient.telephone || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Email:</label>
+                      <span>{selectedClient.email || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Catégorie:</label>
+                      <span>{selectedClient.categorie}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>N° contribuable:</label>
+                      <span>{selectedClient.n_contribuable || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Type de tiers:</label>
+                      <span>{selectedClient.type_tiers}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="detail-item">
-                  <label>Numéro de compte:</label>
-                  <span>{selectedClient.numero_compte || "N/A"}</span>
+                
+                <div className="detail-section">
+                  <h4>Demande d'ouverture de compte</h4>
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <label>Date de création:</label>
+                      <span>{selectedClient.date_creation ? new Date(selectedClient.date_creation).toLocaleDateString('fr-FR') : "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Montant facturé:</label>
+                      <span>{selectedClient.montant_facture ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(selectedClient.montant_facture) : "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Montant payé:</label>
+                      <span>{selectedClient.montant_paye ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(selectedClient.montant_paye) : "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Crédit:</label>
+                      <span>{selectedClient.credit ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(selectedClient.credit) : "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Établissement:</label>
+                      <span>{selectedClient.etablissement || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Service:</label>
+                      <span>{selectedClient.service || "N/A"}</span>
+                    </div>
+                    <div className="detail-item">
+                      <label>Nom du signataire:</label>
+                      <span>{selectedClient.nom_signataire || "N/A"}</span>
+                    </div>
+                    <div className="detail-item" style={{ gridColumn: "1 / -1" }}>
+                      <label>Motif:</label>
+                      <span>{selectedClient.motif || "N/A"}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="detail-item">
-                  <label>BP:</label>
-                  <span>{selectedClient.bp || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Ville:</label>
-                  <span>{selectedClient.ville || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Pays:</label>
-                  <span>{selectedClient.pays || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Adresse géo 1:</label>
-                  <span>{selectedClient.adresse_geo_1 || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Adresse géo 2:</label>
-                  <span>{selectedClient.adresse_geo_2 || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Téléphone:</label>
-                  <span>{selectedClient.telephone || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Email:</label>
-                  <span>{selectedClient.email || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Catégorie:</label>
-                  <span>{selectedClient.categorie}</span>
-                </div>
-                <div className="detail-item">
-                  <label>N° contribuable:</label>
-                  <span>{selectedClient.n_contribuable || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Type de tiers:</label>
-                  <span>{selectedClient.type_tiers}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="detail-section">
-              <h4>Demande d'ouverture de compte</h4>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <label>Date de création:</label>
-                  <span>{selectedClient.date_creation ? new Date(selectedClient.date_creation).toLocaleDateString('fr-FR') : "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Montant facturé:</label>
-                  <span>{selectedClient.montant_facture ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(selectedClient.montant_facture) : "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Montant payé:</label>
-                  <span>{selectedClient.montant_paye ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(selectedClient.montant_paye) : "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Crédit:</label>
-                  <span>{selectedClient.credit ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF' }).format(selectedClient.credit) : "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Établissement:</label>
-                  <span>{selectedClient.etablissement || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Service:</label>
-                  <span>{selectedClient.service || "N/A"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Nom du signataire:</label>
-                  <span>{selectedClient.nom_signataire || "N/A"}</span>
-                </div>
-                <div className="detail-item" style={{ gridColumn: "1 / -1" }}>
-                  <label>Motif:</label>
-                  <span>{selectedClient.motif || "N/A"}</span>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
             
             <div className="detail-section">
               <h4>Actions</h4>
               <div className="action-buttons">
-                <button 
-                  className="submit-button" 
-                  style={{ backgroundColor: "#10B981" }}
-                  onClick={() => handleApprove(selectedClient.id)}
-                >
-                  <CheckCircle size={16} style={{ marginRight: 8 }} />
-                  Approuver
-                </button>
-                <button 
-                  className="submit-button" 
-                  style={{ backgroundColor: "#EF4444" }}
-                  onClick={() => handleReject(selectedClient)}
-                >
-                  <XCircle size={16} style={{ marginRight: 8 }} />
-                  Rejeter
-                </button>
+                {!isEditing ? (
+                  <>
+                    <button 
+                      className="submit-button" 
+                      style={{ backgroundColor: "#10B981" }}
+                      onClick={() => handleApprove(selectedClient.id)}
+                    >
+                      <CheckCircle size={16} style={{ marginRight: 8 }} />
+                      Approuver
+                    </button>
+                    <button 
+                      className="submit-button" 
+                      style={{ backgroundColor: "#F59E0B" }}
+                      onClick={handleEdit}
+                    >
+                      Modifier
+                    </button>
+                    <button 
+                      className="submit-button" 
+                      style={{ backgroundColor: "#EF4444" }}
+                      onClick={() => handleReject(selectedClient)}
+                    >
+                      <XCircle size={16} style={{ marginRight: 8 }} />
+                      Rejeter
+                    </button>
+                  </>
+                ) : null}
               </div>
             </div>
           </div>

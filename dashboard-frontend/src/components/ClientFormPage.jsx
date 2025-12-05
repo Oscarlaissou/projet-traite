@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import { useAuth } from "../hooks/useAuth" // Importer le hook d'authentification
 
 const CATEGORIES = [
   "Sté Privées Hors Grp",
@@ -39,6 +40,11 @@ const ClientFormPage = () => {
   const [service, setService] = useState("")
   const [nom_signataire, setNomSignataire] = useState("")
   const [agences, setAgences] = useState([])
+  
+  const { user, hasPermission } = useAuth() // Utiliser le hook d'authentification pour obtenir les infos utilisateur
+  // Vérifier si l'utilisateur est un administrateur en utilisant les permissions
+  const isAdmin = hasPermission('manage_pending_clients')
+  
   const syncFromSignataire = (value) => {
     if (!value) return
     const match = agences.find((ag) => {
@@ -188,9 +194,32 @@ const ClientFormPage = () => {
     e.preventDefault()
     setError("")
     setSubmitting(true)
+    
     try {
-      const payload = {
+      // For new clients, we don't send the numero_compte as it should be generated automatically
+      const payload = id ? {
         numero_compte,
+        nom_raison_sociale,
+        bp,
+        ville,
+        pays,
+        adresse_geo_1,
+        adresse_geo_2,
+        telephone,
+        email,
+        categorie,
+        n_contribuable,
+        type_tiers,
+        date_creation: date_creation || null,
+        montant_facture: montant_facture ? Number(montant_facture) : null,
+        montant_paye: montant_paye ? Number(montant_paye) : null,
+        credit: credit ? Number(credit) : null,
+        motif,
+        etablissement,
+        service,
+        nom_signataire,
+      } : {
+        // For new clients, exclude numero_compte so it gets generated automatically
         nom_raison_sociale,
         bp,
         ville,
@@ -214,6 +243,7 @@ const ClientFormPage = () => {
 
       // For new clients, save to pending clients table
       // For existing clients (with id), update directly in tiers table
+      // For admins, create directly in tiers table bypassing pending approval
       if (id) {
         // Update existing client directly
         const url = `${baseUrl}/api/tiers/${id}`
@@ -230,26 +260,50 @@ const ClientFormPage = () => {
         // Redirection: en édition -> détail
         navigate(`/clients/${id}`)
       } else {
-        // Save new client to pending clients table
-        const url = `${baseUrl}/api/pending-clients`
-        const method = "POST"
-        const res = await fetch(url, {
-          method,
-          headers: authHeaders(),
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) {
-          const errorData = await res.json()
-          // Check if it's a duplicate account number error
-          if (errorData.message && errorData.message.includes('numero_compte')) {
-            throw new Error("Un client avec ce numéro de compte existe déjà.")
-          } else {
-            const msg = errorData.message || "Échec de la création du client en attente"
-            throw new Error(msg)
+        // Save new client - admins go directly to tiers table, others to pending clients
+        if (isAdmin) {
+          // Admins create directly in tiers table
+          const url = `${baseUrl}/api/tiers`
+          const method = "POST"
+          const res = await fetch(url, {
+            method,
+            headers: authHeaders(),
+            body: JSON.stringify(payload),
+          })
+          if (!res.ok) {
+            const errorData = await res.json()
+            // Check if it's a duplicate account number error
+            if (errorData.message && errorData.message.includes('numero_compte')) {
+              throw new Error("Un client avec ce numéro de compte existe déjà.")
+            } else {
+              const msg = errorData.message || "Échec de la création du client"
+              throw new Error(msg)
+            }
           }
+          // Redirection: en création -> grille clients
+          navigate("/dashboard?tab=credit&view=GestionClients")
+        } else {
+          // Non-admins save to pending clients table
+          const url = `${baseUrl}/api/pending-clients`
+          const method = "POST"
+          const res = await fetch(url, {
+            method,
+            headers: authHeaders(),
+            body: JSON.stringify(payload),
+          })
+          if (!res.ok) {
+            const errorData = await res.json()
+            // Check if it's a duplicate account number error
+            if (errorData.message && errorData.message.includes('numero_compte')) {
+              throw new Error("Un client avec ce numéro de compte existe déjà.")
+            } else {
+              const msg = errorData.message || "Échec de la création du client en attente"
+              throw new Error(msg)
+            }
+          }
+          // Redirection: en création -> grille clients
+          navigate("/dashboard?tab=credit&view=GestionClients")
         }
-        // Redirection: en création -> grille clients
-        navigate("/dashboard?tab=credit&view=GestionClients")
       }
     } catch (err) {
       setError(err.message || "Erreur inconnue")
@@ -281,8 +335,12 @@ const ClientFormPage = () => {
       <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {/* Champs Tiers */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Numéro de compte</label>
-          <input value={numero_compte} onChange={(e) => setNumeroCompte(e.target.value)} className="search-input" />
+          <label>Numéro de compte {!id && "(généré automatiquement)"}</label>
+          {id ? (
+            <input value={numero_compte} onChange={(e) => setNumeroCompte(e.target.value)} className="search-input" />
+          ) : (
+            <input value="" placeholder="Sera généré automatiquement" className="search-input" readOnly disabled />
+          )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label>Nom / Raison sociale *</label>

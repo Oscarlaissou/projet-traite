@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Plus, Upload, Download, X } from "lucide-react"
+import { ArrowLeft, Plus, Upload, Download, X, Search, Printer } from "lucide-react"
 import { useNavigate, useLocation } from "react-router-dom"
+import { useAuth } from "../hooks/useAuth"
 import Pagination from "./Pagination"
 import Can from "./Can"
 import "./Traites.css"
@@ -9,6 +10,7 @@ import "./Traites.css"
 import * as XLSX from 'xlsx'
 
 const Columns = [
+  { key: "numero_compte", label: "Numéro de compte" },
   { key: "nom_raison_sociale", label: "Nom / Raison sociale" },
   { key: "bp", label: "BP" },
   { key: "ville", label: "Ville" },
@@ -39,6 +41,7 @@ const CATEGORY_MAPPINGS = {
 }
 
 const ClientsGrid = () => {
+  const { user, authHeaders: authHeadersHook, baseUrl: baseUrlHook } = useAuth();
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -48,33 +51,41 @@ const ClientsGrid = () => {
   const [perPage, setPerPage] = useState(10)
   const [printPerPage] = useState(53) // Nombre d'éléments par page pour l'impression
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
-  const [sort, setSort] = useState({ key: "created_at", dir: "desc" }) // Default sort by created_at descending
+  const [sort, setSort] = useState({ key: "numero_compte", dir: "desc" }) // Default sort by numero_compte descending
   const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) // Plage de pages à imprimer
   const [showPrintModal, setShowPrintModal] = useState(false) // Modal pour sélectionner la plage d'impression
-  const [importing, setImporting] = useState(false)
-  const importInputRef = useRef(null)
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  // États pour l'importation CSV
+  
+  // States for CSV import functionality
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [csvHeaders, setCsvHeaders] = useState([])
   const [csvRecords, setCsvRecords] = useState([])
   const [columnMapping, setColumnMapping] = useState({})
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, status: '' })
-  const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [isImporting, setIsImporting] = useState(false)
   const [importController, setImportController] = useState(null)
+  
+  const importing = isImporting // alias for existing usage
+  const importInputRef = useRef(null)
+  const navigate = useNavigate()
+  const location = useLocation()
 
-  const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || "", [])
+  // Use the baseUrl from useAuth hook or fallback to environment variable
+  // Move useMemo outside of conditional logic to comply with React Hooks rules
+  const apiBaseUrl = useMemo(() => {
+    return baseUrlHook || process.env.REACT_APP_API_URL || ""
+  }, [baseUrlHook])
 
-  const authHeaders = () => {
-    const token = localStorage.getItem("token")
-    const headers = { Accept: "application/json" }
-    if (token) headers.Authorization = `Bearer ${token}`
-    return headers
+  // Use the authHeaders from useAuth hook or fallback to local implementation
+  const getApiHeaders = () => {
+    return authHeadersHook ? authHeadersHook() : (() => {
+      const token = localStorage.getItem("token")
+      const headers = { Accept: "application/json" }
+      if (token) headers.Authorization = `Bearer ${token}`
+      return headers
+    })()
   }
 
   const fetchClients = async () => {
@@ -98,10 +109,10 @@ const ClientsGrid = () => {
         }
       }
 
-      console.log('Request URL:', `${baseUrl}/api/tiers?${params.toString()}`);
+      console.log('Request URL:', `${apiBaseUrl}/api/tiers?${params.toString()}`);
       
-      const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
-        headers: authHeaders(),
+      const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
+        headers: getApiHeaders(),
       })
 
       if (!response.ok) {
@@ -145,8 +156,8 @@ const ClientsGrid = () => {
         }
       }
 
-      const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
-        headers: authHeaders(),
+      const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
+        headers: getApiHeaders(),
       })
 
       if (!response.ok) {
@@ -195,8 +206,8 @@ const ClientsGrid = () => {
         }
       }
 
-      const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
-        headers: authHeaders(),
+      const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
+        headers: getApiHeaders(),
       })
 
       if (!response.ok) {
@@ -268,8 +279,8 @@ const ClientsGrid = () => {
           }
         }
         
-        const response = await fetch(`${baseUrl}/api/tiers?${params.toString()}`, {
-          headers: authHeaders(),
+        const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
+          headers: getApiHeaders(),
         })
         
         if (!response.ok) {
@@ -352,36 +363,144 @@ const ClientsGrid = () => {
     setImportResult(null)
   }
 
-  // Fonction pour parser le CSV
-  const parseCSV = (text) => {
-    const separator = text.includes(';') ? ';' : ','
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0)
-    
-    if (lines.length === 0) {
-      return { headers: [], records: [] }
-    }
-    
-    const headers = lines[0].split(separator).map(h => h.trim().replace(/^"(.*)"$/, '$1'))
-    const records = lines.slice(1).map(line => {
-      return line.split(separator).map(field => field.trim().replace(/^"(.*)"$/, '$1'))
+  // Fonction pour lire un fichier avec un encodage spécifique
+  const readFileAsTextWithEncoding = (file, encoding) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        let result = reader.result
+        // Supprimer le BOM si présent
+        if (typeof result === 'string' && result.charCodeAt(0) === 0xFEFF) {
+          result = result.slice(1)
+        }
+        resolve(result)
+      }
+      reader.onerror = () => reject(reader.error)
+      reader.readAsText(file, encoding)
     })
-    
-    return { headers, records }
   }
+
+  // Fonction pour parser le CSV avec détection d'encodage
+  const parseCSV = async (file) => {
+    try {
+      // Essayer d'abord avec UTF-8
+      let text;
+      try {
+        text = await readFileAsTextWithEncoding(file, 'utf-8');
+      } catch (utf8Error) {
+        // Si UTF-8 échoue, essayer avec l'encodage par défaut
+        console.warn('UTF-8 decoding failed, trying with default encoding:', utf8Error);
+        text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsText(file);
+        });
+      }
+      
+      // Nettoyer le texte pour gérer correctement les caractères spéciaux
+      if (text.charCodeAt(0) === 0xFEFF) {
+        text = text.slice(1);
+      }
+      
+      // Détecter le délimiteur (virgule ou point-virgule)
+      const separator = text.includes(';') ? ';' : ',';
+      
+      // Diviser les lignes en prenant en compte les guillemets
+      const lines = [];
+      let currentLine = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1] || '';
+        
+        if (char === '"' && !inQuotes) {
+          inQuotes = true;
+        } else if (char === '"' && nextChar === '"') {
+          // Guillemets échappés
+          currentLine += '"';
+          i++; // Skip le prochain guillemet
+        } else if (char === '"' && inQuotes) {
+          inQuotes = false;
+        } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+          if (char === '\r') {
+            i++; // Skip \n
+          }
+          lines.push(currentLine);
+          currentLine = '';
+        } else {
+          currentLine += char;
+        }
+      }
+      
+      // Ajouter la dernière ligne si elle n'est pas vide
+      if (currentLine.trim().length > 0) {
+        lines.push(currentLine);
+      }
+      
+      if (lines.length === 0) {
+        return { headers: [], records: [] };
+      }
+      
+      // Parser les en-têtes
+      const headers = lines[0].split(separator).map(h => {
+        // Nettoyer les guillemets et les espaces
+        let cleaned = h.trim().replace(/^"(.*)"$/, '$1');
+        // Remplacer les entités HTML si présentes
+        cleaned = cleaned.replace(/&eacute;/g, 'é')
+                         .replace(/&egrave;/g, 'è')
+                         .replace(/&ecirc;/g, 'ê')
+                         .replace(/&ccedil;/g, 'ç')
+                         .replace(/&agrave;/g, 'à')
+                         .replace(/&ugrave;/g, 'ù')
+                         .replace(/&icirc;/g, 'î')
+                         .replace(/&ocirc;/g, 'ô')
+                         .replace(/&uuml;/g, 'ü')
+                         .replace(/&euml;/g, 'ë');
+        return cleaned;
+      });
+      
+      // Parser les enregistrements
+      const records = lines.slice(1).map(line => {
+        return line.split(separator).map(field => {
+          // Nettoyer les guillemets et les espaces
+          let cleaned = field.trim().replace(/^"(.*)"$/, '$1');
+          // Remplacer les entités HTML si présentes
+          cleaned = cleaned.replace(/&eacute;/g, 'é')
+                           .replace(/&egrave;/g, 'è')
+                           .replace(/&ecirc;/g, 'ê')
+                           .replace(/&ccedil;/g, 'ç')
+                           .replace(/&agrave;/g, 'à')
+                           .replace(/&ugrave;/g, 'ù')
+                           .replace(/&icirc;/g, 'î')
+                           .replace(/&ocirc;/g, 'ô')
+                           .replace(/&uuml;/g, 'ü')
+                           .replace(/&euml;/g, 'ë');
+          return cleaned;
+        });
+      });
+      
+      return { headers, records };
+    } catch (error) {
+      console.error('Error parsing CSV:', error);
+      throw new Error('Impossible de lire le fichier CSV. Veuillez vérifier que le fichier est au format CSV valide.');
+    }
+  };
 
   const handleFileChange = async (e) => {
     const file = e.target.files && e.target.files[0]
     if (!file) return
     
     try {
-      const text = await file.text()
-      const { headers, records } = parseCSV(text)
+      // Parser le fichier CSV avec gestion améliorée des encodages
+      const { headers, records } = await parseCSV(file)
       if (!headers.length || !records.length) throw new Error('CSV vide ou invalide')
 
       // Mapping automatique des colonnes selon les spécifications fournies
       const autoMapping = {}
       headers.forEach(header => {
-        const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9éèêëàáâãäåòóôõöøìíîïùúûüÿñç]/g, '')
         if (normalizedHeader.includes('nom') && normalizedHeader.includes('tiers')) {
           autoMapping['nom_raison_sociale'] = header
         } else if (normalizedHeader.includes('type') && !normalizedHeader.includes('tiers')) {
@@ -399,7 +518,9 @@ const ClientsGrid = () => {
           autoMapping['date_creation'] = header
         } else if (normalizedHeader.includes('signataire')) {
           autoMapping['nom_signataire'] = header
-        } else if (normalizedHeader.includes('general') && normalizedHeader.includes('n')) {
+        } else if ((normalizedHeader.includes('general') && normalizedHeader.includes('n')) || 
+                   normalizedHeader.includes('numero') || 
+                   normalizedHeader.includes('compte')) {
           autoMapping['numero_compte'] = header
         } else if (normalizedHeader.includes('type') && normalizedHeader.includes('tiers')) {
           autoMapping['type_tiers'] = header
@@ -475,7 +596,7 @@ const ClientsGrid = () => {
         const batch = mappedData.slice(i, i + batchSize)
         
         try {
-          const response = await fetch(`${baseUrl}/api/tiers/import-csv`, {
+          const response = await fetch(`${apiBaseUrl}/api/tiers/import-csv`, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify({ 
@@ -545,9 +666,9 @@ const ClientsGrid = () => {
         })
       }
       
-      // Fermer la modale après 2 secondes et rafraîchir les données
-      setTimeout(() => {
-        if (!controller.signal.aborted) {
+      // Fermer la modale après 2 secondes si aucune erreur n'est survenue, sinon attendre que l'utilisateur ferme manuellement
+      if (errors.length === 0 && !controller.signal.aborted) {
+        setTimeout(() => {
           setImportModalOpen(false)
           setIsImporting(false)
           // Nettoyer les données d'importation
@@ -557,8 +678,12 @@ const ClientsGrid = () => {
           setImportProgress({ current: 0, total: 0, status: '' })
           setImportResult(null)
           fetchClients()
-        }
-      }, 2000)
+        }, 2000)
+      } else if (!controller.signal.aborted) {
+        // En cas d'erreurs, on ne ferme pas automatiquement la modale
+        // L'utilisateur peut voir les erreurs et fermer manuellement
+        setIsImporting(false)
+      }
       
     } catch (err) {
       console.error('Erreur d\'importation:', err)
@@ -599,7 +724,7 @@ return { key, dir: "asc" }
     setSearch("")
     setAppliedSearch("")
     setSelectedCategory("")
-    setSort({ key: "created_at", dir: "desc" })
+    setSort({ key: "numero_compte", dir: "desc" })
     setPage(1)
   }
 
@@ -691,7 +816,7 @@ return { key, dir: "asc" }
             setAppliedSearch(search.trim())
           }}
         >
-          Rechercher
+          <Search size={16} style={{ marginRight: 6 }} /> Rechercher
         </button>
         <Can permission="create_clients">
           <button className="submit-button" onClick={() => navigate('/dashboard?tab=credit&view=NewClient')}>
@@ -709,10 +834,9 @@ return { key, dir: "asc" }
         </Can>
         <Can permission="view_clients">
           <button className="submit-button" onClick={handlePrint}>
-            <Download size={16} style={{ marginRight: 6 }} /> Imprimer
-          </button>
-        </Can>
-        <Can permission="create_clients">
+            <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
+          </button>        </Can>
+        <Can permission="create_clients" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
           <button className="submit-button" onClick={handleImportClick}>
             <Upload size={16} style={{ marginRight: 6 }} /> Importer CSV
           </button>
@@ -732,7 +856,7 @@ return { key, dir: "asc" }
             <thead>
               <tr>
                 {Columns.map((col) => {
-                  const isSortable = ["id", "nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
+                  const isSortable = ["id", "numero_compte", "nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
                   // Show arrow on nom_raison_sociale when sorting by ID
                   const isActive = sort.key === col.key || (sort.key === "id" && col.key === "nom_raison_sociale")
                   // Show appropriate arrow based on sort direction
@@ -833,6 +957,7 @@ return { key, dir: "asc" }
               <h4>Mapping des colonnes :</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[
+                  { key: 'numero_compte', label: 'Numéro de compte' },
                   { key: 'nom_raison_sociale', label: 'Nom / Raison sociale (Nom tiers)' },
                   { key: 'categorie', label: 'Catégorie (Type)' },
                   { key: 'adresse_geo_1', label: 'Adresse géographique 1' },
@@ -928,14 +1053,14 @@ return { key, dir: "asc" }
             )}
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={handleCancelImport} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer' }}>Annuler</button>
+              <button onClick={handleCancelImport} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><X size={16} style={{ marginRight: 6 }} /> Annuler</button>
               <button
                 onClick={handleImportConfirm}
                 disabled={isImporting}
                 style={{ padding: '8px 16px', border: 'none', borderRadius: 4, backgroundColor: isImporting ? '#9ca3af' : '#3b82f6', color: 'white', cursor: isImporting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
                 {isImporting && (<div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />)}
-                {isImporting ? 'Importation en cours...' : 'Importer'}
+                {isImporting ? 'Importation en cours...' : <><Upload size={16} style={{ marginRight: 6 }} /> Importer</>}
               </button>
             </div>
           </div>
@@ -982,12 +1107,12 @@ return { key, dir: "asc" }
             </div>
             
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowPrintModal(false)} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer' }}>Annuler</button>
+              <button onClick={() => setShowPrintModal(false)} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><X size={16} style={{ marginRight: 6 }} /> Annuler</button>
               <button
                 onClick={executePrint}
                 style={{ padding: '8px 16px', border: 'none', borderRadius: 4, backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer' }}
               >
-                Imprimer
+                <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
               </button>
             </div>
           </div>

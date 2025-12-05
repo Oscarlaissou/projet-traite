@@ -41,6 +41,7 @@ class TiersController extends Controller
      * @var array<string, array<int, string>>
      */
     private array $columnCandidates = [
+        'numero_compte' => ['numero_compte', 'num_compte', 'compte', 'account_number'],
         'nom_raison_sociale' => ['nom_raison_sociale', 'raison_sociale', 'nom', 'nom_tiers', 'nom_client'],
         'bp' => ['bp', 'boite_postale', 'boite_postale_1', 'boite_postale_client'],
         'ville' => ['ville', 'city', 'localite'],
@@ -102,6 +103,7 @@ class TiersController extends Controller
         $direction = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $allowedSorts = [
+            'numero_compte' => $this->resolvedColumns['numero_compte'] ?? 'numero_compte',
             'nom_raison_sociale' => $this->resolvedColumns['nom_raison_sociale'] ?? 'nom_raison_sociale',
             'bp' => $this->resolvedColumns['bp'] ?? 'bp',
             'ville' => $this->resolvedColumns['ville'] ?? 'ville',
@@ -123,6 +125,7 @@ class TiersController extends Controller
         $collection = $results->getCollection()->map(function (Tier $tier) {
             return [
                 'id' => $tier->getKey(),
+                'numero_compte' => $this->extractValue($tier, 'numero_compte'),
                 'nom_raison_sociale' => $this->extractValue($tier, 'nom_raison_sociale'),
                 'bp' => $this->extractValue($tier, 'bp'),
                 'ville' => $this->extractValue($tier, 'ville'),
@@ -153,7 +156,8 @@ class TiersController extends Controller
             'numero_compte' => [
                 'nullable',
                 'string',
-                'max:100',
+                'max:4', // Changé de 100 à 4 pour correspondre au nouveau format
+                'regex:/^\d{4}$/', // Ajout d'une règle regex pour s'assurer que c'est un nombre à 4 chiffres
                 Rule::unique('tiers', 'numero_compte')
             ],
             'nom_raison_sociale' => ['required', 'string', 'max:255'],
@@ -184,17 +188,17 @@ class TiersController extends Controller
             $tier = DB::transaction(function () use ($validated) {
                 // 1. Préparer les données pour la création du Tiers.
                 $tierData = [
-                    'numero_compte' => $validated['numero_compte'] ?? null,
+                    'numero_compte' => $validated['numero_compte'] ?? $this->generateNextAccountNumber(),
                     'nom_raison_sociale' => $validated['nom_raison_sociale'],
-                    'bp' => $validated['bp'] ?? null,
-                    'ville' => $validated['ville'] ?? null,
-                    'pays' => $validated['pays'] ?? null,
-                    'adresse_geo_1' => $validated['adresse_geo_1'] ?? null,
-                    'adresse_geo_2' => $validated['adresse_geo_2'] ?? null,
-                    'telephone' => $validated['telephone'] ?? null,
-                    'email' => $validated['email'] ?? null,
+                    'bp' => $validated['bp'] ?? '',
+                    'ville' => $validated['ville'] ?? '',
+                    'pays' => $validated['pays'] ?? 'Cameroun', // Valeur par défaut
+                    'adresse_geo_1' => $validated['adresse_geo_1'] ?? '', // Valeur par défaut vide au lieu de null
+                    'adresse_geo_2' => $validated['adresse_geo_2'] ?? '',
+                    'telephone' => $validated['telephone'] ?? '',
+                    'email' => $validated['email'] ?? '',
                     'categorie' => $validated['categorie'],
-                    'n_contribuable' => $validated['n_contribuable'] ?? null,
+                    'n_contribuable' => $validated['n_contribuable'] ?? '',
                     'type_tiers' => $validated['type_tiers'],
                 ];
                 
@@ -336,7 +340,8 @@ class TiersController extends Controller
             'numero_compte' => [
                 'nullable',
                 'string',
-                'max:100',
+                'max:4', // Changé de 100 à 4 pour correspondre au nouveau format
+                'regex:/^\d{4}$/', // Ajout d'une règle regex pour s'assurer que c'est un nombre à 4 chiffres
                 Rule::unique('tiers', 'numero_compte')->ignore($tier->id, 'id'),
             ],
             'nom_raison_sociale' => ['required', 'string', 'max:255'],
@@ -378,20 +383,26 @@ class TiersController extends Controller
                 }
 
                 // Mise à jour des champs Tiers
-                $tier->update([
-                    'numero_compte' => $validated['numero_compte'] ?? null,
+                $tierData = [
                     'nom_raison_sociale' => $validated['nom_raison_sociale'],
-                    'bp' => $validated['bp'] ?? null,
-                    'ville' => $validated['ville'] ?? null,
-                    'pays' => $validated['pays'] ?? null,
-                    'adresse_geo_1' => $validated['adresse_geo_1'] ?? null,
-                    'adresse_geo_2' => $validated['adresse_geo_2'] ?? null,
-                    'telephone' => $validated['telephone'] ?? null,
-                    'email' => $validated['email'] ?? null,
+                    'bp' => $validated['bp'] ?? '',
+                    'ville' => $validated['ville'] ?? '',
+                    'pays' => $validated['pays'] ?? 'Cameroun', // Valeur par défaut
+                    'adresse_geo_1' => $validated['adresse_geo_1'] ?? '', // Valeur par défaut vide au lieu de null
+                    'adresse_geo_2' => $validated['adresse_geo_2'] ?? '',
+                    'telephone' => $validated['telephone'] ?? '',
+                    'email' => $validated['email'] ?? '',
                     'categorie' => $validated['categorie'],
-                    'n_contribuable' => $validated['n_contribuable'] ?? null,
+                    'n_contribuable' => $validated['n_contribuable'] ?? '',
                     'type_tiers' => $validated['type_tiers'],
-                ]);
+                ];
+                
+                // Ne pas modifier le numéro de compte existant sauf s'il est explicitement fourni
+                if (isset($validated['numero_compte'])) {
+                    $tierData['numero_compte'] = $validated['numero_compte'];
+                }
+                
+                $tier->update($tierData);
 
                 // Détecter les changements sur Tiers
                 $changes = [];
@@ -462,7 +473,7 @@ class TiersController extends Controller
             $payload['id'] = $tierId;
         }
 
-        $payload = $this->assignDemandeValue($payload, 'date_creation', $validated, $existing, $isCreation ? now() : null);
+        $payload = $this->assignDemandeValue($payload, 'date_creation', $validated, $existing, now());
         $payload = $this->assignDemandeValue($payload, 'montant_facture', $validated, $existing);
         $payload = $this->assignDemandeValue($payload, 'montant_paye', $validated, $existing);
         $payload = $this->assignDemandeValue($payload, 'credit', $validated, $existing);
@@ -490,7 +501,14 @@ class TiersController extends Controller
         }
 
         if (array_key_exists($column, $validated)) {
-            $payload[$column] = $validated[$column];
+            $value = $validated[$column];
+            // Pour les dates, s'assurer qu'elles sont au bon format
+            if ($column === 'date_creation' && $value !== null && $value !== '') {
+                $parsedDate = $this->parseDateValue($value);
+                $payload[$column] = $parsedDate ?: $value;
+            } else {
+                $payload[$column] = $value;
+            }
         } elseif ($existing && property_exists($existing, $column)) {
             $payload[$column] = $existing->{$column};
         } elseif ($default !== null) {
@@ -551,6 +569,24 @@ class TiersController extends Controller
             return response()->json(['message' => 'Aucune donnée à importer.'], 422);
         }
 
+        // Obtenir le dernier numéro de compte utilisé avant de commencer l'importation
+        $lastTier = Tier::whereNotNull('numero_compte')
+            ->orderBy('numero_compte', 'desc')
+            ->first();
+        
+        $nextNumber = 1;
+        if ($lastTier) {
+            // Extraire le numéro de la fin du numéro de compte existant
+            $lastNumero = $lastTier->numero_compte;
+            // Adapter l'expression régulière pour le nouveau format (0001, 0002, etc.)
+            if (preg_match('/^(\d+)$/', $lastNumero, $matches)) {
+                $nextNumber = (int)$matches[1] + 1;
+            } else {
+                // Si le format n'est pas reconnu, utiliser le nombre total de tiers + 1
+                $nextNumber = Tier::count() + 1;
+            }
+        }
+
         $summary = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []];
 
         foreach ($data as $index => $item) {
@@ -561,7 +597,14 @@ class TiersController extends Controller
                     continue;
                 }
                 
-                $result = $this->upsertTierFromImport($item, $duplicateAction);
+                // Passer le numéro suivant à la fonction d'importation
+                $result = $this->upsertTierFromImport($item, $duplicateAction, $nextNumber);
+                
+                // Incrémenter le numéro pour le prochain enregistrement si un nouveau client a été créé
+                if ($result === 'created') {
+                    $nextNumber++;
+                }
+                
                 $summary[$result] = ($summary[$result] ?? 0) + 1;
             } catch (\Throwable $e) {
                 $summary['errors'][] = sprintf('Ligne %d: %s', $index + 1, $e->getMessage());
@@ -571,8 +614,11 @@ class TiersController extends Controller
         return response()->json($summary);
     }
 
-    private function upsertTierFromImport(array $data, string $duplicateAction): string
+    private function upsertTierFromImport(array $data, string $duplicateAction, int $nextNumber): string
     {
+        // Normaliser les données d'importation
+        $data = $this->normalizeImportedRow($data);
+        
         // Validation des données requises
         if (empty($data['nom_raison_sociale'])) {
             throw new \InvalidArgumentException('Le nom ou la raison sociale est requis');
@@ -594,29 +640,12 @@ class TiersController extends Controller
         // Générer un numéro de compte unique si non fourni
         $numeroCompte = $data['numero_compte'] ?? null;
         if (empty($numeroCompte)) {
-            // Générer un numéro de compte unique basé sur le nom et un timestamp
-            $base = substr(strtoupper(str_replace([' ', '-', '_', '/', '(', ')'], '', $data['nom_raison_sociale'])), 0, 8);
-            $timestamp = substr((string)time(), -5); // Prendre seulement les 5 derniers chiffres
-            $numeroCompte = $base . '-' . $timestamp;
-            
-            // S'assurer qu'il est unique et respecte la limite de 20 caractères
-            if (strlen($numeroCompte) > 20) {
-                $numeroCompte = substr($numeroCompte, 0, 20);
-            }
-            
-            // Vérifier l'unicité et ajuster si nécessaire
-            $existing = Tier::where('numero_compte', $numeroCompte)->first();
-            if ($existing) {
-                $suffix = rand(10, 99);
-                $numeroCompte = substr($numeroCompte, 0, 18) . $suffix;
-                if (strlen($numeroCompte) > 20) {
-                    $numeroCompte = substr($numeroCompte, 0, 20);
-                }
-            }
+            // Utiliser le numéro fourni par l'importation au lieu de générer un nouveau
+            $numeroCompte = str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
         } else {
-            // S'assurer que le numéro fourni respecte la limite de 20 caractères
-            if (strlen($numeroCompte) > 20) {
-                $numeroCompte = substr($numeroCompte, 0, 20);
+            // S'assurer que le numéro fourni respecte la limite de 4 caractères
+            if (strlen($numeroCompte) > 4) {
+                $numeroCompte = substr($numeroCompte, 0, 4);
             }
         }
 
@@ -660,19 +689,21 @@ class TiersController extends Controller
         $tierPayload = [
             'numero_compte' => $numeroCompte,
             'nom_raison_sociale' => $data['nom_raison_sociale'],
-            'bp' => $data['bp'] ?? null,
-            'ville' => $data['ville'] ?? null,
+            'bp' => $data['bp'] ?? '',
+            'ville' => $data['ville'] ?? '',
             'pays' => $data['pays'] ?? 'Cameroun', // Valeur par défaut
             'adresse_geo_1' => $data['adresse_geo_1'] ?? '', // Valeur par défaut vide au lieu de null
-            'adresse_geo_2' => $data['adresse_geo_2'] ?? null,
-            'telephone' => $data['telephone'] ?? null,
-            'email' => $data['email'] ?? null,
+            'adresse_geo_2' => $data['adresse_geo_2'] ?? '',
+            'telephone' => $data['telephone'] ?? '',
+            'email' => $data['email'] ?? '',
             'categorie' => $categorie,
-            'n_contribuable' => $data['n_contribuable'] ?? null,
+            'n_contribuable' => $data['n_contribuable'] ?? '',
             'type_tiers' => $typeTiers,
         ];
 
         if ($tier) {
+            // Pour les enregistrements existants, ne pas modifier le numéro de compte existant
+            unset($tierPayload['numero_compte']);
             $tier->update($tierPayload);
             $this->persistDemandeFromImport($tier->id, $data, false);
             return 'updated';
@@ -680,6 +711,19 @@ class TiersController extends Controller
 
         $newTier = Tier::create($tierPayload);
         $this->persistDemandeFromImport($newTier->id, $data, true);
+        
+        // Enregistrer l'activité de création pour l'historique
+        try {
+            TierActivity::create([
+                'tier_id' => $newTier->id,
+                'user_id' => optional(Auth::user())->id,
+                'action' => 'Création',
+                'changes' => null,
+            ]);
+        } catch (\Throwable $e) {
+            // ignore logging failures
+        }
+        
         return 'created';
     }
 
@@ -688,6 +732,9 @@ class TiersController extends Controller
         if (empty($this->demandeColumns)) {
             return;
         }
+
+        // Normaliser les données avant de les insérer
+        $data = $this->normalizeImportedRow($data);
 
         $demande = DB::table('demande_ouverture_compte')->where('id', $tierId)->first();
         
@@ -700,6 +747,9 @@ class TiersController extends Controller
         // Mapper les champs de la demande
         if (isset($data['date_creation'])) {
             $payload = $this->assignDemandeValue($payload, 'date_creation', ['date_creation' => $data['date_creation']], $demande, $isCreation ? now() : null);
+        } else {
+            // Si aucune date de création n'est fournie, utiliser la date d'aujourd'hui
+            $payload['date_creation'] = now()->format('Y-m-d');
         }
         
         if (isset($data['montant_facture'])) {
@@ -931,15 +981,38 @@ class TiersController extends Controller
     }
 
     /**
-     * Historique des clients - Fonctionne comme l'historique des traites.
+     * Historique des clients - Affiche uniquement la dernière activité pour l'affichage dans l'interface.
      */
     public function historique(Request $request): JsonResponse
     {
+        // Vérifier que l'utilisateur a la permission de gérer les clients en attente (admins uniquement)
+        $user = Auth::user();
+        \Log::info('Historique request', [
+            'user_id' => $user ? $user->id : null,
+            'user_permissions' => $user ? $user->getPermissions() : null,
+            'has_manage_pending_clients' => $user ? $user->hasPermission('manage_pending_clients') : false
+        ]);
+        
+        if (!$user || !$user->hasPermission('manage_pending_clients')) {
+            \Log::warning('Unauthorized access to historique', [
+                'user_id' => $user ? $user->id : null,
+                'user_role' => $user ? $user->role : null
+            ]);
+            
+            return response()->json(['message' => 'Accès non autorisé'], 403);
+        }
+        
         $type = $request->get('type'); // 'client' or 'mois'
         $nom = $request->get('nom_raison_sociale');
         $month = $request->get('month'); // YYYY-MM
+        
+        \Log::info('Historique parameters', [
+            'type' => $type,
+            'nom' => $nom,
+            'month' => $month
+        ]);
 
-        // Objectif: retourner TOUS les tiers, avec la dernière action et l'utilisateur s'ils existent
+        // Objectif: retourner TOUS les tiers, avec la dernière activité et l'utilisateur associé
         $query = Tier::query()
             ->with(['latestActivity.user:id,username'])
             ->select(['id','numero_compte','nom_raison_sociale']);
@@ -963,7 +1036,13 @@ class TiersController extends Controller
             });
         }
 
-        $tiers = $query->get();
+        try {
+            $tiers = $query->get();
+            \Log::info('Tiers fetched', ['count' => $tiers->count()]);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching tiers', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur lors du chargement des clients'], 500);
+        }
 
         $mapped = $tiers->map(function($t) {
             // Récupérer la dernière activité et l'utilisateur associé
@@ -978,8 +1057,20 @@ class TiersController extends Controller
                 $originalCreator = $act->changes['original_creator']['username'];
             }
             
-            // La date est toujours celle de l'activité (obligatoire maintenant)
-            $date = $act && $act->created_at ? $act->created_at->toDateTimeString() : now()->toDateTimeString();
+            // La date est toujours celle de la dernière activité
+            // Si aucune activité n'existe, utiliser la date de création du client
+            if ($act && $act->created_at) {
+                $date = $act->created_at->toDateTimeString();
+            } else {
+                // Pour les clients sans activité, utiliser la date de création du client
+                $firstActivity = $t->activities()->oldest()->first();
+                if ($firstActivity && $firstActivity->created_at) {
+                    $date = $firstActivity->created_at->toDateTimeString();
+                } else {
+                    // Utiliser la date de création du client si disponible
+                    $latestDate = $tier->created_at ? $tier->created_at->toDateTimeString() : now()->toDateTimeString();
+                }
+            }
             
             // Récupérer les changements s'il y en a
             $changes = $act?->changes ?? null;
@@ -987,6 +1078,7 @@ class TiersController extends Controller
             return [
                 'date' => (string)$date,
                 'nom_raison_sociale' => $t->nom_raison_sociale,
+                'numero_compte' => $t->numero_compte,
                 'action' => $action,
                 'username' => $displayUser,
                 'original_creator' => $originalCreator,
@@ -998,8 +1090,185 @@ class TiersController extends Controller
             return $row['date'] ?? '';
         })
         ->values();
+        
+        \Log::info('Historique response', ['activities_count' => $mapped->count()]);
 
         return response()->json($mapped, 200, [], JSON_UNESCAPED_UNICODE);
+    }
+    
+    /**
+     * Export des historiques clients - Retourne toutes les activités pour l'exportation avec le contenu complet de la grille.
+     */
+    public function exportHistorique(Request $request): JsonResponse
+    {
+        // Vérifier que l'utilisateur a la permission de gérer les clients en attente (admins uniquement)
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('manage_pending_clients')) {
+            return response()->json(['message' => 'Accès non autorisé'], 403);
+        }
+        
+        $type = $request->get('type'); // 'client' or 'mois'
+        $nom = $request->get('nom_raison_sociale');
+        $month = $request->get('month'); // YYYY-MM
+
+        // Objectif: retourner TOUS les tiers, avec toutes les activités et les utilisateurs associés pour l'exportation
+        $query = Tier::query()
+            ->with(['activities.user:id,username'])
+            ->select(['id','numero_compte','nom_raison_sociale']);
+
+        if ($type === 'client' && $nom) {
+            $query->where('nom_raison_sociale', 'like', "%$nom%");
+        }
+
+        if ($type === 'mois' && $month && preg_match('/^\\d{4}-\\d{2}$/', $month)) {
+            // Filtrer par mois en utilisant tier_activities
+            $parts = explode('-', $month);
+            $yyyy = (int)($parts[0] ?? date('Y'));
+            $mm = (int)($parts[1] ?? date('m'));
+            $lastDay = cal_days_in_month(CAL_GREGORIAN, $mm, $yyyy);
+            $start = sprintf('%04d-%02d-01', $yyyy, $mm);
+            $end = sprintf('%04d-%02d-%02d', $yyyy, $mm, $lastDay);
+            
+            // Filtrer par les tiers qui ont des activités dans ce mois
+            $query->whereHas('activities', function($q) use ($start, $end) {
+                $q->whereBetween('created_at', [$start, $end]);
+            });
+        }
+
+        try {
+            $tiers = $query->get();
+        } catch (\Exception $e) {
+            \Log::error('Error fetching tiers for export', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur lors du chargement des clients pour l\'export'], 500);
+        }
+
+        // Collecter toutes les activités de tous les tiers avec leurs informations complètes
+        $allActivities = collect();
+        
+        foreach ($tiers as $tier) {
+            // Ajouter d'abord l'entrée principale du client (comme dans la grille)
+            $latestActivity = $tier->latestActivity;
+            $latestAction = $latestActivity?->action ?? 'Création';
+            $latestUser = $latestActivity?->user; // peut être null
+            $latestDisplayUser = $latestUser?->username ?? null;
+            $latestOriginalCreator = null;
+            
+            // Vérifier si nous avons des informations sur le créateur original
+            if ($latestActivity && $latestActivity->changes && isset($latestActivity->changes['original_creator']['username'])) {
+                $latestOriginalCreator = $latestActivity->changes['original_creator']['username'];
+            }
+            
+            // La date est toujours celle de la dernière activité
+            // Si aucune activité n'existe, utiliser la date de création du client
+            if ($latestActivity && $latestActivity->created_at) {
+                $latestDate = $latestActivity->created_at->toDateTimeString();
+            } else {
+                // Pour les clients sans activité, utiliser la date de création du client
+                $firstActivity = $tier->activities()->oldest()->first();
+                if ($firstActivity && $firstActivity->created_at) {
+                    $latestDate = $firstActivity->created_at->toDateTimeString();
+                } else {
+                    // Utiliser la date de création du client si disponible
+                    $latestDate = $tier->created_at ? $tier->created_at->toDateTimeString() : now()->toDateTimeString();
+                }
+            }
+            
+            // Ajouter l'entrée principale du client
+            $allActivities->push([
+                'date' => (string)$latestDate,
+                'nom_raison_sociale' => $tier->nom_raison_sociale,
+                'numero_compte' => $tier->numero_compte,
+                'action' => $latestAction,
+                'username' => $latestDisplayUser,
+                'original_creator' => $latestOriginalCreator,
+                'changes' => $latestActivity?->changes ?? null,
+                'is_summary_row' => true, // Indicateur pour distinguer les lignes récapitulatives
+            ]);
+            
+            // Ajouter ensuite toutes les activités individuelles du client
+            foreach ($tier->activities as $activity) {
+                $user = $activity->user; // peut être null
+                $displayUser = $user?->username ?? null;
+                $originalCreator = null;
+                
+                // Vérifier si nous avons des informations sur le créateur original
+                if ($activity->changes && isset($activity->changes['original_creator']['username'])) {
+                    $originalCreator = $activity->changes['original_creator']['username'];
+                }
+                
+                // La date est toujours celle de l'activité
+                // Si aucune activité n'existe, utiliser la date de création du client
+                if ($activity->created_at) {
+                    $date = $activity->created_at->toDateTimeString();
+                } else {
+                    // Pour les clients sans activité, utiliser la date de création du client
+                    $firstActivity = $tier->activities()->oldest()->first();
+                    if ($firstActivity && $firstActivity->created_at) {
+                        $date = $firstActivity->created_at->toDateTimeString();
+                    } else {
+                        // Utiliser la date de création du client si disponible
+                        $date = $tier->created_at ? $tier->created_at->toDateTimeString() : now()->toDateTimeString();
+                    }
+                }
+                
+                // Récupérer les changements s'il y en a
+                $changes = $activity->changes ?? null;
+                
+                $allActivities->push([
+                    'date' => (string)$date,
+                    'nom_raison_sociale' => $tier->nom_raison_sociale,
+                    'numero_compte' => $tier->numero_compte,
+                    'action' => $activity->action,
+                    'username' => $displayUser,
+                    'original_creator' => $originalCreator,
+                    'changes' => $changes,
+                    'is_summary_row' => false, // Indicateur pour distinguer les lignes détaillées
+                ]);
+            }
+        }
+
+        // Trier TOUTES les données par date décroissante (plus récent en premier)
+        // Tous types d'actions confondus (création et modification)
+        $sortedActivities = $allActivities->sortByDesc(function($row) {
+            return $row['date'] ?? '';
+        })->values();
+
+        return response()->json($sortedActivities, 200, [], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Génère le prochain numéro de compte disponible.
+     */
+    private function generateNextAccountNumber(): string
+    {
+        // Trouver le dernier numéro de compte existant
+        $lastTier = Tier::whereNotNull('numero_compte')
+            ->orderBy('numero_compte', 'desc')
+            ->first();
+        
+        $nextNumber = 1;
+        if ($lastTier) {
+            // Extraire le numéro de la fin du numéro de compte existant
+            $lastNumero = $lastTier->numero_compte;
+            // Adapter l'expression régulière pour le nouveau format (0001, 0002, etc.)
+            if (preg_match('/^(\d+)$/', $lastNumero, $matches)) {
+                $nextNumber = (int)$matches[1] + 1;
+            } else {
+                // Si le format n'est pas reconnu, utiliser le nombre total de tiers + 1
+                $nextNumber = Tier::count() + 1;
+            }
+        }
+        
+        // Générer un nouveau numéro de compte avec le format souhaité (0001, 0002, etc.)
+        $accountNumber = str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        
+        // Vérifier que le numéro est unique, sinon en générer un nouveau
+        while (Tier::where('numero_compte', $accountNumber)->exists()) {
+            $nextNumber++;
+            $accountNumber = str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        }
+        
+        return $accountNumber;
     }
 
     public function preview(Tier $tier)
