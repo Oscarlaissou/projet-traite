@@ -99,7 +99,7 @@ const DashboardStats = () => {
       const name = `${selectedClientYear}-${String(m).padStart(2, '0')}`
       const found = byName.get(name) || {}
       const baseVal = found.clients ?? 0
-      const value = (selectedClientYear === currentYear && m > currentMonth) ? null : baseVal
+      const value = (selectedTraiteYear === currentYear && m > currentMonth) ? null : baseVal
       return { name, label: monthNames[m-1], clients: value }
     })
     return result
@@ -337,17 +337,9 @@ const DashboardStats = () => {
     }
   ]
 
-  // If user shouldn't see dashboard stats, show a simple message
+  // If user shouldn't see dashboard stats, show nothing
   if (!shouldShowDashboardStats()) {
-    return (
-      <div className="dashboard-stats">
-        <h2 className="stats-title">Accès restreint</h2>
-        <div className="restricted-access-message">
-          <p>Vous n'avez pas accès aux statistiques du tableau de bord.</p>
-          <p>Veuillez contacter votre administrateur pour plus d'informations.</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -545,6 +537,14 @@ const DashboardStats = () => {
                         <Cell 
                           key={`cell-${index}`} 
                           fill={entry.color} 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            // Naviguer vers la grille des clients avec un filtre par type uniquement tout en restant sur le dashboard
+                            const typeName = entry.name;
+                            if (typeName === 'Client' || typeName === 'Fournisseur') {
+                              navigate(`/dashboard?tab=traites&view=Clients&type_tiers=${encodeURIComponent(typeName)}`);
+                            }
+                          }}
                         />
                       ))}
                     </Pie>
@@ -557,7 +557,16 @@ const DashboardStats = () => {
                       verticalAlign="bottom" 
                       align="center"
                       formatter={(value, entry, index) => (
-                        <span style={{ color: '#333', fontSize: '12px' }}>
+                        <span 
+                          style={{ color: '#333', fontSize: '12px', cursor: 'pointer' }}
+                          onClick={() => {
+                            // Naviguer vers la grille des clients avec un filtre par type uniquement tout en restant sur le dashboard
+                            const typeName = entry.value;
+                            if (typeName === 'Client' || typeName === 'Fournisseur') {
+                              navigate(`/dashboard?tab=credit&view=GestionClients&type_tiers=${encodeURIComponent(typeName)}`);
+                            }
+                          }}
+                        >
                           {value} ({clientTypeData[index]?.value || 0})
                         </span>
                       )}

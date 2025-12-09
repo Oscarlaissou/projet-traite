@@ -11,6 +11,8 @@ import ClientsGrid from './components/ClientsGrid';
 import ClientDetailPage from './components/ClientDetailPage';
 import SettingsPage from './components/SettingsPage';
 import PendingClientsGrid from './components/PendingClientsGrid';
+import EditRejectedClient from './components/EditRejectedClient';
+// Removed ClientApprovalHistory import since it will be rendered within the Dashboard
 
 // Composant pour les routes protégées
 function ProtectedRoute({ children }) {
@@ -123,15 +125,25 @@ function AppRoutes() {
                     </ProtectedRoute>
                 }
             />
-            <Route
-                path="/dashboard/clients/:id"
+            <Route 
+                path="/dashboard/clients/:id" 
                 element={
                     <ProtectedRoute>
                         <ClientDetailPage />
                     </ProtectedRoute>
-                }
+                } 
             />
             {/* ------------------------------------------------------------------ */}
+
+            {/* Route pour modifier un client rejeté */}
+            <Route
+                path="/dashboard/clients/edit/:id"
+                element={
+                    <ProtectedRoute>
+                        <EditRejectedClient />
+                    </ProtectedRoute>
+                }
+            />
 
             <Route 
                 path="/pending-clients" 

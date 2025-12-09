@@ -101,11 +101,19 @@ const SettingsPage = () => {
         const data = await res.json();
         setPermissions(data);
         
-        // Initialize userPermissions state
+        // Initialize userPermissions state - deduplicated version
         const initialPermissions = {};
+        const uniquePermissions = [];
+        const permissionNames = new Set();
+        
         data.forEach(permission => {
-          initialPermissions[permission.name] = false;
+          if (!permissionNames.has(permission.name)) {
+            permissionNames.add(permission.name);
+            uniquePermissions.push(permission);
+            initialPermissions[permission.name] = false;
+          }
         });
+        
         setUserPermissions(initialPermissions);
       }
     } catch (err) {
@@ -344,11 +352,12 @@ const SettingsPage = () => {
       
       if (res.ok) {
         const data = await res.json();
-        // Update userPermissions state with user's current permissions
+        // Update userPermissions state with user's current permissions - deduplicated version
         setUserPermissions(prev => {
           const updated = { ...prev };
+          const uniquePermissions = Array.from(new Set(data));
           Object.keys(updated).forEach(permission => {
-            updated[permission] = data.includes(permission);
+            updated[permission] = uniquePermissions.includes(permission);
           });
           return updated;
         });
@@ -468,7 +477,7 @@ const SettingsPage = () => {
     }
   };
 
-  // Group permissions by category for better UI
+  // Group permissions by category for better UI - improved version to avoid duplicates
   const groupPermissions = (permissions) => {
     const groups = {
       'Clients': [],
@@ -476,13 +485,24 @@ const SettingsPage = () => {
       'Système': []
     };
     
+    const addedPermissions = new Set();
+    
     permissions.forEach(permission => {
+      // Skip if already added
+      if (addedPermissions.has(permission.name)) return;
+      
       if (permission.name.includes('client')) {
         groups['Clients'].push(permission);
+        addedPermissions.add(permission.name);
       } else if (permission.name.includes('traite')) {
         groups['Traites'].push(permission);
+        addedPermissions.add(permission.name);
       } else {
-        groups['Système'].push(permission);
+        // Check if not already added to system group
+        if (!addedPermissions.has(permission.name)) {
+          groups['Système'].push(permission);
+          addedPermissions.add(permission.name);
+        }
       }
     });
     
@@ -876,7 +896,7 @@ const SettingsPage = () => {
                           <div key={groupName} className="permission-group">
                             <h3>{groupName}</h3>
                             {permissionGroups[groupName].map(permission => (
-                              <div key={permission.name} className="permission-toggle">
+                              <div key={`${groupName}-${permission.name}`} className="permission-toggle">
                                 <label className="toggle yellow-toggle">
                                   <input
                                     type="checkbox"
@@ -886,7 +906,7 @@ const SettingsPage = () => {
                                   <span className="slider"></span>
                                 </label>
                                 <span className="permission-label">
-                                  {permission.description}
+                                  {permission.description || permission.name}
                                 </span>
                               </div>
                             ))}

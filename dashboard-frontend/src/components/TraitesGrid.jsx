@@ -21,6 +21,21 @@ const Columns = [
   { key: 'statut', label: 'Statut', minWidth: 100 }
 ]
 
+// Define PrintColumns array for professional printing with all form fields
+const PrintColumns = [
+  { key: 'numero', label: 'Numéro' },
+  { key: 'nombre_traites', label: 'Nb TT' },
+  { key: 'echeance', label: 'Échéance' },
+  { key: 'date_emission', label: 'Émission' },
+  { key: 'montant', label: 'Montant' },
+  { key: 'nom_raison_sociale', label: 'Nom/RS' },
+  { key: 'domiciliation_bancaire', label: 'Domiciliation' },
+  { key: 'rib', label: 'RIB' },
+  { key: 'motif', label: 'Motif' },
+  { key: 'commentaires', label: 'Commentaires' },
+  { key: 'statut', label: 'Statut' }
+]
+
 const TraitesGrid = () => {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -91,48 +106,10 @@ const TraitesGrid = () => {
     setIsPrinting(true);
     
     try {
-      // Implementation depends on selected option
-      switch (printOptions.selectedOption) {
-        case 'all':
-          // Fetch all data for printing
-          await fetchAllItemsForPrinting();
-          break;
-        case 'specific':
-          // Print specific page
-          await fetchSpecificPageForPrinting(printOptions.specificPage);
-          break;
-        case 'current':
-          // Print current view with 53 items per page
-          await fetchCurrentViewForPrinting();
-          break;
-        case 'range':
-          // Print page range
-          await fetchPageRangeForPrinting(printOptions.fromPage, printOptions.toPage);
-          break;
-        case 'pages':
-          // Print specific pages
-          await fetchSpecificPagesForPrinting(printOptions.pageRanges);
-          break;
-        default:
-          // Default to current view
-          await fetchCurrentViewForPrinting();
-      }
+      let allItems = [];
+      let formattedItems = [];
       
-      // Trigger print after a short delay to ensure state updates
-      setTimeout(() => {
-        window.print();
-        setIsPrinting(false);
-      }, 500);
-    } catch (error) {
-      console.error('Print error:', error);
-      setIsPrinting(false);
-      alert('Erreur lors de la préparation de l\'impression');
-    }
-  };
-
-  // Helper functions for printing
-  const fetchAllItemsForPrinting = async () => {
-    try {
+      // Always fetch ALL data for printing (respecting current filters)
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (statut) params.append('statut', statut);
@@ -140,21 +117,125 @@ const TraitesGrid = () => {
       if (to) params.append('to', to);
       if (sort?.key) params.append('sort', sort.key);
       if (sort?.dir) params.append('dir', sort.dir);
-      params.append('per_page', '1000'); // Fetch all items
       
-      const response = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
-        headers: getApiHeaders() 
-      });
+      // Implementation depends on selected option
+      switch (printOptions.selectedOption) {
+        case 'all':
+          // Fetch all data for printing with 27 items per page
+          params.append('per_page', '1000'); // Fetch all items
+          const allResponse = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
+            headers: getApiHeaders() 
+          });
+          
+          if (!allResponse.ok) throw new Error('Failed to fetch data for printing');
+          
+          const allData = await allResponse.json();
+          allItems = allData.data || allData || [];
+          break;
+          
+        case 'specific':
+          // Fetch specific page with exactly 27 items per page for printing
+          params.append('page', printOptions.specificPage);
+          params.append('per_page', '27'); // Exactly 27 items for printing
+          const specificResponse = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
+            headers: getApiHeaders() 
+          });
+          
+          if (!specificResponse.ok) throw new Error('Failed to fetch data for printing');
+          
+          const specificData = await specificResponse.json();
+          allItems = specificData.data || specificData || [];
+          break;
+          
+        case 'current':
+          // For current view, we need to fetch with 27 items per page instead of the default 10
+          // We'll fetch the same page but with 27 items per page
+          params.append('page', page);
+          params.append('per_page', '27'); // Use 27 items per page for printing
+          const currentResponse = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
+            headers: getApiHeaders() 
+          });
+          
+          if (!currentResponse.ok) throw new Error('Failed to fetch data for printing');
+          
+          const currentData = await currentResponse.json();
+          allItems = currentData.data || currentData || [];
+          break;
+          
+        case 'range':
+          // Fetch all data first, then filter by page range
+          params.append('per_page', '1000'); // Fetch all items
+          const rangeResponse = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
+            headers: getApiHeaders() 
+          });
+          
+          if (!rangeResponse.ok) throw new Error('Failed to fetch data for printing');
+          
+          const rangeData = await rangeResponse.json();
+          const allRangeItems = rangeData.data || rangeData || [];
+          
+          // Calculate start and end indices for the page range using 27 items per page
+          const startPageIndex = (printOptions.fromPage - 1) * 27;
+          const endPageIndex = printOptions.toPage * 27;
+          allItems = allRangeItems.slice(startPageIndex, endPageIndex);
+          break;
+          
+        case 'pages':
+          // Fetch all data first, then filter by specific pages
+          params.append('per_page', '1000'); // Fetch all items
+          const pagesResponse = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
+            headers: getApiHeaders() 
+          });
+          
+          if (!pagesResponse.ok) throw new Error('Failed to fetch data for printing');
+          
+          const pagesData = await pagesResponse.json();
+          const allPagesItems = pagesData.data || pagesData || [];
+          
+          // Parse page ranges (e.g., "1,3,5-7") using 27 items per page
+          const pageRanges = printOptions.pageRanges.split(',').map(range => range.trim());
+          allItems = [];
+          
+          pageRanges.forEach(range => {
+            if (range.includes('-')) {
+              const [start, end] = range.split('-').map(Number);
+              for (let i = start; i <= end; i++) {
+                const startIndex = (i - 1) * 27;
+                const endIndex = i * 27;
+                allItems = allItems.concat(allPagesItems.slice(startIndex, endIndex));
+              }
+            } else {
+              const pageNum = parseInt(range);
+              const startIndex = (pageNum - 1) * 27;
+              const endIndex = pageNum * 27;
+              allItems = allItems.concat(allPagesItems.slice(startIndex, endIndex));
+            }
+          });
+          break;
+          
+        default:
+          // Default to all pages
+          params.append('per_page', '1000'); // Fetch all items
+          const defaultResponse = await fetch(`${apiBaseUrl}/api/traites?${params.toString()}`, { 
+            headers: getApiHeaders() 
+          });
+          
+          if (!defaultResponse.ok) throw new Error('Failed to fetch data for printing');
+          
+          const defaultData = await defaultResponse.json();
+          allItems = defaultData.data || defaultData || [];
+      }
       
-      if (!response.ok) throw new Error('Failed to fetch data for printing');
+      if (allItems.length === 0) {
+        alert('Aucune donnée à imprimer.');
+        setIsPrinting(false);
+        return;
+      }
       
-      const data = await response.json();
-      const allItems = data.data || data || [];
-      
-      // Format data for printing
-      const formattedItems = allItems.map(item => {
+      // Format all data for printing with ALL fields from form
+      formattedItems = allItems.map(item => {
         const formattedItem = {};
-        Columns.forEach(col => {
+        PrintColumns.forEach(col => {
           let value = item[col.key];
           if (col.key === 'echeance' || col.key === 'date_emission') {
             value = formatDateDDMMYYYY(value);
@@ -168,32 +249,196 @@ const TraitesGrid = () => {
         return formattedItem;
       });
       
-      setAllItemsForPrint(formattedItems);
-      setIsPrintingAll(true);
+      // Create professional landscape print layout with 27 items per page
+      const itemsPerPage = 27;
+      const totalPages = Math.ceil(formattedItems.length / itemsPerPage);
+      
+      // Create hidden iframe for printing
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      
+      // Write content to iframe with landscape layout
+      const doc = iframe.contentWindow.document;
+      
+      // Build HTML content with pagination
+      let htmlContent = `
+        <html>
+          <head>
+            <title>Impression des traites</title>
+            <style>
+              @media print {
+                @page {
+                  size: A4 landscape;
+                  margin: 0.3cm;
+                }
+                body {
+                  margin: 0.3cm;
+                  font-family: Arial, sans-serif;
+                  font-size: 5pt;
+                }
+              }
+              
+              body {
+                font-family: Arial, sans-serif;
+                font-size: 5pt;
+                margin: 0.3cm;
+              }
+              
+              .page-break {
+                page-break-before: always;
+              }
+              
+              .header {
+                text-align: center;
+                margin-bottom: 8px;
+                font-size: 14pt;
+                font-weight: bold;
+                color: #2c3e50;
+              }
+              
+              .date-info {
+                text-align: right;
+                margin-bottom: 8px;
+                font-size: 9pt;
+                color: #7f8c8d;
+              }
+              
+              table {
+                border-collapse: collapse;
+                width: 100%;
+                table-layout: fixed;
+                margin-bottom: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              }
+              
+              th, td {
+                border: 1px solid #34495e;
+                padding: 3px 4px;
+                text-align: left;
+                vertical-align: top;
+                word-wrap: break-word;
+              }
+              
+              th {
+                background-color: #3498db;
+                color: white;
+                font-weight: bold;
+                font-size: 6pt;
+                text-transform: uppercase;
+              }
+              
+              tr:nth-child(even) {
+                background-color: #ecf0f1;
+              }
+              
+              tr:hover {
+                background-color: #d6eaf8;
+              }
+              
+              td {
+                font-size: 5pt;
+                color: #2c3e50;
+              }
+              
+              .page-footer {
+                text-align: center;
+                font-size: 7pt;
+                margin-top: 5px;
+                color: #7f8c8d;
+                font-style: italic;
+              }
+              
+              /* Réduction des largeurs de colonnes pour afficher toutes les bordures */
+              .col-numero { width: 7%; }
+              .col-nombre_traites { width: 5%; }
+              .col-echeance { width: 9%; }
+              .col-date_emission { width: 9%; }
+              .col-montant { width: 11%; }
+              .col-Nom\\/RS { width: 14%; }
+              .col-Domiciliation { width: 11%; }
+              .col-RIB { width: 11%; }
+              .col-Motif { width: 7%; }
+              .col-Commentaires { width: 9%; }
+              .col-Statut { width: 7%; }
+            </style>
+          </head>
+          <body>
+      `;
+      
+      // Add pages with exactly 27 items per page
+      for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+        if (pageNum > 0) {
+          htmlContent += '<div class="page-break"></div>';
+        }
+        
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, formattedItems.length);
+        const pageItems = formattedItems.slice(startIndex, endIndex);
+        
+        // Calculate actual elements range for this page
+        const startElement = startIndex + 1;
+        const endElement = endIndex;
+        
+        htmlContent += `
+          <div class="header">Liste des traites - Page ${pageNum + 1}/${totalPages}</div>
+          <div class="date-info">Imprimé le: ${new Date().toLocaleDateString('fr-FR')}</div>
+          <table>
+            <thead>
+              <tr>
+                ${PrintColumns.map(col => `<th class="col-${col.label.replace('/', '\\/')}">${col.label}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        pageItems.forEach(item => {
+          htmlContent += `
+            <tr>
+              ${PrintColumns.map(col => `<td class="col-${col.label.replace('/', '\\/')}">${item[col.label] || ''}</td>`).join('')}
+            </tr>
+          `;
+        });
+        
+        htmlContent += `
+            </tbody>
+          </table>
+          <div class="page-footer">
+            Page ${pageNum + 1}/${totalPages} - Éléments ${startElement} à ${endElement} (Total: ${formattedItems.length} éléments)
+          </div>
+        `;
+      }
+      
+      htmlContent += `
+          </body>
+        </html>
+      `;
+      
+      doc.write(htmlContent);
+      doc.close();
+      
+      // Trigger print after a short delay to ensure content is loaded
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          setPrintModalOpen(false);
+          setIsPrinting(false);
+        }, 1000);
+      }, 500);
     } catch (error) {
-      console.error('Error fetching all items for printing:', error);
-      throw error;
+      console.error('Print error:', error);
+      setIsPrinting(false);
+      alert('Erreur lors de la préparation de l\'impression: ' + error.message);
     }
-  };
-
-  const fetchSpecificPageForPrinting = async (pageNum) => {
-    // Implementation for specific page printing
-    console.log('Printing specific page:', pageNum);
-  };
-
-  const fetchCurrentViewForPrinting = async () => {
-    // Implementation for current view printing
-    console.log('Printing current view');
-  };
-
-  const fetchPageRangeForPrinting = async (fromPage, toPage) => {
-    // Implementation for page range printing
-    console.log('Printing page range:', fromPage, 'to', toPage);
-  };
-
-  const fetchSpecificPagesForPrinting = async (pageRanges) => {
-    // Implementation for specific pages printing
-    console.log('Printing specific pages:', pageRanges);
   };
 
   const formatDateDDMMYYYY = (value) => {
@@ -720,7 +965,18 @@ const TraitesGrid = () => {
           </Can>
           {/* ÉTAPE 4: Ajouter le bouton d'impression */}
           <Can permission="view_traites">
-            <button className="submit-button" onClick={openPrintModal}><Printer size={16} style={{ marginRight: 6 }} /> Imprimer</button>
+            <button className="submit-button" onClick={openPrintModal} disabled={isPrinting}>
+              {isPrinting ? (
+                <>
+                  <div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '6px' }} />
+                  Impression...
+                </>
+              ) : (
+                <>
+                  <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
+                </>
+              )}
+            </button>
           </Can>
           <Can permission="create_traites">
             <input ref={importInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileChange} />
@@ -839,7 +1095,7 @@ const TraitesGrid = () => {
         </div>
       )}
       
-      {/* Modale d'impression */}
+       {/* Modale d'impression */}
       {printModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: 'white', borderRadius: 8, padding: 24, maxWidth: '500px', width: '90%', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)', position: 'relative' }}>
@@ -856,7 +1112,6 @@ const TraitesGrid = () => {
                   checked={printOptions.selectedOption === 'all'}
                   onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'all' }))}
                   style={{ marginRight: 8 }}
-                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'all' }))}
                 />
                 Imprimer toutes les pages ({pagination.last_page || 1} pages)
                 <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px' }}>
@@ -871,7 +1126,6 @@ const TraitesGrid = () => {
                   checked={printOptions.selectedOption === 'specific'}
                   onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'specific', specificPage: page }))}
                   style={{ marginRight: 8 }}
-                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'specific', specificPage: page }))}
                 />
                 Imprimer une page spécifique
               </label>
@@ -883,7 +1137,6 @@ const TraitesGrid = () => {
                   checked={printOptions.selectedOption === 'current'}
                   onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'current' }))}
                   style={{ marginRight: 8 }}
-                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'current' }))}
                 />
                 Imprimer la vue actuelle
                 <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px' }}>
@@ -898,7 +1151,6 @@ const TraitesGrid = () => {
                   checked={printOptions.selectedOption === 'range'}
                   onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'range', fromPage: 1, toPage: pagination.last_page || 1 }))}
                   style={{ marginRight: 8 }}
-                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'range', fromPage: 1, toPage: pagination.last_page || 1 }))}
                 />
                 Imprimer une plage de pages
               </label>
@@ -946,7 +1198,6 @@ const TraitesGrid = () => {
                   checked={printOptions.selectedOption === 'pages'}
                   onChange={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'pages', pageRanges: '' }))}
                   style={{ marginRight: 8 }}
-                  onClick={() => setPrintOptions(prev => ({ ...prev, selectedOption: 'pages', pageRanges: '' }))}
                 />
                 Imprimer des pages spécifiques
               </label>
@@ -989,138 +1240,7 @@ const TraitesGrid = () => {
           </div>
         </div>
       )}
-      
-    {/* ... Le reste de votre JSX (modal d'importation, etc.) reste inchangé ... */}
-    {importModalOpen && (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-        <div style={{ backgroundColor: 'white', borderRadius: 8, padding: 24, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)', position: 'relative' }}>
-          <button aria-label="Fermer" onClick={() => setImportModalOpen(false)} style={{ position: 'absolute', top: 8, right: 8, border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, color: 'red', lineHeight: 0 }}>
-            <X size={20} />
-          </button>
-          <h3 style={{ marginTop: 0, marginBottom: 20 }}>Configuration de l'importation CSV</h3>
-          
-          <div style={{ marginBottom: 20 }}>
-            <h4>Colonnes détectées dans le fichier CSV :</h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-              {csvHeaders.map((header, index) => (
-                <span key={index} style={{ backgroundColor: '#f3f4f6', padding: '4px 8px', borderRadius: 4, fontSize: '12px', border: '1px solid #d1d5db' }}>
-                  {header}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {(duplicates.csvDuplicates.length > 0 || duplicates.existingDuplicates.length > 0) && (
-            <div style={{ marginBottom: 20 }}>
-              <h4 style={{ color: '#dc2626' }}>⚠️ Doublons détectés :</h4>
-              
-              {duplicates.csvDuplicates.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <strong>Doublons dans le fichier CSV :</strong>
-                  <div style={{ backgroundColor: '#fef2f2', padding: 8, borderRadius: 4, marginTop: 4 }}>
-                    {duplicates.csvDuplicates.map((dup, index) => (
-                      <div key={index} style={{ fontSize: '12px', color: '#dc2626' }}>
-                        Ligne {dup.line}: Numéro "{dup.numero}" déjà présent dans le fichier
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {duplicates.existingDuplicates.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <strong>Doublons avec les données existantes :</strong>
-                  <div style={{ backgroundColor: '#fef2f2', padding: 8, borderRadius: 4, marginTop: 4 }}>
-                    {duplicates.existingDuplicates.map((dup, index) => (
-                      <div key={index} style={{ fontSize: '12px', color: '#dc2626' }}>
-                        Ligne {dup.line}: Numéro "{dup.numero}" existe déjà dans la base de données
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              <div style={{ marginTop: 12 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>Action pour les doublons :</label>
-                <select value={duplicateAction} onChange={(e) => setDuplicateAction(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, width: '100%' }}>
-                  <option value="skip">Ignorer les doublons (recommandé)</option>
-                  <option value="import_all">Importer tous les enregistrements</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: 20 }}>
-            <h4>Mapping des colonnes :</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {Object.keys(fieldMappings).map(field => (
-                <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={{ minWidth: 120, fontSize: '14px' }}>{Columns.find(c => c.key === field)?.label || field}:</label>
-                  <select value={columnMapping[field] || ''} onChange={(e) => setColumnMapping(prev => ({ ...prev, [field]: e.target.value }))} style={{ flex: 1, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4 }}>
-                    <option value="">-- Non mappé --</option>
-                    {csvHeaders.map(header => (<option key={header} value={header}>{header}</option>))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {csvRecords.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <h4>Aperçu des données (3 premières lignes) :</h4>
-              <div style={{ overflow: 'auto', maxHeight: 200, border: '1px solid #d1d5db', borderRadius: 4 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f9fafb' }}>
-                      {csvHeaders.map((header, index) => (<th key={index} style={{ padding: '4px 8px', border: '1px solid #d1d5db', textAlign: 'left' }}>{header}</th>))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvRecords.slice(0, 3).map((row, rowIndex) => (<tr key={rowIndex}> {row.map((cell, cellIndex) => (<td key={cellIndex} style={{ padding: '4px 8px', border: '1px solid #d1d5db' }}>{cell}</td>))}</tr>))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {importProgress.total > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <h4>Progression de l'importation :</h4>
-              <div style={{ backgroundColor: '#f3f4f6', borderRadius: 4, padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span>{importProgress.status}</span>
-                  <span>{importProgress.current} / {importProgress.total}</span>
-                </div>
-                <div style={{ backgroundColor: '#e5e7eb', borderRadius: 4, height: 8 }}>
-                  <div style={{ backgroundColor: '#10b981', height: '100%', borderRadius: 4, width: `${(importProgress.current / importProgress.total) * 100}%`, transition: 'width 0.3s ease' }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-            <button onClick={() => setImportModalOpen(false)} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 4, backgroundColor: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><X size={16} style={{ marginRight: 6 }} /> Annuler</button>
-            <button
-              onClick={() => {
-                const requiredFields = ['numero', 'nombre_traites', 'echeance', 'date_emission', 'montant', 'nom_raison_sociale']
-                const missingFields = requiredFields.filter(field => !columnMapping[field])
-                if (missingFields.length > 0) {
-                  alert(`Champs requis non mappés: ${missingFields.join(', ')}`)
-                  return
-                }
-                handleImportConfirm()
-              }}
-              disabled={isImporting}
-              style={{ padding: '8px 16px', border: 'none', borderRadius: 4, backgroundColor: isImporting ? '#9ca3af' : '#3b82f6', color: 'white', cursor: isImporting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              {isImporting && (<div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />)}
-              {isImporting ? 'Importation en cours...' : <><Upload size={16} style={{ marginRight: 6 }} /> Importer</>}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-  </div>
+    </div>
   )
 }
 

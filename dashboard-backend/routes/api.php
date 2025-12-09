@@ -9,65 +9,48 @@ use App\Http\Controllers\TiersController;
 use App\Http\Controllers\ClientStatsController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\PendingClientsController;
+use App\Http\Controllers\ClientApprovalHistoryController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::get('/user', [AuthController::class, 'user'])->middleware('auth:sanctum');
 
-// Route de test CORS
+// Test Routes
 Route::get('/test-cors', function() {
-    return response()->json(['message' => 'CORS fonctionne !', 'timestamp' => now()])
-        ->header('Access-Control-Allow-Origin', 'http://localhost:3000')
-        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-        ->header('Access-Control-Allow-Credentials', 'true');
+    return response()->json(['message' => 'CORS fonctionne !']);
 });
 
-// Route de test simple pour l'importation
-Route::post('/test-import', function() {
-    return response()->json(['message' => 'Test import OK', 'data' => request()->all()])
-        ->header('Access-Control-Allow-Origin', 'http://localhost:3000')
-        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-        ->header('Access-Control-Allow-Credentials', 'true');
-});
-
-
-// User management routes
+// User management
 Route::prefix('users')->group(function () {
     Route::get('/', [UserController::class, 'index'])->middleware('auth:sanctum');
     Route::post('/', [UserController::class, 'store'])->middleware('auth:sanctum');
     Route::get('/{id}', [UserController::class, 'show'])->middleware('auth:sanctum');
     Route::put('/{id}', [UserController::class, 'update'])->middleware('auth:sanctum');
     Route::delete('/{id}', [UserController::class, 'destroy'])->middleware('auth:sanctum');
-    
-    // Permissions routes
     Route::get('/{id}/permissions', [UserController::class, 'getUserPermissions'])->middleware('auth:sanctum');
     Route::put('/{id}/permissions', [UserController::class, 'updateUserPermissions'])->middleware('auth:sanctum');
 });
 
-// User notifications routes
+// Notifications
 Route::prefix('user')->group(function () {
     Route::get('/notifications', [UserController::class, 'getNotifications'])->middleware('auth:sanctum');
     Route::post('/notifications/{id}/read', [UserController::class, 'markNotificationAsRead'])->middleware('auth:sanctum');
 });
 
-// Permissions routes
 Route::get('/permissions', [UserController::class, 'getPermissions'])->middleware('auth:sanctum');
 
-// Organization settings routes
+// Organization & Stats
 Route::prefix('organization')->group(function () {
     Route::get('/settings', [UserController::class, 'getOrganizationSettings'])->middleware('auth:sanctum');
     Route::put('/settings', [UserController::class, 'updateOrganizationSettings'])->middleware('auth:sanctum');
 });
 
-// Statistiques traites
 Route::get('/traites/stats', [TraitesStatsController::class, 'stats']);
 Route::get('/traites/monthly', [TraitesStatsController::class, 'monthly']);
 Route::get('/traites/status', [TraitesStatsController::class, 'statusBreakdown']);
 Route::get('/traites/available-years', [TraitesStatsController::class, 'availableYears']);
 
-// Grille des clients (tiers)
+// Tiers / Clients
 Route::get('/tiers', [TiersController::class, 'index']);
 Route::post('/tiers', [TiersController::class, 'store'])->middleware('auth:sanctum');
 Route::post('/tiers/import-csv', [TiersController::class, 'importCsv'])->middleware('auth:sanctum');
@@ -78,48 +61,56 @@ Route::get('/tiers/{tier}', [TiersController::class, 'show']);
 Route::put('/tiers/{tier}', [TiersController::class, 'update'])->middleware('auth:sanctum');
 Route::delete('/tiers/{tier}', [TiersController::class, 'destroy'])->middleware('auth:sanctum');
 
-// Historique des traites (avec utilisateur) - placer AVANT la route paramétrée
+// Traites
 Route::get('/traites/historique', [TraitesController::class, 'historique']);
-
-// CRUD Traites
 Route::get('/traites', [TraitesController::class, 'index']);
 Route::post('/traites', [TraitesController::class, 'store'])->middleware('auth:sanctum');
-Route::options('/traites/import-csv', function() {
-    return response('', 200)
-        ->header('Access-Control-Allow-Origin', 'http://localhost:3000')
-        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-        ->header('Access-Control-Allow-Credentials', 'true');
-});
-Route::post('/traites/import-csv', [TraitesController::class, 'importCsv']); // Temporairement sans auth pour test
+Route::post('/traites/import-csv', [TraitesController::class, 'importCsv']); 
 Route::get('/traites/{traite}', [TraitesController::class, 'show']);
 Route::put('/traites/{traite}', [TraitesController::class, 'update'])->middleware('auth:sanctum');
 Route::delete('/traites/{traite}', [TraitesController::class, 'destroy'])->middleware('auth:sanctum');
 Route::patch('/traites/{traite}/statut', [TraitesController::class, 'updateStatus'])->middleware('auth:sanctum');
 
-
+// --- CORRECTION ICI : Ajout du middleware auth:sanctum ---
 Route::prefix('clients')->group(function () {
     Route::get('/stats', [ClientStatsController::class, 'stats']);
     Route::get('/available-years', [ClientStatsController::class, 'availableYears']);
     Route::get('/monthly', [ClientStatsController::class, 'monthly']);
     Route::get('/type-breakdown', [ClientStatsController::class, 'typeBreakdown']);
+    
+    // IMPORTANT : Middleware ajouté ici
+    Route::get('/approval-history', [ClientApprovalHistoryController::class, 'index'])
+        ->middleware('auth:sanctum');
 });
 
-// Routes pour les paramètres d'organisation
+// Settings (Auth required)
 Route::middleware('auth:sanctum')->group(function () {
-    // Récupérer les paramètres de l'organisation
     Route::get('/organization/settings', [UserController::class, 'getOrganizationSettings']);
-    
-    // Mettre à jour les paramètres de l'organisation (utilisez POST pour FormData)
     Route::post('/organization/settings', [UserController::class, 'updateOrganizationSettings']);
 });
 
-// Routes pour les clients en attente
+// Pending Clients (Auth required)
 Route::prefix('pending-clients')->group(function () {
     Route::get('/', [PendingClientsController::class, 'index'])->middleware('auth:sanctum');
     Route::post('/', [PendingClientsController::class, 'store'])->middleware('auth:sanctum');
     Route::get('/{pendingClient}', [PendingClientsController::class, 'show'])->middleware('auth:sanctum');
+    Route::put('/{pendingClient}', [PendingClientsController::class, 'update'])->middleware('auth:sanctum');
+    Route::post('/{pendingClient}/submit', [PendingClientsController::class, 'submit'])->middleware('auth:sanctum');
     Route::delete('/{pendingClient}', [PendingClientsController::class, 'destroy'])->middleware('auth:sanctum');
     Route::post('/{pendingClient}/approve', [PendingClientsController::class, 'approve'])->middleware('auth:sanctum');
     Route::post('/{pendingClient}/reject', [PendingClientsController::class, 'reject'])->middleware('auth:sanctum');
 });
+
+// Dans routes/api.php (à ajouter dans le groupe auth:sanctum existant)
+
+// Test de connexion DB (utile pour le diagnostic API)
+Route::get('/test-db', function () {
+    // ... votre code de test DB ...
+});
+
+// Envoi par email (Ce sont des actions API, donc api.php)
+Route::post('/print/traites/{traite}/email', [TraitesController::class, 'emailPreview'])
+    ->name('api.traites.email');
+
+Route::post('/print/traites/{traite}/email-image', [TraitesController::class, 'emailPreviewImage'])
+    ->name('api.traites.email_image');

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import "./Sidebar.css"
-import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit, History, ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { LogOut, Users, Bell, Settings, Home, Briefcase, CreditCard, Table, Edit, History, ChevronLeft, ChevronRight, Plus, CheckCircle } from "lucide-react"
 import Can from "./Can"
 import { useAuth } from "../hooks/useAuth" // Import du hook
 
@@ -155,7 +155,15 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
             <Can permission="access_dashboard">
               <button
                 className={`nav-item ${activeMenuItem === "Dashboard" ? "active" : ""}`}
-                onClick={() => { setActiveMenuItem("Dashboard"); setActiveSubItem && setActiveSubItem(null); navigate('/dashboard') }}
+                onClick={() => { 
+                  if (typeof setActiveMenuItem === 'function') {
+                    setActiveMenuItem("Dashboard"); 
+                  }
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem(null); 
+                  }
+                  navigate('/dashboard') 
+                }}
               >
                 <span className="nav-icon">
                   <Home size={16} />
@@ -168,8 +176,12 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
             <button
               className={`nav-item ${activeMenuItem === "Gestion Traites" ? "active" : ""}`}
               onClick={() => { 
-                setActiveMenuItem("Gestion Traites"); 
-                setActiveSubItem && setActiveSubItem("Grille de saisie"); 
+                if (typeof setActiveMenuItem === 'function') {
+                  setActiveMenuItem("Gestion Traites"); 
+                }
+                if (typeof setActiveSubItem === 'function') {
+                  setActiveSubItem("Grille de saisie"); 
+                }
                 setCollapsed(false);
                 try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
                 navigate('/dashboard') 
@@ -184,28 +196,48 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           <Can permission="view_traites">
             {activeMenuItem === "Gestion Traites" && (
               <div className="subitems-group">
-                <button className={`nav-subitem ${activeSubItem === "Grille de saisie" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Grille de saisie"); navigate('/dashboard') }}>
+                <button className={`nav-subitem ${activeSubItem === "Grille de saisie" ? "active" : ""}`} onClick={() => { 
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem("Grille de saisie"); 
+                  }
+                  navigate('/dashboard') 
+                }}>
                   <span className="nav-icon">
                     <Table size={16} />
                   </span>
                   <span className="nav-text">Grille de saisie</span>
                 </button>
 
-                <button className={`nav-subitem ${activeSubItem === "Edition" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Edition"); navigate('/dashboard') }}>
+                <button className={`nav-subitem ${activeSubItem === "Edition" ? "active" : ""}`} onClick={() => { 
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem("Edition"); 
+                  }
+                  navigate('/dashboard') 
+                }}>
                   <span className="nav-icon">
                     <Edit size={16} />
                   </span>
                   <span className="nav-text">Edition</span>
                 </button>
                 <Can permission="manage_pending_clients">
-                  <button className={`nav-subitem ${activeSubItem === "Historique" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique"); navigate('/dashboard') }}>
+                  <button className={`nav-subitem ${activeSubItem === "Historique" ? "active" : ""}`} onClick={() => { 
+                    if (typeof setActiveSubItem === 'function') {
+                      setActiveSubItem("Historique"); 
+                    }
+                    navigate('/dashboard') 
+                  }}>
                     <span className="nav-icon">
                       <History size={16} />
                     </span>
                     <span className="nav-text">Historique</span>
                   </button>
                 </Can>
-                <button className={`nav-subitem ${activeSubItem === "Notification" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Notification"); navigate('/notifications') }}>
+                <button className={`nav-subitem ${activeSubItem === "Notification" ? "active" : ""}`} onClick={() => { 
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem("Notification"); 
+                  }
+                  navigate('/notifications') 
+                }}>
                   <span className="nav-icon">
                     <Bell size={16} />
                   </span>
@@ -215,16 +247,23 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
             )}
           </Can>
           <Can permission="view_clients">
-            <button
-              className={`nav-item ${activeMenuItem === "Credit compte" ? "active" : ""}`}
-              onClick={() => { 
-                setActiveMenuItem("Credit compte");
-                setActiveSubItem && setActiveSubItem("Gestion des comptes clients");
-                setCollapsed(false);
-                try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
-                navigate('/dashboard?tab=credit&view=GestionClients');
-              }}
-            >
+           <button
+  className={`nav-item ${activeMenuItem === "Credit compte" ? "active" : ""}`}
+  onClick={() => { 
+    // setActiveMenuItem est maintenant une fonction valide passée par le parent
+    if (typeof setActiveMenuItem === 'function') {
+        setActiveMenuItem("Credit compte");
+    }
+    // setActiveSubItem est aussi une fonction
+    if (setActiveSubItem) {
+        setActiveSubItem("Gestion des comptes clients");
+    }
+    
+    setCollapsed(false);
+    try { localStorage.setItem('sidebar_collapsed', '0') } catch (_) {}
+    navigate('/dashboard?tab=credit&view=GestionClients');
+  }}
+>
               <span className="nav-icon">
                 <CreditCard size={16} />
               </span>
@@ -234,14 +273,24 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           <Can permission="view_clients">
             {activeMenuItem === "Credit compte" && (
               <div className="subitems-group">
-                <button className={`nav-subitem ${activeSubItem === "Gestion des comptes clients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Gestion des comptes clients"); navigate('/dashboard?tab=credit&view=GestionClients') }}>
+                <button className={`nav-subitem ${activeSubItem === "Gestion des comptes clients" ? "active" : ""}`} onClick={() => { 
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem("Gestion des comptes clients"); 
+                  }
+                  navigate('/dashboard?tab=credit&view=GestionClients') 
+                }}>
                   <span className="nav-icon">
                     <Users size={16} />
                   </span>
                   <span className="nav-text">Gestion des comptes clients</span>
                 </button>
                 <Can permission="manage_pending_clients">
-                  <button className={`nav-subitem ${activeSubItem === "Historique clients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Historique clients"); navigate('/dashboard?tab=credit&view=HistoriqueClients') }}>
+                  <button className={`nav-subitem ${activeSubItem === "Historique clients" ? "active" : ""}`} onClick={() => { 
+                    if (typeof setActiveSubItem === 'function') {
+                      setActiveSubItem("Historique clients"); 
+                    }
+                    navigate('/dashboard?tab=credit&view=HistoriqueClients') 
+                  }}>
                     <span className="nav-icon">
                       <History size={16} />
                     </span>
@@ -249,16 +298,26 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                   </button>
                 </Can>
                 <Can permission="create_clients">
-                  <button className={`nav-subitem ${activeSubItem === "Nouveau client" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("Nouveau client"); navigate('/dashboard?tab=credit&view=NewClient') }}>
+                  <button className={`nav-subitem ${activeSubItem === "Nouveau client" ? "active" : ""}`} onClick={() => { 
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem("Nouveau client"); 
+                  }
+                  navigate('/dashboard?tab=credit&view=NewClient') 
+                }}>
                     <span className="nav-icon">
                       <Plus size={16} />
                     </span>
                     <span className="nav-text">Nouveau compte client</span>
                   </button>
                 </Can>
-                {/* Afficher "Clients en attente" seulement si l'utilisateur a la permission */}
+                {/* Afficher "Clients en attente" pour les admins (manage_pending_clients) */}
                 {hasPermission('manage_pending_clients') && (
-                  <button className={`nav-subitem ${activeSubItem === "PendingClients" ? "active" : ""}`} onClick={() => { setActiveSubItem && setActiveSubItem("PendingClients"); navigate('/dashboard?tab=credit&view=PendingClients') }}>
+                  <button className={`nav-subitem ${activeSubItem === "PendingClients" ? "active" : ""}`} onClick={() => { 
+                  if (typeof setActiveSubItem === 'function') {
+                    setActiveSubItem("PendingClients"); 
+                  }
+                  navigate('/dashboard?tab=credit&view=PendingClients') 
+                }}>
                     <span className="nav-icon">
                       <Users size={16} />
                     </span>
@@ -272,7 +331,22 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                     </span>
                   </button>
                 )}
-              </div>
+              {/* Historique Approuvés/Rejetés - visible UNIQUEMENT pour les gestionnaires (create_clients) et NON pour les admins */}
+{hasPermission('create_clients') && !hasPermission('manage_pending_clients') && (
+  <button className={`nav-subitem ${activeSubItem === "ClientApprovalHistory" ? "active" : ""}`} onClick={() => { 
+    if (typeof setActiveSubItem === 'function') {
+      setActiveSubItem("ClientApprovalHistory"); 
+    }
+    navigate('/dashboard?tab=credit&view=ClientApprovalHistory') 
+  }}>
+    <span className="nav-icon">
+      <CheckCircle size={16} />
+    </span>
+    <span className="nav-text">
+      Historique Approuvés/Rejetés
+    </span>
+  </button>
+)}              </div>
             )}
           </Can>
         </div>
@@ -284,8 +358,13 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
         {/* Show settings button if user has manage_company_info or manage_users permission */}
         {(hasPermission('manage_company_info') || hasPermission('manage_users')) && (
           <button
-            className={`nav-item ${activeMenuItem === "Parametres" ? "active" : ""}`}
-            onClick={() => { setActiveMenuItem("Parametres"); navigate('/settings') }}
+            className={`nav-item ${activeMenuItem === "Paramètres" ? "active" : ""}`}
+            onClick={() => { 
+              if (typeof setActiveMenuItem === 'function') {
+                setActiveMenuItem("Paramètres"); 
+              }
+              navigate('/settings') 
+            }}
             style={{ marginBottom: '10px', width: '100%' }}
           >
             <span className="nav-icon">

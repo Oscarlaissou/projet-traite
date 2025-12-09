@@ -89,7 +89,15 @@ class PendingClientsController extends Controller
      */
     public function index()
     {
-        $pendingClients = PendingClient::with('createdBy:id,username')->get();
+        // Récupérer uniquement les clients en attente qui n'ont pas été rejetés
+        $pendingClients = PendingClient::with('createdBy:id,username')
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('client_approvals')
+                    ->whereColumn('client_approvals.tier_id', 'pending_clients.id')
+                    ->where('client_approvals.status', 'rejected');
+            })
+            ->get();
         
         // Log pour debugger les données
         \Log::info('Pending clients data:', ['count' => $pendingClients->count(), 'clients' => $pendingClients->toArray()]);
@@ -212,9 +220,22 @@ class PendingClientsController extends Controller
                     }
                 }
 
-                // Supprimer le client en attente
-                $pendingClient->delete();
+                // Enregistrer l'approbation dans la table client_approvals
+                try {
+                    \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
+                        'tier_id' => $newTier->id,
+                        'user_id' => $pendingClient->created_by,
+                        'status' => 'approved',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                } catch (\Throwable $e) {
+                    // Log error but don't stop the process
+                    \Log::error('Error inserting client approval record: ' . $e->getMessage());
+                }
 
+                // Supprimer le client en attente (seulement maintenant, pas lors du rejet)
+                $pendingClient->delete();
                 return $newTier;
             });
 
@@ -325,24 +346,28 @@ class PendingClientsController extends Controller
                 ]);
             }
 
-            // Supprimer le client en attente
-            \Log::info('Deleting pending client', [
+            // Enregistrer le rejet dans la table client_approvals
+            try {
+                \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
+                    'tier_id' => $pendingClient->id, // Using the pending client ID since it wasn't moved to tiers
+                    'user_id' => $pendingClient->created_by,
+                    'status' => 'rejected',
+                    'rejection_reason' => $reason,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } catch (\Throwable $e) {
+                // Log error but don't stop the process
+                \Log::error('Error inserting client rejection record: ' . $e->getMessage());
+            }
+
+            // NE PAS supprimer le client en attente - il doit rester dans la table pending_clients
+            // jusqu'à ce qu'il soit approuvé ou supprimé manuellement
+            // On met simplement à jour son statut si nécessaire
+            \Log::info('Client marked as rejected but kept in pending_clients table', [
                 'pending_client_id' => $pendingClient->id
             ]);
             
-            try {
-                $pendingClient->delete();
-                \Log::info('Pending client deleted successfully', [
-                    'pending_client_id' => $pendingClient->id
-                ]);
-            } catch (\Exception $deleteError) {
-                \Log::error('Error deleting pending client: ' . $deleteError->getMessage(), [
-                    'exception' => $deleteError,
-                    'pending_client_id' => $pendingClient->id
-                ]);
-                throw new \Exception('Failed to delete pending client: ' . $deleteError->getMessage());
-            }
-
             // Broadcast event to update pending clients count
             \Log::info('Broadcasting pending clients count update');
             try {
@@ -396,6 +421,174 @@ class PendingClientsController extends Controller
             return response()->json([
                 'message' => 'Une erreur est survenue lors de la suppression du client en attente.',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update the specified pending client in storage.
+     */
+    public function update(Request $request, PendingClient $pendingClient)
+    {
+        // Validate that the pending client exists
+        if (!$pendingClient || !$pendingClient->exists) {
+            \Log::error('Pending client not found for update', [
+                'pending_client_id' => $request->route('pendingClient')
+            ]);
+            
+            return response()->json([
+                'message' => 'Client en attente non trouvé.'
+            ], 404);
+        }
+        
+        try {
+            $validated = $request->validate([
+                // Champs Tiers
+                'numero_compte' => [
+                    'nullable',
+                    'string',
+                    'max:100',
+                    // Vérifier que le numéro de compte n'existe pas déjà dans les tiers existants (sauf pour ce client)
+                    Rule::unique('tiers', 'numero_compte'),
+                    // Vérifier que le numéro de compte n'existe pas déjà dans les clients en attente (sauf pour ce client)
+                    Rule::unique('pending_clients', 'numero_compte')->ignore($pendingClient->id)
+                ],
+                'nom_raison_sociale' => ['required', 'string', 'max:255'],
+                'bp' => ['nullable', 'string', 'max:255'],
+                'ville' => ['nullable', 'string', 'max:255'],
+                'pays' => ['nullable', 'string', 'max:255'],
+                'adresse_geo_1' => ['nullable', 'string', 'max:255'],
+                'adresse_geo_2' => ['nullable', 'string', 'max:255'],
+                'telephone' => ['nullable', 'string', 'max:50'],
+                'email' => ['nullable', 'email', 'max:255'],
+                'categorie' => ['required', 'string', Rule::in(self::CATEGORIES)],
+                'n_contribuable' => ['nullable', 'string', 'max:100'],
+                'type_tiers' => ['required', 'string', Rule::in(['Client', 'Fournisseur'])],
+
+                // Champs Demande d'ouverture de compte
+                'date_creation' => ['nullable', 'date'],
+                'montant_facture' => ['nullable', 'numeric', 'min:0'],
+                'montant_paye' => ['nullable', 'numeric', 'min:0'],
+                'credit' => ['nullable', 'numeric'],
+                'motif' => ['nullable', 'string', 'max:1000'],
+                'etablissement' => ['nullable', 'string', 'max:255'],
+                'service' => ['nullable', 'string', 'max:255'],
+                'nom_signataire' => ['nullable', 'string', 'max:255'],
+            ]);
+
+            // Mettre à jour le client en attente
+            $pendingClient->update($validated);
+
+            // Recharger le client avec les relations
+            $pendingClient->load('createdBy:id,username');
+            
+            \Log::info('Pending client updated successfully', [
+                'pending_client_id' => $pendingClient->id,
+                'updated_data' => $validated
+            ]);
+            
+            return response()->json($pendingClient, 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Validation error updating pending client', [
+                'pending_client_id' => $pendingClient->id,
+                'errors' => $e->errors(),
+                'input' => $request->all()
+            ]);
+            
+            return response()->json([
+                'message' => 'Données invalides.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Throwable $e) {
+            \Log::error('Error updating pending client: ' . $e->getMessage(), [
+                'exception' => $e,
+                'pending_client_id' => $pendingClient->id,
+                'input' => $request->all()
+            ]);
+            
+            return response()->json([
+                'message' => 'Une erreur est survenue lors de la mise à jour du client en attente.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Submit a pending client for approval (resubmit after rejection).
+     */
+    public function submit(PendingClient $pendingClient)
+    {
+        // Validate that the pending client exists
+        if (!$pendingClient || !$pendingClient->exists) {
+            \Log::error('Pending client not found for submission', [
+                'pending_client_id' => request()->route('pendingClient')
+            ]);
+            
+            return response()->json([
+                'message' => 'Client en attente non trouvé.'
+            ], 404);
+        }
+        
+        try {
+            \Log::info('Starting client resubmission process', [
+                'pending_client_id' => $pendingClient->id,
+                'pending_client_name' => $pendingClient->nom_raison_sociale,
+                'created_by' => $pendingClient->created_by,
+                'current_user_id' => Auth::id()
+            ]);
+            
+            // Vérifier s'il existe un enregistrement dans client_approvals avec statut 'rejected'
+            $existingRecord = \Illuminate\Support\Facades\DB::table('client_approvals')
+                ->where('tier_id', $pendingClient->id)
+                ->where('status', 'rejected')
+                ->first();
+            
+            if (!$existingRecord) {
+                \Log::warning('No rejected record found for resubmission', [
+                    'pending_client_id' => $pendingClient->id
+                ]);
+                
+                return response()->json([
+                    'message' => 'Aucun enregistrement rejeté trouvé pour ce client.'
+                ], 400, [], JSON_UNESCAPED_UNICODE);
+            }
+            
+            // Mettre à jour le statut dans la table client_approvals
+            try {
+                \Illuminate\Support\Facades\DB::table('client_approvals')
+                    ->where('tier_id', $pendingClient->id)
+                    ->where('status', 'rejected')
+                    ->update([
+                        'status' => 'pending',
+                        'updated_at' => now(),
+                    ]);
+            } catch (\Throwable $e) {
+                // Log error but don't stop the process
+                \Log::error('Error updating client approval record: ' . $e->getMessage());
+            }
+            
+            \Log::info('Client resubmission completed successfully', [
+                'pending_client_id' => $pendingClient->id
+            ]);
+            
+            return response()->json([
+                'message' => 'Client soumis pour approbation avec succès.'
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            \Log::error('Error resubmitting pending client: ' . $e->getMessage(), [
+                'exception' => $e,
+                'pending_client_id' => $pendingClient->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Une erreur est survenue lors de la soumission du client pour approbation.',
+                'error' => $e->getMessage(),
+                'details' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                ] : null
             ], 500);
         }
     }

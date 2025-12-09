@@ -19,26 +19,9 @@ const Columns = [
 ]
 
 const DEFAULT_CATEGORIES = [
-  "Sté Privées Hors Grp",
-  "Société Groupe",
-  "Individuel",
-  "Personnel Groupe",
-  "Administration",
-  "Collectivité locale",
-  "Entreprise Publique",
-  "Administration Privée",
+  "Client",
+  "Fournisseur"
 ]
-
-// Mapping des catégories pour l'affichage
-const CATEGORY_MAPPINGS = {
-  "IND=STE": "Sté Privées Hors Grp",
-  "HGP": "Sté Privées Hors Grp",
-  "ADM": "Administration",
-  "COL LOC": "Collectivité locale",
-  "ONG": "Administration Privée",
-  "IND": "Individuel",
-  "PG": "Personnel Groupe"
-}
 
 const ClientsGrid = () => {
   const { user, authHeaders: authHeadersHook, baseUrl: baseUrlHook } = useAuth();
@@ -51,11 +34,11 @@ const ClientsGrid = () => {
   const [perPage, setPerPage] = useState(10)
   const [printPerPage] = useState(53) // Nombre d'éléments par page pour l'impression
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
-  const [sort, setSort] = useState({ key: "numero_compte", dir: "desc" }) // Default sort by numero_compte descending
+  const [sort, setSort] = useState({ key: "numero_compte", dir: "desc" }) 
   const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState("")
-  const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) // Plage de pages à imprimer
-  const [showPrintModal, setShowPrintModal] = useState(false) // Modal pour sélectionner la plage d'impression
+  const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) 
+  const [showPrintModal, setShowPrintModal] = useState(false) 
   
   // States for CSV import functionality
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -67,18 +50,14 @@ const ClientsGrid = () => {
   const [isImporting, setIsImporting] = useState(false)
   const [importController, setImportController] = useState(null)
   
-  const importing = isImporting // alias for existing usage
   const importInputRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Use the baseUrl from useAuth hook or fallback to environment variable
-  // Move useMemo outside of conditional logic to comply with React Hooks rules
   const apiBaseUrl = useMemo(() => {
     return baseUrlHook || process.env.REACT_APP_API_URL || ""
   }, [baseUrlHook])
 
-  // Use the authHeaders from useAuth hook or fallback to local implementation
   const getApiHeaders = () => {
     return authHeadersHook ? authHeadersHook() : (() => {
       const token = localStorage.getItem("token")
@@ -88,8 +67,27 @@ const ClientsGrid = () => {
     })()
   }
 
+  // Effet pour gérer les paramètres d'URL
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const searchParam = params.get("search") || ""
+    const typeTiersParam = params.get("type_tiers") || ""
+    
+    setSearch(searchParam)
+    setAppliedSearch(searchParam)
+    
+    // Définir la catégorie sélectionnée en fonction des paramètres (uniquement Client ou Fournisseur)
+    if (typeTiersParam === 'Client' || typeTiersParam === 'Fournisseur') {
+      setSelectedCategory(typeTiersParam)
+    } else {
+      setSelectedCategory("")
+    }
+    
+    // Réinitialiser la pagination à la première page
+    setPage(1)
+  }, [location.search])
+
   const fetchClients = async () => {
-    console.log('Fetching clients with sort:', sort);
     setLoading(true)
     setError("")
     try {
@@ -99,17 +97,11 @@ const ClientsGrid = () => {
       if (sort?.dir) params.append("dir", sort.dir)
       params.append("page", String(page))
       params.append("per_page", String(perPage))
-      // Send the correct parameter based on what we're filtering by
-      if (selectedCategory) {
-        // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
-        if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-          params.append("type_tiers", selectedCategory)
-        } else {
-          params.append("categorie", selectedCategory)
-        }
+      
+      // Uniquement le filtrage par type_tiers (Client ou Fournisseur)
+      if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+        params.append("type_tiers", selectedCategory)
       }
-
-      console.log('Request URL:', `${apiBaseUrl}/api/tiers?${params.toString()}`);
       
       const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
         headers: getApiHeaders(),
@@ -120,7 +112,6 @@ const ClientsGrid = () => {
       }
 
       const payload = await response.json()
-      console.log('Response data:', payload);
       const data = payload?.data ?? []
 
       setItems(Array.isArray(data) ? data : [])
@@ -129,9 +120,7 @@ const ClientsGrid = () => {
         last_page: payload?.last_page ?? 1,
         total: payload?.total ?? data.length,
       })
-      if (Array.isArray(payload?.available_categories) && payload.available_categories.length > 0) {
-        setAvailableCategories(payload.available_categories)
-      }
+      // Supprimer la mise à jour des catégories disponibles
     } catch (e) {
       setError(e.message || "Erreur inconnue lors du chargement")
     } finally {
@@ -139,56 +128,6 @@ const ClientsGrid = () => {
     }
   }
 
-  const exportCSV = async () => {
-    try {
-      const params = new URLSearchParams()
-      if (appliedSearch.trim()) params.append("search", appliedSearch.trim())
-      if (sort?.key) params.append("sort", sort.key)
-      if (sort?.dir) params.append("dir", sort.dir)
-      params.append("per_page", "1000")
-      // Send the correct parameter based on what we're filtering by
-      if (selectedCategory) {
-        // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
-        if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-          params.append("type_tiers", selectedCategory)
-        } else {
-          params.append("categorie", selectedCategory)
-        }
-      }
-
-      const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
-        headers: getApiHeaders(),
-      })
-
-      if (!response.ok) {
-        throw new Error("Export CSV impossible pour le moment")
-      }
-
-      const payload = await response.json()
-      const data = payload?.data ?? []
-      const rows = data.map((row) =>
-        Columns.map(({ key }) => {
-          const value = row?.[key] ?? ""
-          const safeValue = String(value).replace(/"/g, '""')
-          return `"${safeValue}"`
-        }).join(","),
-      )
-
-      const header = Columns.map(({ label }) => label.replace(/"/g, '""')).join(",")
-      const csvContent = ["\uFEFF" + header, ...rows].join("\n")
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement("a")
-      anchor.href = url
-      anchor.download = `clients_${new Date().toISOString().slice(0, 10)}.csv`
-      anchor.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      alert(e.message || "Erreur inconnue lors de l'export")
-    }
-  }
-
-  // Nouvelle fonction pour exporter en Excel
   const exportExcel = async () => {
     try {
       const params = new URLSearchParams()
@@ -196,14 +135,10 @@ const ClientsGrid = () => {
       if (sort?.key) params.append("sort", sort.key)
       if (sort?.dir) params.append("dir", sort.dir)
       params.append("per_page", "1000")
-      // Send the correct parameter based on what we're filtering by
-      if (selectedCategory) {
-        // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
-        if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-          params.append("type_tiers", selectedCategory)
-        } else {
-          params.append("categorie", selectedCategory)
-        }
+      
+      // Uniquement le filtrage par type_tiers (Client ou Fournisseur)
+      if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+        params.append("type_tiers", selectedCategory)
       }
 
       const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
@@ -217,7 +152,6 @@ const ClientsGrid = () => {
       const payload = await response.json()
       const data = payload?.data ?? []
       
-      // Créer la feuille de calcul
       const worksheet = XLSX.utils.json_to_sheet(data.map(row => {
         const formattedRow = {}
         Columns.forEach(col => {
@@ -226,17 +160,14 @@ const ClientsGrid = () => {
         return formattedRow
       }))
 
-      // Ajuster la largeur des colonnes
       const colWidths = Columns.map(col => ({
         wch: Math.max(col.label.length, ...data.map(row => String(row[col.key] ?? "").length))
       }))
       worksheet['!cols'] = colWidths
 
-      // Créer le classeur et y ajouter la feuille
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Clients")
 
-      // Télécharger le fichier
       const fileName = `clients_${new Date().toISOString().slice(0, 10)}.xlsx`
       XLSX.writeFile(workbook, fileName)
     } catch (e) {
@@ -244,57 +175,68 @@ const ClientsGrid = () => {
     }
   }
   
-  // Fonction pour imprimer une plage spécifique de pages
   const handlePrint = () => {
-    // Calculer le nombre total de pages pour l'impression
     const totalPages = Math.ceil(pagination.total / printPerPage)
-    setSelectedPrintRange({ start: 1, end: Math.min(5, totalPages) }) // Par défaut, imprimer les 5 premières pages
+    setSelectedPrintRange({ start: 1, end: Math.min(5, totalPages) })
     setShowPrintModal(true)
   }
   
-  // Fonction pour effectuer l'impression
+  // Fonction corrigée pour l'impression
   const executePrint = async () => {
     try {
-      // Fermer le modal
-      setShowPrintModal(false)
+      // 1. Récupérer les données à imprimer selon les filtres actuels
+      const params = new URLSearchParams()
+      if (appliedSearch.trim()) params.append("search", appliedSearch.trim())
+      if (sort?.key) params.append("sort", sort.key)
+      if (sort?.dir) params.append("dir", sort.dir)
       
-      // Récupérer les données pour la plage de pages sélectionnée
-      const printedItems = []
-      const { start, end } = selectedPrintRange
-      
-      for (let pageNum = start; pageNum <= end; pageNum++) {
-        const params = new URLSearchParams()
-        if (appliedSearch.trim()) params.append("search", appliedSearch.trim())
-        if (sort?.key) params.append("sort", sort.key)
-        if (sort?.dir) params.append("dir", sort.dir)
-        params.append("page", String(pageNum))
-        params.append("per_page", String(printPerPage))
-        // Send the correct parameter based on what we're filtering by
-        if (selectedCategory) {
-          // Check if this is a type_tiers filter (Client/Fournisseur) or category filter
-          if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-            params.append("type_tiers", selectedCategory)
-          } else {
-            params.append("categorie", selectedCategory)
-          }
-        }
-        
-        const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
-          headers: getApiHeaders(),
-        })
-        
-        if (!response.ok) {
-          throw new Error("Échec de la récupération des données pour l'impression")
-        }
-        
-        const payload = await response.json()
-        const data = payload?.data ?? []
-        printedItems.push(...data)
+      // On demande beaucoup de données pour couvrir la plage d'impression
+      // Idéalement, le backend devrait supporter une récupération précise, mais ici on prend large
+      params.append("per_page", "2500") 
+
+      // Uniquement le filtrage par type_tiers (Client ou Fournisseur)
+      if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
+        params.append("type_tiers", selectedCategory)
       }
+
+      const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
+        headers: getApiHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de la récupération des données pour l'impression")
+      }
+
+      const payload = await response.json()
+      const allData = payload?.data ?? []
+
+      // Filtrer les données selon la plage de pages sélectionnée
+      const startIndex = (selectedPrintRange.start - 1) * printPerPage
+      const endIndex = selectedPrintRange.end * printPerPage
       
-      // Créer une nouvelle fenêtre pour l'impression
-      const printWindow = window.open('', '_blank')
-      printWindow.document.write(`
+      // C'EST ICI QUE printedItems EST DÉFINI
+      const printedItems = allData.slice(startIndex, endIndex)
+
+      if (printedItems.length === 0) {
+        alert("Aucune donnée à imprimer dans cette plage.")
+        return
+      }
+
+      // 2. Créer une iframe invisible
+      const iframe = document.createElement('iframe');
+      
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      
+      document.body.appendChild(iframe);
+
+      // 3. Écrire le contenu dans l'iframe
+      const doc = iframe.contentWindow.document;
+      doc.write(`
         <html>
           <head>
             <title>Impression des clients</title>
@@ -326,21 +268,25 @@ const ClientsGrid = () => {
                 `).join('')}
               </tbody>
             </table>
-            <script>
-              window.onload = function() {
-                window.print();
-                // Fermer la fenêtre après impression
-                window.onfocus = function() { 
-                  setTimeout(function() { window.close(); }, 500); 
-                }
-              }
-            </script>
           </body>
         </html>
-      `)
-      printWindow.document.close()
+      `);
+      doc.close();
+
+      // 4. Lancer l'impression une fois le contenu chargé
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        
+        // 5. Nettoyage
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          setShowPrintModal(false); // Fermer la modale après impression
+        }, 1000);
+      }, 500);
+
     } catch (e) {
-      alert(e.message || "Erreur lors de la préparation de l'impression")
+      alert(e.message || "Erreur lors de la préparation de l'impression");
     }
   }
   
@@ -349,13 +295,11 @@ const ClientsGrid = () => {
   }
 
   const handleCancelImport = () => {
-    // Annuler l'importation en cours
     if (importController) {
       importController.abort()
     }
     setIsImporting(false)
     setImportModalOpen(false)
-    // Nettoyer les données d'importation
     setCsvHeaders([])
     setCsvRecords([])
     setColumnMapping({})
@@ -363,13 +307,11 @@ const ClientsGrid = () => {
     setImportResult(null)
   }
 
-  // Fonction pour lire un fichier avec un encodage spécifique
   const readFileAsTextWithEncoding = (file, encoding) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => {
         let result = reader.result
-        // Supprimer le BOM si présent
         if (typeof result === 'string' && result.charCodeAt(0) === 0xFEFF) {
           result = result.slice(1)
         }
@@ -380,16 +322,12 @@ const ClientsGrid = () => {
     })
   }
 
-  // Fonction pour parser le CSV avec détection d'encodage
   const parseCSV = async (file) => {
     try {
-      // Essayer d'abord avec UTF-8
       let text;
       try {
         text = await readFileAsTextWithEncoding(file, 'utf-8');
       } catch (utf8Error) {
-        // Si UTF-8 échoue, essayer avec l'encodage par défaut
-        console.warn('UTF-8 decoding failed, trying with default encoding:', utf8Error);
         text = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
@@ -398,15 +336,12 @@ const ClientsGrid = () => {
         });
       }
       
-      // Nettoyer le texte pour gérer correctement les caractères spéciaux
       if (text.charCodeAt(0) === 0xFEFF) {
         text = text.slice(1);
       }
       
-      // Détecter le délimiteur (virgule ou point-virgule)
       const separator = text.includes(';') ? ';' : ',';
       
-      // Diviser les lignes en prenant en compte les guillemets
       const lines = [];
       let currentLine = '';
       let inQuotes = false;
@@ -418,14 +353,13 @@ const ClientsGrid = () => {
         if (char === '"' && !inQuotes) {
           inQuotes = true;
         } else if (char === '"' && nextChar === '"') {
-          // Guillemets échappés
           currentLine += '"';
-          i++; // Skip le prochain guillemet
+          i++; 
         } else if (char === '"' && inQuotes) {
           inQuotes = false;
         } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
           if (char === '\r') {
-            i++; // Skip \n
+            i++; 
           }
           lines.push(currentLine);
           currentLine = '';
@@ -434,7 +368,6 @@ const ClientsGrid = () => {
         }
       }
       
-      // Ajouter la dernière ligne si elle n'est pas vide
       if (currentLine.trim().length > 0) {
         lines.push(currentLine);
       }
@@ -443,40 +376,14 @@ const ClientsGrid = () => {
         return { headers: [], records: [] };
       }
       
-      // Parser les en-têtes
       const headers = lines[0].split(separator).map(h => {
-        // Nettoyer les guillemets et les espaces
         let cleaned = h.trim().replace(/^"(.*)"$/, '$1');
-        // Remplacer les entités HTML si présentes
-        cleaned = cleaned.replace(/&eacute;/g, 'é')
-                         .replace(/&egrave;/g, 'è')
-                         .replace(/&ecirc;/g, 'ê')
-                         .replace(/&ccedil;/g, 'ç')
-                         .replace(/&agrave;/g, 'à')
-                         .replace(/&ugrave;/g, 'ù')
-                         .replace(/&icirc;/g, 'î')
-                         .replace(/&ocirc;/g, 'ô')
-                         .replace(/&uuml;/g, 'ü')
-                         .replace(/&euml;/g, 'ë');
         return cleaned;
       });
       
-      // Parser les enregistrements
       const records = lines.slice(1).map(line => {
         return line.split(separator).map(field => {
-          // Nettoyer les guillemets et les espaces
           let cleaned = field.trim().replace(/^"(.*)"$/, '$1');
-          // Remplacer les entités HTML si présentes
-          cleaned = cleaned.replace(/&eacute;/g, 'é')
-                           .replace(/&egrave;/g, 'è')
-                           .replace(/&ecirc;/g, 'ê')
-                           .replace(/&ccedil;/g, 'ç')
-                           .replace(/&agrave;/g, 'à')
-                           .replace(/&ugrave;/g, 'ù')
-                           .replace(/&icirc;/g, 'î')
-                           .replace(/&ocirc;/g, 'ô')
-                           .replace(/&uuml;/g, 'ü')
-                           .replace(/&euml;/g, 'ë');
           return cleaned;
         });
       });
@@ -484,7 +391,7 @@ const ClientsGrid = () => {
       return { headers, records };
     } catch (error) {
       console.error('Error parsing CSV:', error);
-      throw new Error('Impossible de lire le fichier CSV. Veuillez vérifier que le fichier est au format CSV valide.');
+      throw new Error('Impossible de lire le fichier CSV.');
     }
   };
 
@@ -493,18 +400,15 @@ const ClientsGrid = () => {
     if (!file) return
     
     try {
-      // Parser le fichier CSV avec gestion améliorée des encodages
       const { headers, records } = await parseCSV(file)
       if (!headers.length || !records.length) throw new Error('CSV vide ou invalide')
 
-      // Mapping automatique des colonnes selon les spécifications fournies
       const autoMapping = {}
       headers.forEach(header => {
         const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9éèêëàáâãäåòóôõöøìíîïùúûüÿñç]/g, '')
         if (normalizedHeader.includes('nom') && normalizedHeader.includes('tiers')) {
           autoMapping['nom_raison_sociale'] = header
         } else if (normalizedHeader.includes('type') && !normalizedHeader.includes('tiers')) {
-          // Mapping de la colonne 'Type' vers 'categorie'
           autoMapping['categorie'] = header
         } else if (normalizedHeader.includes('adresse') && normalizedHeader.includes('geo')) {
           autoMapping['adresse_geo_1'] = header
@@ -543,11 +447,9 @@ const ClientsGrid = () => {
     try {
       setIsImporting(true)
       
-      // Créer un contrôleur pour pouvoir annuler l'importation
       const controller = new AbortController()
       setImportController(controller)
       
-      // Créer un objet pour envoyer les données mappées
       const mappedData = csvRecords.map((row, index) => {
         const mappedRow = {}
         Object.keys(columnMapping).forEach(field => {
@@ -560,16 +462,14 @@ const ClientsGrid = () => {
           }
         })
         return mappedRow
-      }).filter(row => Object.keys(row).length > 0) // Filtrer les lignes vides
+      }).filter(row => Object.keys(row).length > 0)
       
-      // Mettre à jour la progression
       setImportProgress({ 
         current: 0, 
         total: mappedData.length, 
         status: `Préparation de l'importation de ${mappedData.length} enregistrements...` 
       })
       
-      // Envoyer les données au backend avec progression
       const token = localStorage.getItem("token")
       const headers = { 
         'Accept': 'application/json',
@@ -577,21 +477,12 @@ const ClientsGrid = () => {
       }
       if (token) headers['Authorization'] = `Bearer ${token}`
       
-      // Traiter les données par lots pour une meilleure progression
       const batchSize = 50
       let importedCount = 0
       const errors = []
       
       for (let i = 0; i < mappedData.length; i += batchSize) {
-        // Vérifier si l'importation a été annulée
-        if (controller.signal.aborted) {
-          setImportProgress({ 
-            current: importedCount, 
-            total: mappedData.length, 
-            status: `Importation annulée. ${importedCount} enregistrements traités avant l'annulation.` 
-          })
-          break
-        }
+        if (controller.signal.aborted) break
         
         const batch = mappedData.slice(i, i + batchSize)
         
@@ -601,19 +492,12 @@ const ClientsGrid = () => {
             headers: headers,
             body: JSON.stringify({ 
               data: batch,
-              duplicate_action: 'update' // Permet d'écraser les données existantes
+              duplicate_action: 'update'
             }),
-            signal: controller.signal // Attacher le signal d'annulation
+            signal: controller.signal
           })
           
-          if (controller.signal.aborted) {
-            setImportProgress({ 
-              current: importedCount, 
-              total: mappedData.length, 
-              status: `Importation annulée. ${importedCount} enregistrements traités avant l'annulation.` 
-            })
-            break
-          }
+          if (controller.signal.aborted) break
           
           if (!response.ok) {
             const errorData = await response.json()
@@ -623,34 +507,22 @@ const ClientsGrid = () => {
           const result = await response.json()
           importedCount += result.created + result.updated
           
-          // Mettre à jour la progression
           setImportProgress({ 
             current: Math.min(i + batchSize, mappedData.length), 
             total: mappedData.length, 
             status: `Importation en cours... ${importedCount} enregistrements traités` 
           })
           
-          // Ajouter les erreurs éventuelles
           if (result.errors && result.errors.length > 0) {
             errors.push(...result.errors)
           }
         } catch (batchError) {
-          if (batchError.name === 'AbortError') {
-            // L'importation a été annulée
-            setImportProgress({ 
-              current: importedCount, 
-              total: mappedData.length, 
-              status: `Importation annulée. ${importedCount} enregistrements traités avant l'annulation.` 
-            })
-            break
-          }
-          
+          if (batchError.name === 'AbortError') break
           console.error('Erreur lors de l\'importation du lot:', batchError)
           errors.push(`Lot ${Math.floor(i/batchSize) + 1}: ${batchError.message}`)
         }
       }
       
-      // Résumé final
       setImportResult({ 
         created: importedCount,
         updated: 0,
@@ -666,12 +538,10 @@ const ClientsGrid = () => {
         })
       }
       
-      // Fermer la modale après 2 secondes si aucune erreur n'est survenue, sinon attendre que l'utilisateur ferme manuellement
       if (errors.length === 0 && !controller.signal.aborted) {
         setTimeout(() => {
           setImportModalOpen(false)
           setIsImporting(false)
-          // Nettoyer les données d'importation
           setCsvHeaders([])
           setCsvRecords([])
           setColumnMapping({})
@@ -680,8 +550,6 @@ const ClientsGrid = () => {
           fetchClients()
         }, 2000)
       } else if (!controller.signal.aborted) {
-        // En cas d'erreurs, on ne ferme pas automatiquement la modale
-        // L'utilisateur peut voir les erreurs et fermer manuellement
         setIsImporting(false)
       }
       
@@ -695,28 +563,22 @@ const ClientsGrid = () => {
   const handleHeaderSort = (key) => {
     setPage(1)
     setSort((current) => {
-   // Si on clique sur nom ou raison_sociale, on trie toujours par ID
-if (key === "nom_raison_sociale") {
-  return { 
-    key: "id", 
-    dir: current.key === "id" && current.dir === "asc" ? "desc" : "asc" 
-  }
-}
-
-// Si on clique sur la colonne ID, on trie par ID
-if (key === "id") {
-  return { 
-    key: "id", 
-    dir: current.key === "id" && current.dir === "desc" ? "asc" : "desc" 
-  }
-}
-
-// Pour toutes les autres colonnes, on trie par cette colonne
-if (current.key === key) {
-  return { key, dir: current.dir === "asc" ? "desc" : "asc" }
-}
-
-return { key, dir: "asc" }
+      if (key === "nom_raison_sociale") {
+        return { 
+          key: "id", 
+          dir: current.key === "id" && current.dir === "asc" ? "desc" : "asc" 
+        }
+      }
+      if (key === "id") {
+        return { 
+          key: "id", 
+          dir: current.key === "id" && current.dir === "desc" ? "asc" : "desc" 
+        }
+      }
+      if (current.key === key) {
+        return { key, dir: current.dir === "asc" ? "desc" : "asc" }
+      }
+      return { key, dir: "asc" }
     })
   }
 
@@ -730,49 +592,13 @@ return { key, dir: "asc" }
 
   useEffect(() => {
     fetchClients()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, perPage, sort, selectedCategory, appliedSearch])
-
-  // Appliquer les filtres depuis l'URL quand on arrive depuis le dashboard
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const tab = params.get('tab')
-    const view = params.get('view')
-    
-    // Handle search parameter for both 'traites' and 'credit' tabs
-    if ((tab === 'traites' && view === 'Clients') || (tab === 'credit' && view === 'GestionClients')) {
-      const urlSearch = params.get('search') || ''
-      if (urlSearch && urlSearch !== search) {
-        setSearch(urlSearch)
-        setAppliedSearch(urlSearch)
-        setPage(1)
-      }
-    }
-    
-    // Handle category parameter (for dashboard statistics chart navigation)
-    const urlCategory = params.get('categorie')
-    if (urlCategory && urlCategory !== selectedCategory) {
-      setSelectedCategory(urlCategory)
-      setPage(1)
-    }
-    
-    // Handle type_tiers parameter (for dashboard statistics chart navigation by type)
-    const urlTypeTiers = params.get('type_tiers')
-    if (urlTypeTiers && urlTypeTiers !== selectedCategory) {
-      setSelectedCategory(urlTypeTiers)
-      setPage(1)
-    }
-    
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search])
 
   return (
     <div className="dashboard-stats">
       <button
         className="icon-button"
-        onClick={() => {
-          resetFilters()
-        }}
+        onClick={() => resetFilters()}
         aria-label="Réinitialiser"
         style={{ marginBottom: 8, color: "red" }}
       >
@@ -804,7 +630,7 @@ return { key, dir: "asc" }
           }}
           style={{ minWidth: 220 }}
         >
-          <option value="">Toutes catégories</option>
+          <option value="">Tous les types</option>
           {availableCategories.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
@@ -824,9 +650,6 @@ return { key, dir: "asc" }
           </button>
         </Can>
        
-        {/* <button className="submit-button" onClick={exportCSV}>
-          <Download size={16} style={{ marginRight: 6 }} /> Exporter CSV
-        </button> */}
         <Can permission="view_clients">
           <button className="submit-button" onClick={exportExcel}>
             <Download size={16} style={{ marginRight: 6 }} /> Exporter Excel
@@ -835,7 +658,8 @@ return { key, dir: "asc" }
         <Can permission="view_clients">
           <button className="submit-button" onClick={handlePrint}>
             <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
-          </button>        </Can>
+          </button>
+        </Can>
         <Can permission="create_clients" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
           <button className="submit-button" onClick={handleImportClick}>
             <Upload size={16} style={{ marginRight: 6 }} /> Importer CSV
@@ -857,9 +681,7 @@ return { key, dir: "asc" }
               <tr>
                 {Columns.map((col) => {
                   const isSortable = ["id", "numero_compte", "nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
-                  // Show arrow on nom_raison_sociale when sorting by ID
                   const isActive = sort.key === col.key || (sort.key === "id" && col.key === "nom_raison_sociale")
-                  // Show appropriate arrow based on sort direction
                   const arrow = isActive ? (sort.dir === "asc" ? " ↑" : " ↓") : ""
                   return (
                     <th
