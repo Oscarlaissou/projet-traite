@@ -18,42 +18,81 @@ import NotificationsPage from "./NotificationsPage"
 import ClientApprovalHistory from "./ClientApprovalHistory"
 import EditRejectedClient from "./EditRejectedClient"
 import { useLocation } from "react-router-dom"
-import { useAuth } from "../hooks/useAuth" // Import useAuth hook
+import { useAuth } from "../hooks/useAuth"
 import "./Dashboard.css"
 
 const Dashboard = () => {
-  const [activeMenuItem, setActiveMenuItem] = useState("Dashboard") // Par défaut à "Dashboard"
-  const [activeSubItem, setActiveSubItem] = useState(null) // Par défaut à null
+  const [activeMenuItem, setActiveMenuItem] = useState(null)
+  const [activeSubItem, setActiveSubItem] = useState(null)
   const [currentSearch, setCurrentSearch] = useState("")
+  const [menuInitialized, setMenuInitialized] = useState(false)
   
   const location = useLocation()
-  const { hasPermission } = useAuth() // Get user permissions
-
-  // Déterminer si l'utilisateur peut accéder aux stats du dashboard
-  const canAccessDashboardStats = () => {
-    return hasPermission('access_dashboard') && 
-           (hasPermission('access_traites') && hasPermission('access_clients')) ||
-           (hasPermission('access_dashboard') && 
-            !hasPermission('access_traites') && 
-            !hasPermission('access_clients'));
-  }
-
-  // Mettre à jour l'état par défaut en fonction des permissions
+  const { hasPermission, permissions, isLoading } = useAuth()
+  
+  // DEBUG: Afficher les permissions
   useEffect(() => {
-    // Si l'utilisateur peut accéder au dashboard, conserver "Dashboard" comme menu actif
-    if (canAccessDashboardStats()) {
-      // Ne pas changer l'état par défaut - garder "Dashboard"
+    console.log('Permissions chargées:', permissions);
+    console.log('isLoading:', isLoading);
+  }, [permissions, isLoading]);
+
+  // Définir le menu par défaut selon le rôle (UNE SEULE FOIS au montage)
+  useEffect(() => {
+    // Attendre que les permissions soient chargées
+    if (isLoading) return;
+    if (menuInitialized) return;
+    
+    const params = new URLSearchParams(location.search)
+    const tab = params.get('tab')
+    
+    // Si URL a des paramètres, laisser l'autre useEffect gérer
+    if (tab) {
+      setMenuInitialized(true);
       return;
-    } 
-    // Si l'utilisateur n'a pas accès au dashboard, le rediriger vers la première grille disponible
-    else if (hasPermission('access_traites')) {
-      setActiveMenuItem("Gestion Traites");
-      setActiveSubItem("Grille de saisie");
-    } else if (hasPermission('access_clients')) {
+    }
+    
+    // Vérifier les permissions réelles
+    const hasClients = hasPermission('view_clients') || hasPermission('create_clients') || hasPermission('edit_clients')
+    const hasTraites = hasPermission('view_traites') || hasPermission('create_traites') || hasPermission('edit_traites')
+    const hasDashboard = hasPermission('access_dashboard') || hasPermission('view_dashboard')
+    
+    console.log('Permissions détectées:', { hasClients, hasTraites, hasDashboard, allPermissions: permissions }); // Debug
+    
+    // Gestionnaire de clients uniquement → Grille clients
+    if (hasClients && !hasTraites) {
+      console.log('✅ Redirection vers Credit compte - Gestion clients');
       setActiveMenuItem("Credit compte");
       setActiveSubItem("Gestion des comptes clients");
+      setMenuInitialized(true);
     }
-  }, [hasPermission]);
+    // Gestionnaire de traites uniquement → Grille traites
+    else if (hasTraites && !hasClients) {
+      console.log('✅ Redirection vers Gestion Traites - Grille de saisie');
+      setActiveMenuItem("Gestion Traites");
+      setActiveSubItem("Grille de saisie");
+      setMenuInitialized(true);
+    }
+    // Accès complet (clients ET traites) → Dashboard
+    else if (hasTraites && hasClients) {
+      console.log('✅ Redirection vers Dashboard (accès complet)');
+      setActiveMenuItem("Dashboard");
+      setActiveSubItem(null);
+      setMenuInitialized(true);
+    }
+    // Si dashboard uniquement
+    else if (hasDashboard) {
+      console.log('✅ Redirection vers Dashboard');
+      setActiveMenuItem("Dashboard");
+      setActiveSubItem(null);
+      setMenuInitialized(true);
+    }
+    // Par défaut → Dashboard
+    else {
+      console.log('⚠️ Aucune permission spécifique, affichage Dashboard par défaut');
+      setActiveMenuItem("Dashboard");
+      setMenuInitialized(true);
+    }
+  }, [hasPermission, menuInitialized, location.search, isLoading, permissions])
 
   // Gestion de l'URL pour activer les bons menus
   useEffect(() => {
@@ -86,18 +125,28 @@ const Dashboard = () => {
     }
   }, [location.search, location.pathname])
 
-  // Fonction wrapper pour gérer le changement de menu et le reset des sous-menus
+  // Fonction pour gérer le changement de menu
   const handleMenuChange = (newItem) => {
     setActiveMenuItem(newItem)
-    // On ne force pas le sous-menu à null ici pour 'Credit compte' car la Sidebar le gère déjà
+    
     if (newItem === "Gestion Traites") {
-        setActiveSubItem("Grille de saisie")
+      setActiveSubItem("Grille de saisie")
     } else if (newItem === "Dashboard") {
-        setActiveSubItem(null)
+      setActiveSubItem(null)
     } else if (newItem === "Credit compte") {
-        setActiveSubItem("Gestion des comptes clients")
+      setActiveSubItem("Gestion des comptes clients")
     }
-    // Pour "Credit compte", on laisse la Sidebar ou l'URL décider du sous-menu
+  }
+
+  // Afficher un loader pendant le chargement des permissions
+  if (isLoading) {
+    return (
+      <div className="dashboard-container">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          Chargement...
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -150,10 +199,7 @@ const Dashboard = () => {
               activeSubItem === "ClientApprovalHistory" ? <ClientApprovalHistory /> :
               activeSubItem === "editRejectedClient" ? <EditRejectedClient /> :
               <ClientsGrid key={`default-clients-${currentSearch}`} searchTerm={currentSearch} />
-            ) : (
-              // Par défaut, afficher le DashboardStats
-              <DashboardStats />
-            )}
+            ) : null}
             
           </div>
         </div>
