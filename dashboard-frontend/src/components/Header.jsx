@@ -53,12 +53,46 @@ const Header = () => {
       return
     }
 
-    // Pour les recherches normales, toujours aller dans la grille des traites
+    // Pour les recherches normales, aller dans la grille des traites
     // avec les paramètres de recherche
     const params = new URLSearchParams()
     params.set('tab', 'traites')
     params.set('view', 'Grille')
     if (originalQuery) params.set('search', originalQuery)
+    
+    // Vérifier s'il y a des résultats dans la grille des traites
+    // Si aucun résultat, basculer automatiquement vers la grille des clients
+    try {
+      const baseUrl = process.env.REACT_APP_API_URL || ''
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+      
+      // Effectuer une requête rapide pour vérifier s'il y a des résultats
+      const searchParams = new URLSearchParams()
+      if (originalQuery) searchParams.set('search', originalQuery)
+      searchParams.set('per_page', '1') // Nous voulons juste savoir s'il y a des résultats
+      
+      const response = await fetch(`${baseUrl}/api/traites?${searchParams.toString()}`, { headers })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const results = data.data || []
+        
+        // S'il n'y a pas de résultats dans les traites, basculer vers les clients
+        if (results.length === 0) {
+          const clientParams = new URLSearchParams()
+          clientParams.set('tab', 'credit')
+          clientParams.set('view', 'GestionClients')
+          if (originalQuery) clientParams.set('search', originalQuery)
+          navigate(`/dashboard?${clientParams.toString()}`)
+          return
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification des résultats:', error)
+    }
+    
+    // Si nous arrivons ici, c'est qu'il y a des résultats dans les traites ou une erreur
     navigate(`/dashboard?${params.toString()}`)
   }
   return (
