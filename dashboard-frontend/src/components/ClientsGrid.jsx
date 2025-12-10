@@ -15,7 +15,7 @@ const Columns = [
   { key: "bp", label: "BP" },
   { key: "ville", label: "Ville" },
   { key: "pays", label: "Pays" },
-  { key: "categorie", label: "Catégorie" }
+  { key: "type_tiers", label: "Type" }
 ]
 
 const DEFAULT_CATEGORIES = [
@@ -36,7 +36,10 @@ const ClientsGrid = () => {
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [sort, setSort] = useState({ key: "numero_compte", dir: "desc" }) 
   const [availableCategories, setAvailableCategories] = useState(DEFAULT_CATEGORIES)
-  const [selectedCategory, setSelectedCategory] = useState("")
+  
+  // State pour le filtre de type (Client/Fournisseur)
+  const [selectedTypeTiers, setSelectedTypeTiers] = useState("")
+  
   const [selectedPrintRange, setSelectedPrintRange] = useState({ start: 1, end: 1 }) 
   const [showPrintModal, setShowPrintModal] = useState(false) 
   
@@ -67,7 +70,7 @@ const ClientsGrid = () => {
     })()
   }
 
-  // Effet pour gérer les paramètres d'URL
+  // Gestion des paramètres URL au chargement
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const searchParam = params.get("search") || ""
@@ -76,58 +79,70 @@ const ClientsGrid = () => {
     setSearch(searchParam)
     setAppliedSearch(searchParam)
     
-    // Définir la catégorie sélectionnée en fonction des paramètres (uniquement Client ou Fournisseur)
-    if (typeTiersParam === 'Client' || typeTiersParam === 'Fournisseur') {
-      setSelectedCategory(typeTiersParam)
+    // Initialisation du filtre type_tiers depuis l'URL
+    if (typeTiersParam) {
+      setSelectedTypeTiers(typeTiersParam)
     } else {
-      setSelectedCategory("")
+      setSelectedTypeTiers("")
     }
     
-    // Réinitialiser la pagination à la première page
     setPage(1)
   }, [location.search])
 
+  // --- FONCTION DE CHARGEMENT PRINCIPALE (CORRIGÉ) ---
   const fetchClients = async () => {
-    setLoading(true)
-    setError("")
+    // Ne pas réinitialiser loading à true pour éviter le flickering
+    setError("");
     try {
-      const params = new URLSearchParams()
-      if (appliedSearch.trim()) params.append("search", appliedSearch.trim())
-      if (sort?.key) params.append("sort", sort.key)
-      if (sort?.dir) params.append("dir", sort.dir)
-      params.append("page", String(page))
-      params.append("per_page", String(perPage))
+      const params = new URLSearchParams();
       
-      // Uniquement le filtrage par type_tiers (Client ou Fournisseur)
-      if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-        params.append("type_tiers", selectedCategory)
+      // Recherche
+      if (appliedSearch.trim()) params.append("search", appliedSearch.trim());
+      
+      // Tri
+      if (sort?.key) params.append("sort", sort.key);
+      if (sort?.dir) params.append("dir", sort.dir);
+      
+      // Pagination
+      params.append("page", String(page));
+      params.append("per_page", String(perPage));
+      
+      // Filtrage par type_tiers
+      if (selectedTypeTiers) {
+        params.append("type_tiers", selectedTypeTiers);
+        console.log('Filtre type_tiers appliqué :', selectedTypeTiers);
+      } else {
+        console.log('Aucun filtre type_tiers appliqué');
       }
+      
+      console.log('Appel API :', `${apiBaseUrl}/api/tiers?${params.toString()}`);
       
       const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
         headers: getApiHeaders(),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Échec du chargement des clients")
+        throw new Error("Échec du chargement des clients");
       }
 
-      const payload = await response.json()
-      const data = payload?.data ?? []
+      const payload = await response.json();
+      const data = payload?.data ?? [];
 
-      setItems(Array.isArray(data) ? data : [])
+      setItems(Array.isArray(data) ? data : []);
       setPagination({
         current_page: payload?.current_page ?? 1,
         last_page: payload?.last_page ?? 1,
         total: payload?.total ?? data.length,
-      })
-      // Supprimer la mise à jour des catégories disponibles
+      });
     } catch (e) {
-      setError(e.message || "Erreur inconnue lors du chargement")
+      setError(e.message || "Erreur inconnue lors du chargement");
+      setItems([]); // Vider la liste en cas d'erreur
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
+  // --- EXPORT EXCEL (CORRIGÉ) ---
   const exportExcel = async () => {
     try {
       const params = new URLSearchParams()
@@ -136,9 +151,9 @@ const ClientsGrid = () => {
       if (sort?.dir) params.append("dir", sort.dir)
       params.append("per_page", "1000")
       
-      // Uniquement le filtrage par type_tiers (Client ou Fournisseur)
-      if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-        params.append("type_tiers", selectedCategory)
+      // Correction ici aussi - toujours envoyer le paramètre type_tiers
+      if (selectedTypeTiers) {
+        params.append("type_tiers", selectedTypeTiers)
       }
 
       const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
@@ -181,22 +196,19 @@ const ClientsGrid = () => {
     setShowPrintModal(true)
   }
   
-  // Fonction corrigée pour l'impression
+  // --- IMPRESSION (CORRIGÉE) ---
   const executePrint = async () => {
     try {
-      // 1. Récupérer les données à imprimer selon les filtres actuels
       const params = new URLSearchParams()
       if (appliedSearch.trim()) params.append("search", appliedSearch.trim())
       if (sort?.key) params.append("sort", sort.key)
       if (sort?.dir) params.append("dir", sort.dir)
       
-      // On demande beaucoup de données pour couvrir la plage d'impression
-      // Idéalement, le backend devrait supporter une récupération précise, mais ici on prend large
       params.append("per_page", "2500") 
 
-      // Uniquement le filtrage par type_tiers (Client ou Fournisseur)
-      if (selectedCategory === 'Client' || selectedCategory === 'Fournisseur') {
-        params.append("type_tiers", selectedCategory)
+      // Correction ici aussi - toujours envoyer le paramètre type_tiers
+      if (selectedTypeTiers) {
+        params.append("type_tiers", selectedTypeTiers)
       }
 
       const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
@@ -210,11 +222,9 @@ const ClientsGrid = () => {
       const payload = await response.json()
       const allData = payload?.data ?? []
 
-      // Filtrer les données selon la plage de pages sélectionnée
       const startIndex = (selectedPrintRange.start - 1) * printPerPage
       const endIndex = selectedPrintRange.end * printPerPage
       
-      // C'EST ICI QUE printedItems EST DÉFINI
       const printedItems = allData.slice(startIndex, endIndex)
 
       if (printedItems.length === 0) {
@@ -222,7 +232,6 @@ const ClientsGrid = () => {
         return
       }
 
-      // 2. Créer une iframe invisible
       const iframe = document.createElement('iframe');
       
       iframe.style.position = 'fixed';
@@ -234,7 +243,6 @@ const ClientsGrid = () => {
       
       document.body.appendChild(iframe);
 
-      // 3. Écrire le contenu dans l'iframe
       const doc = iframe.contentWindow.document;
       doc.write(`
         <html>
@@ -273,15 +281,13 @@ const ClientsGrid = () => {
       `);
       doc.close();
 
-      // 4. Lancer l'impression une fois le contenu chargé
       setTimeout(() => {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
         
-        // 5. Nettoyage
         setTimeout(() => {
           document.body.removeChild(iframe);
-          setShowPrintModal(false); // Fermer la modale après impression
+          setShowPrintModal(false);
         }, 1000);
       }, 500);
 
@@ -307,6 +313,7 @@ const ClientsGrid = () => {
     setImportResult(null)
   }
 
+  // --- LOGIQUE D'IMPORT CSV (INCHANGÉE MAIS NÉCESSAIRE) ---
   const readFileAsTextWithEncoding = (file, encoding) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -560,24 +567,15 @@ const ClientsGrid = () => {
     }
   }
 
+  // --- TRI SIMPLIFIÉ (CORRIGÉ) ---
   const handleHeaderSort = (key) => {
     setPage(1)
     setSort((current) => {
-      if (key === "nom_raison_sociale") {
-        return { 
-          key: "id", 
-          dir: current.key === "id" && current.dir === "asc" ? "desc" : "asc" 
-        }
-      }
-      if (key === "id") {
-        return { 
-          key: "id", 
-          dir: current.key === "id" && current.dir === "desc" ? "asc" : "desc" 
-        }
-      }
+      // Si on reclique sur la même colonne, on inverse l'ordre
       if (current.key === key) {
         return { key, dir: current.dir === "asc" ? "desc" : "asc" }
       }
+      // Sinon on trie par cette nouvelle colonne en ascendant
       return { key, dir: "asc" }
     })
   }
@@ -585,14 +583,27 @@ const ClientsGrid = () => {
   const resetFilters = () => {
     setSearch("")
     setAppliedSearch("")
-    setSelectedCategory("")
+    setSelectedTypeTiers("")
     setSort({ key: "numero_compte", dir: "desc" })
     setPage(1)
+    
+    // Mettre à jour l'URL en supprimant les paramètres de filtre
+    const params = new URLSearchParams(location.search);
+    params.delete("search");
+    params.delete("type_tiers");
+    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
   }
 
+  // --- DÉCLENCHEMENT DE LA RECHERCHE ---
+  // C'est ce useEffect qui relance fetchClients quand selectedTypeTiers change
   useEffect(() => {
-    fetchClients()
-  }, [page, perPage, sort, selectedCategory, appliedSearch])
+    // Ajout d'un délai pour éviter les appels multiples rapides
+    const handler = setTimeout(() => {
+      fetchClients()
+    }, 100)
+    
+    return () => clearTimeout(handler)
+  }, [page, perPage, sort, selectedTypeTiers, appliedSearch])
 
   return (
     <div className="dashboard-stats">
@@ -621,25 +632,47 @@ const ClientsGrid = () => {
           className="search-input"
           style={{ maxWidth: 260 }}
         />
+        
+        {/* --- MENU DÉROULANT (CORRIGÉ) --- */}
         <select
           className="search-input"
-          value={selectedCategory}
+          value={selectedTypeTiers}
           onChange={(e) => {
-            setSelectedCategory(e.target.value)
-            setPage(1)
+            const newTypeTiers = e.target.value;
+            setSelectedTypeTiers(newTypeTiers);
+            setPage(1);
+            
+            // Mettre à jour l'URL avec le nouveau filtre
+            const params = new URLSearchParams(location.search);
+            if (newTypeTiers) {
+              params.set("type_tiers", newTypeTiers);
+            } else {
+              params.delete("type_tiers");
+            }
+            navigate(`${location.pathname}?${params.toString()}`, { replace: true });
           }}
           style={{ minWidth: 220 }}
         >
           <option value="">Tous les types</option>
-          {availableCategories.map((c) => (
+          {DEFAULT_CATEGORIES.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
+        
         <button
           className="submit-button"
           onClick={() => {
             setPage(1)
             setAppliedSearch(search.trim())
+            
+            // Mettre à jour l'URL avec le terme de recherche
+            const params = new URLSearchParams(location.search);
+            if (search.trim()) {
+              params.set("search", search.trim());
+            } else {
+              params.delete("search");
+            }
+            navigate(`${location.pathname}?${params.toString()}`, { replace: true });
           }}
         >
           <Search size={16} style={{ marginRight: 6 }} /> Rechercher
@@ -680,8 +713,18 @@ const ClientsGrid = () => {
             <thead>
               <tr>
                 {Columns.map((col) => {
-                  const isSortable = ["id", "numero_compte", "nom_raison_sociale", "bp", "ville", "pays", "categorie"].includes(col.key)
-                  const isActive = sort.key === col.key || (sort.key === "id" && col.key === "nom_raison_sociale")
+                  const isSortable = [
+                    "id", 
+                    "numero_compte", 
+                    "nom_raison_sociale", 
+                    "bp", 
+                    "ville", 
+                    "pays", 
+                    "categorie",
+                    "type_tiers"
+                  ].includes(col.key)
+
+                  const isActive = sort.key === col.key
                   const arrow = isActive ? (sort.dir === "asc" ? " ↑" : " ↓") : ""
                   return (
                     <th
@@ -692,6 +735,7 @@ const ClientsGrid = () => {
                         borderBottom: "1px solid #e5e7eb",
                         whiteSpace: "nowrap",
                         cursor: isSortable ? "pointer" : "default",
+                        backgroundColor: isActive ? "#f3f4f6" : "transparent"
                       }}
                       onClick={() => isSortable && handleHeaderSort(col.key)}
                     >

@@ -113,6 +113,31 @@ class PendingClientsController extends Controller
      */
     public function show(PendingClient $pendingClient)
     {
+        // Vérifier si le client existe encore dans pending_clients
+        if (!$pendingClient || !$pendingClient->exists) {
+            \Log::info('Pending client not found in pending_clients table', [
+                'pending_client_id' => request()->route('pendingClient')
+            ]);
+            
+            // Vérifier s'il existe dans la table tiers (cas où le client a été approuvé)
+            $approvedClient = \App\Models\Tier::find(request()->route('pendingClient'));
+            if ($approvedClient) {
+                \Log::info('Client found in tiers table (already approved)', [
+                    'tier_id' => $approvedClient->id
+                ]);
+                
+                return response()->json([
+                    'message' => 'Client déjà approuvé.',
+                    'client' => $approvedClient,
+                    'status' => 'approved'
+                ], 200, [], JSON_UNESCAPED_UNICODE);
+            }
+            
+            return response()->json([
+                'message' => 'Client en attente non trouvé. Il a peut-être déjà été approuvé ou supprimé.'
+            ], 404);
+        }
+        
         $pendingClient->load('createdBy:id,username');
         
         // Log pour debugger les données
@@ -215,27 +240,51 @@ class PendingClientsController extends Controller
                     if ($creator) {
                         $creator->notify(new ClientApprovedNotification(
                             $pendingClient->nom_raison_sociale,
-                            $pendingClient->numero_compte
+                            $pendingClient->numero_compte,
+                            $pendingClient->id
                         ));
                     }
                 }
 
                 // Enregistrer l'approbation dans la table client_approvals
                 try {
-                    \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
-                        'tier_id' => $newTier->id,
-                        'user_id' => $pendingClient->created_by,
-                        'status' => 'approved',
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    // Utiliser l'ID original du pending_client comme tier_id
+                    // pour maintenir la cohérence avec les enregistrements rejetés
+                    $originalClientId = $pendingClient->id;
+                    
+                    // Vérifier s'il existe déjà un enregistrement pour ce client
+                    $existingRecord = \Illuminate\Support\Facades\DB::table('client_approvals')
+                        ->where('tier_id', $originalClientId)
+                        ->first();
+                    
+                    if ($existingRecord) {
+                        // Mettre à jour l'enregistrement existant
+                        \Illuminate\Support\Facades\DB::table('client_approvals')
+                            ->where('id', $existingRecord->id)
+                            ->update([
+                                'status' => 'approved',
+                                'rejection_reason' => null,
+                                'updated_at' => now(),
+                            ]);
+                    } else {
+                        // Créer un nouvel enregistrement
+                        \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
+                            'tier_id' => $originalClientId,
+                            'user_id' => $pendingClient->created_by,
+                            'status' => 'approved',
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
                 } catch (\Throwable $e) {
                     // Log error but don't stop the process
-                    \Log::error('Error inserting client approval record: ' . $e->getMessage());
+                    \Log::error('Error inserting/updating client approval record: ' . $e->getMessage());
                 }
 
                 // Supprimer le client en attente (seulement maintenant, pas lors du rejet)
-                $pendingClient->delete();
+                // Ne pas supprimer le client de pending_clients pour maintenir la cohérence des IDs
+                // Cela permet de conserver l'ID original pour les références dans client_approvals
+
                 return $newTier;
             });
 
@@ -324,7 +373,7 @@ class PendingClientsController extends Controller
                 try {
                     $creator = User::find($pendingClient->created_by);
                     if ($creator) {
-                        $creator->notify(new ClientRejectedNotification($clientName, $reason));
+                        $creator->notify(new ClientRejectedNotification($clientName, $reason, $pendingClient->id));
                         \Log::info('Rejection notification sent successfully');
                     } else {
                         \Log::warning('Creator not found for notification', [
@@ -348,17 +397,35 @@ class PendingClientsController extends Controller
 
             // Enregistrer le rejet dans la table client_approvals
             try {
-                \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
-                    'tier_id' => $pendingClient->id, // Using the pending client ID since it wasn't moved to tiers
-                    'user_id' => $pendingClient->created_by,
-                    'status' => 'rejected',
-                    'rejection_reason' => $reason,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                // Vérifier s'il existe déjà un enregistrement pour ce client
+                $existingRecord = \Illuminate\Support\Facades\DB::table('client_approvals')
+                    ->where('tier_id', $pendingClient->id)
+                    ->first();
+                
+                if ($existingRecord) {
+                    // Mettre à jour l'enregistrement existant
+                    // Toujours mettre le statut à "rejected" lors d'un rejet
+                    \Illuminate\Support\Facades\DB::table('client_approvals')
+                        ->where('id', $existingRecord->id)
+                        ->update([
+                            'status' => 'rejected',
+                            'rejection_reason' => $reason,
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    // Créer un nouvel enregistrement
+                    \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
+                        'tier_id' => $pendingClient->id, // Using the pending client ID since it wasn't moved to tiers
+                        'user_id' => $pendingClient->created_by,
+                        'status' => 'rejected',
+                        'rejection_reason' => $reason,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
             } catch (\Throwable $e) {
                 // Log error but don't stop the process
-                \Log::error('Error inserting client rejection record: ' . $e->getMessage());
+                \Log::error('Error inserting/updating client rejection record: ' . $e->getMessage());
             }
 
             // NE PAS supprimer le client en attente - il doit rester dans la table pending_clients
@@ -537,34 +604,42 @@ class PendingClientsController extends Controller
                 'current_user_id' => Auth::id()
             ]);
             
-            // Vérifier s'il existe un enregistrement dans client_approvals avec statut 'rejected'
+            // Vérifier s'il existe un enregistrement dans client_approvals
             $existingRecord = \Illuminate\Support\Facades\DB::table('client_approvals')
                 ->where('tier_id', $pendingClient->id)
-                ->where('status', 'rejected')
                 ->first();
             
             if (!$existingRecord) {
-                \Log::warning('No rejected record found for resubmission', [
+                \Log::warning('No record found for resubmission, creating new one', [
                     'pending_client_id' => $pendingClient->id
                 ]);
                 
-                return response()->json([
-                    'message' => 'Aucun enregistrement rejeté trouvé pour ce client.'
-                ], 400, [], JSON_UNESCAPED_UNICODE);
-            }
-            
-            // Mettre à jour le statut dans la table client_approvals
-            try {
-                \Illuminate\Support\Facades\DB::table('client_approvals')
-                    ->where('tier_id', $pendingClient->id)
-                    ->where('status', 'rejected')
-                    ->update([
+                // Créer un nouvel enregistrement s'il n'existe pas
+                try {
+                    \Illuminate\Support\Facades\DB::table('client_approvals')->insert([
+                        'tier_id' => $pendingClient->id,
+                        'user_id' => $pendingClient->created_by,
                         'status' => 'pending',
+                        'created_at' => now(),
                         'updated_at' => now(),
                     ]);
-            } catch (\Throwable $e) {
-                // Log error but don't stop the process
-                \Log::error('Error updating client approval record: ' . $e->getMessage());
+                } catch (\Throwable $e) {
+                    \Log::error('Error creating client approval record: ' . $e->getMessage());
+                }
+            } else {
+                // Mettre à jour le statut dans la table client_approvals
+                // La soumission remet toujours le client dans l'état "pending"
+                try {
+                    \Illuminate\Support\Facades\DB::table('client_approvals')
+                        ->where('id', $existingRecord->id)
+                        ->update([
+                            'status' => 'pending',
+                            'updated_at' => now(),
+                        ]);
+                } catch (\Throwable $e) {
+                    // Log error but don't stop the process
+                    \Log::error('Error updating client approval record: ' . $e->getMessage());
+                }
             }
             
             \Log::info('Client resubmission completed successfully', [

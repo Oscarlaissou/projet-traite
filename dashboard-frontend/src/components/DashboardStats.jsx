@@ -539,10 +539,10 @@ const DashboardStats = () => {
                           fill={entry.color} 
                           style={{ cursor: 'pointer' }}
                           onClick={() => {
-                            // Naviguer vers la grille des clients avec un filtre par type uniquement tout en restant sur le dashboard
+                            // Naviguer vers la grille des clients avec un filtre par type
                             const typeName = entry.name;
                             if (typeName === 'Client' || typeName === 'Fournisseur') {
-                              navigate(`/dashboard?tab=traites&view=Clients&type_tiers=${encodeURIComponent(typeName)}`);
+                              navigate(`/dashboard?tab=credit&view=GestionClients&type_tiers=${encodeURIComponent(typeName)}`);
                             }
                           }}
                         />
@@ -560,7 +560,7 @@ const DashboardStats = () => {
                         <span 
                           style={{ color: '#333', fontSize: '12px', cursor: 'pointer' }}
                           onClick={() => {
-                            // Naviguer vers la grille des clients avec un filtre par type uniquement tout en restant sur le dashboard
+                            // Naviguer vers la grille des clients avec un filtre par type
                             const typeName = entry.value;
                             if (typeName === 'Client' || typeName === 'Fournisseur') {
                               navigate(`/dashboard?tab=credit&view=GestionClients&type_tiers=${encodeURIComponent(typeName)}`);

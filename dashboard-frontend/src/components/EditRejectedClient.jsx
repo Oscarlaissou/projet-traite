@@ -10,7 +10,7 @@ const EditRejectedClient = () => {
   
   // Extract ID from URL parameters
   const urlParams = new URLSearchParams(location.search);
-  const id = urlParams.get('id');
+  const id = urlParams.get('id') || urlParams.get('clientId') || urlParams.get('client_id');
   
   const [clientData, setClientData] = useState({
     nom_raison_sociale: "",
@@ -56,6 +56,8 @@ const EditRejectedClient = () => {
   // Charger les données du client
   useEffect(() => {
     const fetchClientData = async () => {
+      console.log('EditRejectedClient - Fetching client data for ID:', id);
+      
       if (!id) {
         setError("ID du client non spécifié.");
         setClientExists(false);
@@ -69,9 +71,18 @@ const EditRejectedClient = () => {
           headers: authHeaders()
         });
         
+        console.log('EditRejectedClient - API response status:', res.status);
+        
         if (res.status === 404) {
-          setError(`Client avec ID ${id} non trouvé. Il a peut-être déjà été approuvé ou supprimé.`);
-          setClientExists(false);
+          const data = await res.json().catch(() => ({}));
+          if (data.status === 'approved') {
+            // Client déjà approuvé, afficher un message approprié
+            setError(`Client avec ID ${id} a déjà été approuvé.`);
+            setClientExists(false);
+          } else {
+            setError(`Client avec ID ${id} non trouvé. Il a peut-être déjà été approuvé ou supprimé.`);
+            setClientExists(false);
+          }
           setLoading(false);
           return;
         }
@@ -81,6 +92,16 @@ const EditRejectedClient = () => {
         }
         
         const data = await res.json();
+        console.log('EditRejectedClient - Received client data:', data);
+        
+        // Vérifier si le client est déjà approuvé
+        if (data.status === 'approved') {
+          setError(`Client avec ID ${id} a déjà été approuvé.`);
+          setClientExists(false);
+          setLoading(false);
+          return;
+        }
+        
         setClientData({
           nom_raison_sociale: data.nom_raison_sociale || "",
           numero_compte: data.numero_compte || "",
@@ -105,6 +126,7 @@ const EditRejectedClient = () => {
         });
         setClientExists(true);
       } catch (e) {
+        console.error('EditRejectedClient - Error fetching client data:', e);
         setError(e.message || "Erreur lors du chargement des données du client");
       } finally {
         setLoading(false);
@@ -160,6 +182,10 @@ const EditRejectedClient = () => {
       
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
+        // Vérifier si le client a déjà été approuvé
+        if (errorData.message && errorData.message.includes('not found')) {
+          throw new Error(`Client avec ID ${id} non trouvé. Il a peut-être déjà été approuvé ou supprimé.`);
+        }
         throw new Error(`Erreur ${res.status}: ${errorData.message || 'Impossible de soumettre pour approbation'}`);
       }
       
@@ -237,7 +263,7 @@ const EditRejectedClient = () => {
             textAlign: 'center'
           }}>
             <h2 style={{ color: '#DC2626', marginBottom: '16px' }}>Client non trouvé</h2>
-            <p>Le client que vous tentez de modifier n'existe plus. Il a peut-être déjà été approuvé ou supprimé.</p>
+            <p>{error || "Le client que vous tentez de modifier n'existe plus. Il a peut-être déjà été approuvé ou supprimé."}</p>
             <button
               onClick={handleCancel}
               style={{
@@ -662,7 +688,7 @@ const EditRejectedClient = () => {
               disabled={saving}
               style={{
                 padding: '10px 20px',
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#111827',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -689,8 +715,6 @@ const EditRejectedClient = () => {
                   cursor: submitting ? 'not-allowed' : 'pointer',
                   fontWeight: '500',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
                 }}
               >
                 {submitting ? "Soumission..." : "Soumettre pour Approbation"}

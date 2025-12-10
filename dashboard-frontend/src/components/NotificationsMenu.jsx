@@ -143,8 +143,26 @@ const NotificationsMenu = () => {
       const dd = String(now.getDate()).padStart(2, '0')
       const todayStr = `${yyyy}-${mm}-${dd}`
 
+      // Vérifier les permissions de l'utilisateur
+      const canManagePendingClients = userHasPermission('manage_pending_clients');
+      const canViewTraites = userHasPermission('view_traites');
+      const canViewClients = userHasPermission('view_clients');
+      
+      console.log('User permissions:', {
+        canManagePendingClients,
+        canViewTraites,
+        canViewClients
+      });
+
       // 1) Aujourd'hui (tous statuts) via plage echeance_from/echeance_to
+      // Seulement pour les utilisateurs avec accès aux traites et pas seulement gestionnaires clients
       const p1 = (async () => {
+        // Ne pas charger les notifications de traites pour les gestionnaires clients uniquement
+        if (!canViewTraites || (canViewClients && !canManagePendingClients && !canViewTraites)) {
+          console.log('Skipping traites notifications for clients manager only');
+          return [];
+        }
+        
         const p = new URLSearchParams()
         p.append('per_page', '200')
         p.append('page', '1')
@@ -159,7 +177,14 @@ const NotificationsMenu = () => {
       })()
 
       // 2) À venir (Non échu) sous 3 jours
+      // Seulement pour les utilisateurs avec accès aux traites et pas seulement gestionnaires clients
       const p2 = (async () => {
+        // Ne pas charger les notifications de traites pour les gestionnaires clients uniquement
+        if (!canViewTraites || (canViewClients && !canManagePendingClients && !canViewTraites)) {
+          console.log('Skipping upcoming traites notifications for clients manager only');
+          return [];
+        }
+        
         const p = new URLSearchParams()
         p.append('per_page', '200')
         p.append('upcoming_days', '3')
@@ -397,12 +422,31 @@ const NotificationsMenu = () => {
                           setUserNotifications(prev => prev.filter(n => n.id !== notification.id));
                           setCount(prev => Math.max(0, prev - 1));
                           
-                          // If this is a client approval notification, navigate to the clients page
+                          // Close the notification menu
+                          setOpen(false);
+                          
+                          // Handle navigation based on notification type
                           if (notification.data && notification.data.type === 'client_approved') {
-                            // Close the notification menu
-                            setOpen(false);
-                            // Navigate to the clients management page
-                            navigate('/dashboard?tab=credit&view=GestionClients');
+                            // Navigate to the client approval history page
+                            navigate('/dashboard?tab=credit&view=ClientApprovalHistory');
+                          } else if (notification.data && notification.data.type === 'client_rejected') {
+                            // Navigate to edit the rejected client request
+                            
+                            // Try multiple possible field names for client ID
+                            const clientId = notification.data.client_id || 
+                                          notification.data.pending_client_id || 
+                                          notification.data.clientId || 
+                                          notification.data.id;
+                            
+                            if (clientId) {
+                              navigate(`/dashboard?tab=credit&view=editRejectedClient&id=${clientId}`);
+                            } else {
+                              // Fallback to approval history if no client_id
+                              navigate('/dashboard?tab=credit&view=ClientApprovalHistory');
+                            }
+                          } else {
+                            // Default navigation to approval history for other notifications
+                            navigate('/dashboard?tab=credit&view=ClientApprovalHistory');
                           }
                         }
                       } catch (e) {

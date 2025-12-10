@@ -47,6 +47,7 @@ class TiersController extends Controller
         'ville' => ['ville', 'city', 'localite'],
         'pays' => ['pays', 'country', 'nation'],
         'categorie' => ['categorie', 'category', 'type_client', 'type'],
+        'type_tiers' => ['type_tiers', 'type_party', 'party_type'],
     ];
 
     /**
@@ -98,6 +99,12 @@ class TiersController extends Controller
             $query->whereIn($resolvedCategoryColumn, $categories);
         }
 
+        // Filtrage par type_tiers
+        $typeTiersFilter = $request->input('type_tiers');
+        if (!empty($typeTiersFilter) && $resolvedTypeTiersColumn = ($this->resolvedColumns['type_tiers'] ?? null)) {
+            $query->where($resolvedTypeTiersColumn, $typeTiersFilter);
+        }
+
         // Tri configurable sur un sous-ensemble de colonnes.
         $sortRequest = (string) $request->get('sort', 'nom_raison_sociale');
         $direction = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
@@ -131,6 +138,7 @@ class TiersController extends Controller
                 'ville' => $this->extractValue($tier, 'ville'),
                 'pays' => $this->extractValue($tier, 'pays'),
                 'categorie' => $this->extractValue($tier, 'categorie'),
+                'type_tiers' => $this->extractValue($tier, 'type_tiers'),
             ];
         });
 

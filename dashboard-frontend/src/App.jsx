@@ -94,7 +94,7 @@ function AppRoutes() {
                 path="/clients/:id" 
                 element={
                     <ProtectedRoute>
-                        <Dashboard />
+                        <ClientDetailPage />
                     </ProtectedRoute>
                 } 
             />

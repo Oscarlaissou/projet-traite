@@ -184,21 +184,21 @@ const Dashboard = () => {
               activeSubItem === "Historique" ? <HistoriquePage /> : 
               activeSubItem === "Notification" ? <NotificationsPage /> : 
               activeSubItem === "Grille clients" ? (
-                <ClientsGrid key={`clients-grid-${currentSearch}`} searchTerm={currentSearch} />
+                <ClientsGrid />
               ) : (
                 <TraitesGrid key={`traites-grid-${currentSearch}`} searchTerm={currentSearch} />
               )
             
             ) : activeMenuItem === "Credit compte" ? (
               activeSubItem === "Gestion des comptes clients" ? (
-                <ClientsGrid key={`credit-clients-${currentSearch}`} searchTerm={currentSearch} />
+                <ClientsGrid />
               ) :
               activeSubItem === "Historique clients" ? <ClientsHistoriquePage /> :
               activeSubItem === "Nouveau client" ? <ClientFormPage /> :
               activeSubItem === "PendingClients" ? <PendingClientsGrid /> :
               activeSubItem === "ClientApprovalHistory" ? <ClientApprovalHistory /> :
               activeSubItem === "editRejectedClient" ? <EditRejectedClient /> :
-              <ClientsGrid key={`default-clients-${currentSearch}`} searchTerm={currentSearch} />
+              <ClientsGrid />
             ) : null}
             
           </div>

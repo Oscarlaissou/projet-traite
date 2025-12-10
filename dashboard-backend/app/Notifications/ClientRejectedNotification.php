@@ -13,14 +13,16 @@ class ClientRejectedNotification extends Notification
 
     protected $clientName;
     protected $reason;
+    protected $clientId;
 
     /**
      * Create a new notification instance.
      */
-    public function __construct($clientName, $reason = null)
+    public function __construct($clientName, $reason = null, $clientId = null)
     {
         $this->clientName = $clientName;
         $this->reason = $reason;
+        $this->clientId = $clientId;
     }
 
     /**
@@ -50,6 +52,7 @@ class ClientRejectedNotification extends Notification
             'type' => 'client_rejected',
             'client_name' => $this->clientName,
             'reason' => $this->reason,
+            'client_id' => $this->clientId,
             'created_at' => now(),
         ];
     }

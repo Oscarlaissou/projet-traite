@@ -13,14 +13,16 @@ class ClientApprovedNotification extends Notification
 
     protected $clientName;
     protected $accountId;
+    protected $clientId;
 
     /**
      * Create a new notification instance.
      */
-    public function __construct($clientName, $accountId)
+    public function __construct($clientName, $accountId, $clientId = null)
     {
         $this->clientName = $clientName;
         $this->accountId = $accountId;
+        $this->clientId = $clientId;
     }
 
     /**
@@ -45,6 +47,7 @@ class ClientApprovedNotification extends Notification
             'type' => 'client_approved',
             'client_name' => $this->clientName,
             'account_id' => $this->accountId,
+            'client_id' => $this->clientId,
             'created_at' => now(),
         ];
     }
