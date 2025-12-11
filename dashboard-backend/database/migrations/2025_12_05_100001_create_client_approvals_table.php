@@ -15,11 +15,14 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('tier_id');
             $table->unsignedBigInteger('user_id');
-            $table->string('status'); // approved, rejected
+            $table->string('status'); // approved, rejected, pending
             $table->text('rejection_reason')->nullable();
             $table->timestamps();
             
-            $table->foreign('tier_id')->references('id')->on('tiers')->onDelete('cascade');
+            // Change the foreign key to reference pending_clients initially
+            // When a client is approved, they are moved to tiers table
+            // But the approval record still references the original pending client ID
+            $table->foreign('tier_id')->references('id')->on('pending_clients')->onDelete('cascade');
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
         });
     }

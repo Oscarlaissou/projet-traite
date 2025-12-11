@@ -267,8 +267,8 @@
     <div class="section-title">Émetteur de la demande.</div>
     <table class="emitter-table">
         <tr><td>Société</td><td class="bold-value">{{ $demande->societe ?? ($companyName ?? 'CFAO MOBILITY CAMEROON') }}</td></tr>
-        <tr><td>Établissement</td><td class="bold-value">{{ $demande->etablissement ?? 'DEPARTEMENT PL' }}</td></tr>
-        <tr><td>Service</td><td class="bold-value">{{ $demande->service ?? 'COMMERCIAL PL' }}</td></tr>
+        <tr><td>Établissement</td><td class="bold-value">{{ $demande->etablissement ?? '' }}</td></tr>
+        <tr><td>Service</td><td class="bold-value">{{ $demande->service ?? '' }}</td></tr>
         <tr><td>Nom du Signataire</td><td class="bold-value">{{ $demande->nom_signataire ?? '' }}</td></tr>
     </table>
 
@@ -344,8 +344,8 @@
             <div class="section-title">Émetteur de la demande.</div>
             <table class="emitter-table">
                 <tr><td>Société</td><td class="bold-value">{{ $demande->societe ?? ($companyName ?? 'CFAO MOBILITY CAMEROON') }}</td></tr>
-                <tr><td>Établissement</td><td class="bold-value">{{ $demande->etablissement ?? 'DEPARTEMENT PL' }}</td></tr>
-                <tr><td>Service</td><td class="bold-value">{{ $demande->service ?? 'COMMERCIAL PL' }}</td></tr>
+                <tr><td>Établissement</td><td class="bold-value">{{ $demande->etablissement ?? '' }}</td></tr>
+                <tr><td>Service</td><td class="bold-value">{{ $demande->service ?? '' }}</td></tr>
                 <tr><td>Nom du Signataire</td><td class="bold-value">{{ $demande->nom_signataire ?? '' }}</td></tr>
             </table>
         </div>

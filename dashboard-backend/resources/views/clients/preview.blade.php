@@ -247,7 +247,7 @@
 
   <!-- BOUTONS AU-DESSUS DE LA PAGE CENTRALE -->
   <div class="header-right-fixed">
-<img src="{{ \App\Models\OrganizationSetting::first()?->logo ? url('storage/' . \App\Models\OrganizationSetting::first()->logo) : asset('images/LOGO.png') }}" 
+<img src="{{ (\App\Models\OrganizationSetting::first() && \App\Models\OrganizationSetting::first()->logo) ? url('storage/' . \App\Models\OrganizationSetting::first()->logo) : asset('images/LOGO.png') }}" 
      alt="Logo" 
      style="height: 60px; object-fit: contain; max-width: 100%;" />
      <div class="header-title">

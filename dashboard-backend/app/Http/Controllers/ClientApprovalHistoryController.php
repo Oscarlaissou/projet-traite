@@ -43,15 +43,15 @@ class ClientApprovalHistoryController extends Controller
                     'ca.rejection_reason',
                     'ca.created_at',
                     DB::raw('CASE 
-                        WHEN ca.status = "approved" THEN COALESCE((SELECT t.nom_raison_sociale FROM tiers t WHERE t.id = ca.tier_id), "Client approuvé")
+                        WHEN ca.status = "approved" THEN COALESCE((SELECT t.nom_raison_sociale FROM tiers t WHERE t.id = ca.approved_tier_id), "Client approuvé")
                         WHEN ca.status = "rejected" THEN COALESCE((SELECT pc.nom_raison_sociale FROM pending_clients pc WHERE pc.id = ca.tier_id), "Client rejeté")
-                        WHEN ca.status = "pending" THEN COALESCE((SELECT pc.nom_raison_sociale FROM pending_clients pc WHERE pc.id = ca.tier_id), (SELECT t.nom_raison_sociale FROM tiers t WHERE t.id = ca.tier_id), "Client en attente")
+                        WHEN ca.status = "pending" THEN COALESCE((SELECT pc.nom_raison_sociale FROM pending_clients pc WHERE pc.id = ca.tier_id), (SELECT t.nom_raison_sociale FROM tiers t WHERE t.id = ca.approved_tier_id), "Client en attente")
                         ELSE "Inconnu"
                     END as client_name'),
                     DB::raw('CASE 
-                        WHEN ca.status = "approved" THEN COALESCE((SELECT t.numero_compte FROM tiers t WHERE t.id = ca.tier_id), "N/A")
+                        WHEN ca.status = "approved" THEN COALESCE((SELECT t.numero_compte FROM tiers t WHERE t.id = ca.approved_tier_id), "N/A")
                         WHEN ca.status = "rejected" THEN COALESCE((SELECT pc.numero_compte FROM pending_clients pc WHERE pc.id = ca.tier_id), "N/A")
-                        WHEN ca.status = "pending" THEN COALESCE((SELECT pc.numero_compte FROM pending_clients pc WHERE pc.id = ca.tier_id), (SELECT t.numero_compte FROM tiers t WHERE t.id = ca.tier_id), "N/A")
+                        WHEN ca.status = "pending" THEN COALESCE((SELECT pc.numero_compte FROM pending_clients pc WHERE pc.id = ca.tier_id), (SELECT t.numero_compte FROM tiers t WHERE t.id = ca.approved_tier_id), "N/A")
                         ELSE "N/A"
                     END as account_number')
                 )

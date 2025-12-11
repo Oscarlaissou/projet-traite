@@ -1,5 +1,8 @@
+<?php 
+  $organizationSetting = \App\Models\OrganizationSetting::first();
+  $logoUrl = $organizationSetting && $organizationSetting->logo ? url('storage/' . $organizationSetting->logo) : asset('images/LOGO.png');
 
-
+?>
 
 <!DOCTYPE html>
 <html lang="fr">

@@ -94,7 +94,7 @@ function AppRoutes() {
                 path="/clients/:id" 
                 element={
                     <ProtectedRoute>
-                        <ClientDetailPage />
+                        <Dashboard />
                     </ProtectedRoute>
                 } 
             />
@@ -129,7 +129,7 @@ function AppRoutes() {
                 path="/dashboard/clients/:id" 
                 element={
                     <ProtectedRoute>
-                        <ClientDetailPage />
+                        <Dashboard />
                     </ProtectedRoute>
                 } 
             />

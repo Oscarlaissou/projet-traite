@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tier;
+use App\Models\Agence; // Added Agence model
 use App\Models\TierActivity;
 use App\Models\OrganizationSetting;
 use Carbon\Carbon;
@@ -305,7 +306,15 @@ class TiersController extends Controller
     public function show(Tier $tier): JsonResponse
     {
         // Récupère les informations de la demande d'ouverture de compte si elles existent
-        $demande = DB::table('demande_ouverture_compte')->where('id', $tier->id)->first();
+        $demandeQuery = DB::table('demande_ouverture_compte')
+            ->where('demande_ouverture_compte.id', $tier->id); // Specify table name to avoid ambiguity
+        
+        // Join with agence table if it exists and agence_id column exists
+        if (Schema::hasTable('agence') && in_array('agence_id', $this->demandeColumns)) {
+            $demandeQuery->leftJoin('agence', 'demande_ouverture_compte.agence_id', '=', 'agence.id');
+        }
+        
+        $demande = $demandeQuery->first();
 
         $payload = $tier->toArray();
 
@@ -315,14 +324,24 @@ class TiersController extends Controller
             $payload['montant_paye'] = $demande->montant_paye ?? null;
             $payload['credit'] = $demande->credit ?? null;
             $payload['motif'] = $demande->motif ?? null;
-            if (property_exists($demande, 'etablissement')) {
-                $payload['etablissement'] = $demande->etablissement;
-            }
-            if (property_exists($demande, 'service')) {
-                $payload['service'] = $demande->service;
-            }
-            if (property_exists($demande, 'nom_signataire')) {
-                $payload['nom_signataire'] = $demande->nom_signataire;
+            
+            // Get agency information from joined table or direct fields
+            if (Schema::hasTable('agence') && !empty($demande->agence_id)) {
+                // Get agency info from joined agence table
+                $payload['etablissement'] = $demande->etablissement ?? null;
+                $payload['service'] = $demande->service ?? null;
+                $payload['nom_signataire'] = $demande->nom_signataire ?? null;
+            } else {
+                // Fallback to direct fields if they exist
+                if (property_exists($demande, 'etablissement')) {
+                    $payload['etablissement'] = $demande->etablissement;
+                }
+                if (property_exists($demande, 'service')) {
+                    $payload['service'] = $demande->service;
+                }
+                if (property_exists($demande, 'nom_signataire')) {
+                    $payload['nom_signataire'] = $demande->nom_signataire;
+                }
             }
         }
 
@@ -387,7 +406,9 @@ class TiersController extends Controller
                 // Capturer aussi les valeurs de la demande avant modification
                 $oldDemande = null;
                 if (!empty($this->demandeColumns)) {
-                    $oldDemande = DB::table('demande_ouverture_compte')->where('id', $tier->id)->first();
+                    $oldDemande = DB::table('demande_ouverture_compte')
+                        ->where('demande_ouverture_compte.id', $tier->id) // Specify table name to avoid ambiguity
+                        ->first();
                 }
 
                 // Mise à jour des champs Tiers
@@ -423,12 +444,16 @@ class TiersController extends Controller
 
                 // Mise à jour/Création de la demande d'ouverture si la table existe
                 if (!empty($this->demandeColumns)) {
-                    $demande = DB::table('demande_ouverture_compte')->where('id', $tier->id)->first();
+                    $demande = DB::table('demande_ouverture_compte')
+                        ->where('demande_ouverture_compte.id', $tier->id) // Specify table name to avoid ambiguity
+                        ->first();
                     $payload = $this->buildDemandePayload($tier->id, $validated, $demande, $demande === null);
                     if ($this->shouldPersistDemande($payload)) {
                         if ($demande) {
                             unset($payload['id']); // inutile pour update
-                            DB::table('demande_ouverture_compte')->where('id', $tier->id)->update($payload);
+                            DB::table('demande_ouverture_compte')
+                                ->where('demande_ouverture_compte.id', $tier->id) // Specify table name to avoid ambiguity
+                                ->update($payload);
                             
                             // Détecter les changements sur demande_ouverture_compte
                             $demandeFields = ['etablissement', 'service', 'nom_signataire', 'montant_facture', 'montant_paye', 'credit', 'motif'];
@@ -486,9 +511,41 @@ class TiersController extends Controller
         $payload = $this->assignDemandeValue($payload, 'montant_paye', $validated, $existing);
         $payload = $this->assignDemandeValue($payload, 'credit', $validated, $existing);
         $payload = $this->assignDemandeValue($payload, 'motif', $validated, $existing);
-        $payload = $this->assignDemandeValue($payload, 'etablissement', $validated, $existing);
-        $payload = $this->assignDemandeValue($payload, 'service', $validated, $existing);
-        $payload = $this->assignDemandeValue($payload, 'nom_signataire', $validated, $existing);
+        
+        // Handle agency information properly
+        if (Schema::hasTable('agence')) {
+            // Check if we have agency fields in the request
+            $hasAgencyInfo = !empty($validated['etablissement']) || !empty($validated['service']) || !empty($validated['nom_signataire']);
+            
+            if ($hasAgencyInfo) {
+                // Find or create the agency
+                $agence = Agence::firstOrCreate(
+                    [
+                        'etablissement' => $validated['etablissement'] ?? '',
+                        'service' => $validated['service'] ?? null,
+                        'nom_signataire' => $validated['nom_signataire'] ?? null
+                    ],
+                    [
+                        'etablissement' => $validated['etablissement'] ?? '',
+                        'service' => $validated['service'] ?? null,
+                        'nom_signataire' => $validated['nom_signataire'] ?? null
+                    ]
+                );
+                
+                // Add agence_id to payload if the column exists
+                if ($this->hasDemandeColumn('agence_id')) {
+                    $payload['agence_id'] = $agence->id;
+                }
+            } else if ($existing && !empty($existing->agence_id)) {
+                // Keep existing agence_id if no new agency info provided
+                $payload['agence_id'] = $existing->agence_id;
+            }
+        } else {
+            // Fallback to direct fields if agence table doesn't exist
+            $payload = $this->assignDemandeValue($payload, 'etablissement', $validated, $existing);
+            $payload = $this->assignDemandeValue($payload, 'service', $validated, $existing);
+            $payload = $this->assignDemandeValue($payload, 'nom_signataire', $validated, $existing);
+        }
 
         if ($isCreation && $this->hasDemandeColumn('created_at')) {
             $payload['created_at'] = now();
@@ -744,7 +801,9 @@ class TiersController extends Controller
         // Normaliser les données avant de les insérer
         $data = $this->normalizeImportedRow($data);
 
-        $demande = DB::table('demande_ouverture_compte')->where('id', $tierId)->first();
+        $demande = DB::table('demande_ouverture_compte')
+            ->where('demande_ouverture_compte.id', $tierId) // Specify table name to avoid ambiguity
+            ->first();
         
         // Construire le payload pour la demande d'ouverture de compte
         $payload = [];
@@ -776,16 +835,47 @@ class TiersController extends Controller
             $payload = $this->assignDemandeValue($payload, 'motif', ['motif' => $data['motif']], $demande);
         }
         
-        if (isset($data['etablissement'])) {
-            $payload = $this->assignDemandeValue($payload, 'etablissement', ['etablissement' => $data['etablissement']], $demande);
-        }
-        
-        if (isset($data['service'])) {
-            $payload = $this->assignDemandeValue($payload, 'service', ['service' => $data['service']], $demande);
-        }
-        
-        if (isset($data['nom_signataire'])) {
-            $payload = $this->assignDemandeValue($payload, 'nom_signataire', ['nom_signataire' => $data['nom_signataire']], $demande);
+        // Handle agency information properly for imports
+        if (Schema::hasTable('agence')) {
+            // Check if we have agency fields in the imported data
+            $hasAgencyInfo = !empty($data['etablissement']) || !empty($data['service']) || !empty($data['nom_signataire']);
+            
+            if ($hasAgencyInfo) {
+                // Find or create the agency
+                $agence = Agence::firstOrCreate(
+                    [
+                        'etablissement' => $data['etablissement'] ?? '',
+                        'service' => $data['service'] ?? null,
+                        'nom_signataire' => $data['nom_signataire'] ?? null
+                    ],
+                    [
+                        'etablissement' => $data['etablissement'] ?? '',
+                        'service' => $data['service'] ?? null,
+                        'nom_signataire' => $data['nom_signataire'] ?? null
+                    ]
+                );
+                
+                // Add agence_id to payload if the column exists
+                if ($this->hasDemandeColumn('agence_id')) {
+                    $payload['agence_id'] = $agence->id;
+                }
+            } else if ($demande && !empty($demande->agence_id)) {
+                // Keep existing agence_id if no new agency info provided
+                $payload['agence_id'] = $demande->agence_id;
+            }
+        } else {
+            // Fallback to direct fields if agence table doesn't exist
+            if (isset($data['etablissement'])) {
+                $payload = $this->assignDemandeValue($payload, 'etablissement', ['etablissement' => $data['etablissement']], $demande);
+            }
+            
+            if (isset($data['service'])) {
+                $payload = $this->assignDemandeValue($payload, 'service', ['service' => $data['service']], $demande);
+            }
+            
+            if (isset($data['nom_signataire'])) {
+                $payload = $this->assignDemandeValue($payload, 'nom_signataire', ['nom_signataire' => $data['nom_signataire']], $demande);
+            }
         }
         
         if ($isCreation && $this->hasDemandeColumn('created_at')) {
@@ -803,7 +893,9 @@ class TiersController extends Controller
 
         if ($demande) {
             unset($payload['id']);
-            DB::table('demande_ouverture_compte')->where('id', $tierId)->update($payload);
+            DB::table('demande_ouverture_compte')
+                ->where('demande_ouverture_compte.id', $tierId) // Specify table name to avoid ambiguity
+                ->update($payload);
         } else {
             DB::table('demande_ouverture_compte')->insert($payload);
         }
@@ -1023,10 +1115,10 @@ class TiersController extends Controller
         // Objectif: retourner TOUS les tiers, avec la dernière activité et l'utilisateur associé
         $query = Tier::query()
             ->with(['latestActivity.user:id,username'])
-            ->select(['id','numero_compte','nom_raison_sociale']);
+            ->select(['tiers.id','tiers.numero_compte','tiers.nom_raison_sociale']); // Specify table name to avoid ambiguity
 
         if ($type === 'client' && $nom) {
-            $query->where('nom_raison_sociale', 'like', "%$nom%");
+            $query->where('tiers.nom_raison_sociale', 'like', "%$nom%"); // Specify table name to avoid ambiguity
         }
 
         if ($type === 'mois' && $month && preg_match('/^\\d{4}-\\d{2}$/', $month)) {
@@ -1122,10 +1214,10 @@ class TiersController extends Controller
         // Objectif: retourner TOUS les tiers, avec toutes les activités et les utilisateurs associés pour l'exportation
         $query = Tier::query()
             ->with(['activities.user:id,username'])
-            ->select(['id','numero_compte','nom_raison_sociale']);
+            ->select(['tiers.id','tiers.numero_compte','tiers.nom_raison_sociale']); // Specify table name to avoid ambiguity
 
         if ($type === 'client' && $nom) {
-            $query->where('nom_raison_sociale', 'like', "%$nom%");
+            $query->where('tiers.nom_raison_sociale', 'like', "%$nom%"); // Specify table name to avoid ambiguity
         }
 
         if ($type === 'mois' && $month && preg_match('/^\\d{4}-\\d{2}$/', $month)) {
@@ -1279,9 +1371,22 @@ class TiersController extends Controller
         return $accountNumber;
     }
 
+    /**
+     * Affiche un aperçu d'impression pour un client (tier).
+     */
     public function preview(Tier $tier)
     {
-        $demande = DB::table('demande_ouverture_compte')->where('id', $tier->id)->first();
+        // Récupère les informations de la demande d'ouverture de compte si elles existent
+        $demandeQuery = DB::table('demande_ouverture_compte')
+            ->where('demande_ouverture_compte.id', $tier->id); // Specify table name to avoid ambiguity
+        
+        // Join with agence table if it exists and agence_id column exists
+        if (Schema::hasTable('agence') && in_array('agence_id', $this->demandeColumns)) {
+            $demandeQuery->leftJoin('agence', 'demande_ouverture_compte.agence_id', '=', 'agence.id');
+        }
+        
+        $demande = $demandeQuery->first();
+        
         $signatureDate = $demande && $demande->date_creation
             ? Carbon::parse($demande->date_creation)->format('d/m/Y')
             : Carbon::now()->format('d/m/Y');
@@ -1289,7 +1394,7 @@ class TiersController extends Controller
         // Get organization settings
         $organizationSetting = OrganizationSetting::first();
         $companyName = $organizationSetting ? $organizationSetting->name : 'CFAO MOBILITY CAMEROON';
-        $companyLogo = $organizationSetting && $organizationSetting->logo_path ? $organizationSetting->logo_path : '/images/LOGO.png';
+        $companyLogo = $organizationSetting && $organizationSetting->logo ? url('storage/' . $organizationSetting->logo) : asset('images/LOGO.png');
             
         $pageData = [
             'tier' => $tier,

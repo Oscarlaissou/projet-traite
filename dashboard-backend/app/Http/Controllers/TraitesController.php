@@ -177,7 +177,7 @@ class TraitesController extends Controller
         // Get organization settings
         $organizationSetting = OrganizationSetting::first();
         $companyName = $organizationSetting ? $organizationSetting->name : 'CFAO MOBILITY CAMEROON';
-        $companyLogo = $organizationSetting && $organizationSetting->logo_path ? $organizationSetting->logo_path : '/images/LOGO.png';
+        $companyLogo = $organizationSetting && $organizationSetting->logo ? url('storage/' . $organizationSetting->logo) : asset('images/LOGO.png');
 
         $data = [
             'rangeText' => $currentIndex . ' | ' . $totalTranches,
@@ -212,7 +212,7 @@ class TraitesController extends Controller
         // Get organization settings
         $organizationSetting = OrganizationSetting::first();
         $companyName = $organizationSetting ? $organizationSetting->name : 'CFAO MOBILITY CAMEROON';
-        $companyLogo = $organizationSetting && $organizationSetting->logo_path ? $organizationSetting->logo_path : '/images/LOGO.png';
+        $companyLogo = $organizationSetting && $organizationSetting->logo ? url('storage/' . $organizationSetting->logo) : asset('images/LOGO.png');
 
         $pages = [];
         for ($i = 1; $i <= $totalTranches; $i++) {
@@ -257,7 +257,7 @@ class TraitesController extends Controller
         // Get organization settings
         $organizationSetting = OrganizationSetting::first();
         $companyName = $organizationSetting ? $organizationSetting->name : 'CFAO MOBILITY CAMEROON';
-        $companyLogo = $organizationSetting && $organizationSetting->logo_path ? $organizationSetting->logo_path : '/images/LOGO.png';
+        $companyLogo = $organizationSetting && $organizationSetting->logo ? url('storage/' . $organizationSetting->logo) : asset('images/LOGO.png');
 
         // Construire un HTML "pur impression" en utilisant traites.print, sans toolbar/footer
         $htmlParts = [];
@@ -302,7 +302,7 @@ class TraitesController extends Controller
         // Get organization settings
         $organizationSetting = OrganizationSetting::first();
         $companyName = $organizationSetting ? $organizationSetting->name : 'CFAO MOBILITY CAMEROON';
-        $companyLogo = $organizationSetting && $organizationSetting->logo_path ? $organizationSetting->logo_path : '/images/LOGO.png';
+        $companyLogo = $organizationSetting && $organizationSetting->logo ? url('storage/' . $organizationSetting->logo) : asset('images/LOGO.png');
 
         $htmlParts = [];
         for ($i = 1; $i <= $totalTranches; $i++) {

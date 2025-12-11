@@ -4,9 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\PendingClient;
 use App\Models\Tier;
-use App\Models\User;
+use App\Models\Agence; // Added Agence model
+use App\Models\User; // Added User model import
 use App\Notifications\ClientApprovedNotification;
-use App\Notifications\ClientRejectedNotification;
+use App\Notifications\ClientRejectedNotification; // Added ClientRejectedNotification import
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -89,13 +90,20 @@ class PendingClientsController extends Controller
      */
     public function index()
     {
-        // Récupérer uniquement les clients en attente qui n'ont pas été rejetés
+        // Récupérer uniquement les clients en attente qui n'ont pas été rejetés et qui ne sont pas approuvés
         $pendingClients = PendingClient::with('createdBy:id,username')
+            ->where('pending_clients.status', 'pending') // Seulement les clients en attente
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('client_approvals')
                     ->whereColumn('client_approvals.tier_id', 'pending_clients.id')
                     ->where('client_approvals.status', 'rejected');
+            })
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('client_approvals')
+                    ->whereColumn('client_approvals.tier_id', 'pending_clients.id')
+                    ->where('client_approvals.status', 'approved');
             })
             ->get();
         
@@ -185,6 +193,24 @@ class PendingClientsController extends Controller
                     $demandeColumns = DB::getSchemaBuilder()->getColumnListing('demande_ouverture_compte');
                     
                     if (!empty($demandeColumns)) {
+                        // Find or create the agency
+                        $agenceId = null;
+                        if (!empty($pendingClient->etablissement)) {
+                            $agence = Agence::firstOrCreate(
+                                [
+                                    'etablissement' => $pendingClient->etablissement,
+                                    'service' => $pendingClient->service,
+                                    'nom_signataire' => $pendingClient->nom_signataire
+                                ],
+                                [
+                                    'etablissement' => $pendingClient->etablissement,
+                                    'service' => $pendingClient->service,
+                                    'nom_signataire' => $pendingClient->nom_signataire
+                                ]
+                            );
+                            $agenceId = $agence->id;
+                        }
+
                         $demandeData = [
                             'id' => $newTier->id,
                             'date_creation' => $pendingClient->date_creation,
@@ -192,9 +218,7 @@ class PendingClientsController extends Controller
                             'montant_paye' => $pendingClient->montant_paye,
                             'credit' => $pendingClient->credit,
                             'motif' => $pendingClient->motif,
-                            'etablissement' => $pendingClient->etablissement,
-                            'service' => $pendingClient->service,
-                            'nom_signataire' => $pendingClient->nom_signataire,
+                            'agence_id' => $agenceId, // Use agence_id instead of direct fields
                             'created_at' => now(),
                             'updated_at' => now(),
                         ];
@@ -265,6 +289,8 @@ class PendingClientsController extends Controller
                                 'status' => 'approved',
                                 'rejection_reason' => null,
                                 'updated_at' => now(),
+                                // Stocker l'ID du client approuvé dans la table tiers
+                                'approved_tier_id' => $newTier->id,
                             ]);
                     } else {
                         // Créer un nouvel enregistrement
@@ -274,6 +300,8 @@ class PendingClientsController extends Controller
                             'status' => 'approved',
                             'created_at' => now(),
                             'updated_at' => now(),
+                            // Stocker l'ID du client approuvé dans la table tiers
+                            'approved_tier_id' => $newTier->id,
                         ]);
                     }
                 } catch (\Throwable $e) {
@@ -281,9 +309,8 @@ class PendingClientsController extends Controller
                     \Log::error('Error inserting/updating client approval record: ' . $e->getMessage());
                 }
 
-                // Supprimer le client en attente (seulement maintenant, pas lors du rejet)
-                // Ne pas supprimer le client de pending_clients pour maintenir la cohérence des IDs
-                // Cela permet de conserver l'ID original pour les références dans client_approvals
+                // Mettre à jour le statut du client en attente au lieu de le supprimer
+                $pendingClient->update(['status' => 'approved']);
 
                 return $newTier;
             });
@@ -428,13 +455,9 @@ class PendingClientsController extends Controller
                 \Log::error('Error inserting/updating client rejection record: ' . $e->getMessage());
             }
 
-            // NE PAS supprimer le client en attente - il doit rester dans la table pending_clients
-            // jusqu'à ce qu'il soit approuvé ou supprimé manuellement
-            // On met simplement à jour son statut si nécessaire
-            \Log::info('Client marked as rejected but kept in pending_clients table', [
-                'pending_client_id' => $pendingClient->id
-            ]);
-            
+            // Mettre à jour le statut du client en attente au lieu de le supprimer
+            $pendingClient->update(['status' => 'rejected']);
+
             // Broadcast event to update pending clients count
             \Log::info('Broadcasting pending clients count update');
             try {
@@ -641,6 +664,9 @@ class PendingClientsController extends Controller
                     \Log::error('Error updating client approval record: ' . $e->getMessage());
                 }
             }
+            
+            // Mettre à jour le statut du client en attente
+            $pendingClient->update(['status' => 'pending']);
             
             \Log::info('Client resubmission completed successfully', [
                 'pending_client_id' => $pendingClient->id

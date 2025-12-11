@@ -139,8 +139,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
           className="logo-text"
           style={{ fontSize: "16px", fontWeight: "bold", color: "#333", textAlign: "center", marginTop: "10px" }}
         >
-          {/* {organization.name} */}
-          NOM DE L'APPLICATION
+          {organization.name}
         </div>
       </div>
 
