@@ -30,6 +30,9 @@ Route::get('/print/traites/{traite}/{index?}', [TraitesController::class, 'print
 Route::get('/print/traites/{traite}/preview', [TraitesController::class, 'preview'])
     ->name('traites.preview');
 
+Route::get('/print/traites/{traite}/acceptance', [TraitesController::class, 'acceptancePreview'])
+    ->name('traites.acceptance');
+
 Route::get('/print/clients/{tier}/preview', [TiersController::class, 'preview'])
     ->name('clients.preview');
 

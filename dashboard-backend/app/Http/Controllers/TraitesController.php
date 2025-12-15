@@ -32,6 +32,7 @@ class TraitesController extends Controller
                   ->orWhere('rib', 'like', "%$s%")
                   ->orWhere('commentaires', 'like', "%$s%")
                   ->orWhere('statut', 'like', "%$s%")
+                  ->orWhere('origine_traite', 'like', "%$s%")
                   ->orWhereRaw('CAST(montant AS CHAR) like ?', ["%$s%"])
                   ->orWhereRaw('DATE_FORMAT(echeance, "%d-%m-%Y") like ?', ["%$s%"])
                   ->orWhereRaw('DATE_FORMAT(date_emission, "%d-%m-%Y") like ?', ["%$s%"]);
@@ -117,7 +118,7 @@ class TraitesController extends Controller
         // personnalisable via query params
         $sort = $request->get('sort');
         $dir = strtolower($request->get('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-        $allowedSorts = ['echeance','date_emission','created_at','montant','numero','nom_raison_sociale','statut','id'];
+        $allowedSorts = ['echeance','date_emission','created_at','montant','numero','nom_raison_sociale','statut','id', 'origine_traite'];
         if (!in_array($sort, $allowedSorts, true)) {
             $sort = $request->has('alpha') ? 'nom_raison_sociale' : 'date_emission';
         }
@@ -716,6 +717,7 @@ class TraitesController extends Controller
             'domiciliation_bancaire' => ['nullable','string','max:255'],
             'rib' => ['nullable','string','max:50'],
             'motif' => ['nullable','string','max:500'],
+            'origine_traite' => ['nullable','string','max:100'],
             'commentaires' => ['nullable','string','max:1000'],
             'statut' => ['nullable', Rule::in(['Non échu', 'Échu', 'Impayé', 'Rejeté', 'Payé'])],
         ]);
@@ -825,6 +827,82 @@ class TraitesController extends Controller
         }
         
         return $duplicates;
+    }
+
+    /**
+     * Aperçu de l'acceptation d'une traite
+     */
+    public function acceptancePreview(Traite $traite)
+    {
+        // Get organization settings
+        $organizationSetting = OrganizationSetting::first();
+        $companyName = $organizationSetting ? $organizationSetting->name : 'CFAO MOBILITY CAMEROON';
+        
+        // Get request parameters
+        $decision = request('decision', 'Encaissement');
+        $branchDepartment = request('branch_dept', request('branche_code', ''));
+        $creditAccount = request('credit_account', request('credit', '4111'));
+        $agosType = request('agos_type', request('agios', 'Tiré'));
+        
+        // Format dates
+        $emission = $traite->date_emission ? Carbon::parse($traite->date_emission) : null;
+        $echeance = $traite->echeance ? Carbon::parse($traite->echeance) : null;
+        
+        // Format amounts
+        $total = (int) round($traite->montant ?? 0);
+        $montantFormatted = number_format($total, 0, ',', ' ');
+        
+        // Handle multiple traites (tranches)
+        $nombreTraites = max(1, (int) ($traite->nombre_traites ?? 1));
+        $traites = [];
+        $totalGeneral = 0;
+        
+        // Split the total amount into tranches
+        $montantParTranche = (int) round($total / $nombreTraites);
+        
+        for ($i = 0; $i < $nombreTraites; $i++) {
+            // Calculate due date for each tranche
+            $dueDate = $echeance ? $echeance->copy()->addMonthsNoOverflow($i) : null;
+            
+            $traites[] = [
+                'numero_ordre' => str_pad($i + 1, 2, '0', STR_PAD_LEFT),
+                'numero' => $traite->numero ?? '',
+                'echeance' => $dueDate ? $dueDate->format('d/m/Y') : '',
+                'montant' => $montantParTranche,
+                'montant_formatted' => number_format($montantParTranche, 0, ',', ' ')
+            ];
+            
+            $totalGeneral += $montantParTranche;
+        }
+        
+        // Format total general
+        $totalGeneralFormatted = number_format($totalGeneral, 0, ',', ' ');
+        
+        // Current date for document
+        $currentDate = Carbon::now();
+        
+        // Data for the view
+        $data = [
+            'ville' => 'Douala',
+            'current_date_long' => $currentDate->locale('fr')->translatedFormat('d F Y'),
+            'current_date' => $currentDate->format('d/m/Y'),
+            'montant_formatted' => $montantFormatted,
+            'domiciliation' => $traite->domiciliation_bancaire ?? '',
+            'rib' => $traite->rib ?? '',
+            'numero' => $traite->numero ?? '',
+            'echeance' => $echeance ? $echeance->format('d/m/Y') : '',
+            'nom_raison_sociale' => $traite->nom_raison_sociale ?? '',
+            'companyName' => $companyName,
+            'decision' => $decision,
+            'branch_department' => $branchDepartment,
+            'credit_account' => $creditAccount,
+            'agos_type' => $agosType,
+            'traites' => $traites,
+            'total_general_formatted' => $totalGeneralFormatted,
+            'nombre_traites' => $nombreTraites
+        ];
+        
+        return response()->view('traites.acceptance', $data);
     }
 
     public function historique(Request $request)
@@ -988,7 +1066,7 @@ class TraitesController extends Controller
                                 // L'ancienne traite est meilleure, ignorer la nouvelle
                                 \Log::info("Doublon détecté ligne " . ($actualIndex + 1) . ": Client '{$nom}', nombre de traites {$nbTraites} et montant {$montant} - échéance moins proche que celle en base");
                                 $duplicates[] = [
-                                    'line' => $actualIndex + 1,
+                                    'line' => $existingTraite->id,
                                     'numero' => $numero,
                                     'reason' => "Client '{$nom}', nombre de traites ({$nbTraites}) et montant ({$montant}) déjà existant en base (échéance moins proche de la date d'émission)"
                                 ];
@@ -1039,6 +1117,7 @@ class TraitesController extends Controller
                         'domiciliation_bancaire' => $item['domiciliation_bancaire'] ?? '',
                         'rib' => $item['rib'] ?? '',
                         'motif' => $item['motif'] ?? '',
+                        'origine_traite' => $item['origine_traite'] ?? '',
                         'commentaires' => $item['commentaires'] ?? '',
                         'statut' => $statut, // toujours prendre le statut calculé
                     ];
@@ -1106,5 +1185,3 @@ class TraitesController extends Controller
         }
     }
 }
-
-

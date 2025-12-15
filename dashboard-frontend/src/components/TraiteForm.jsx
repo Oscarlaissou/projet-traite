@@ -12,6 +12,7 @@ const defaultForm = {
   domiciliation_bancaire: "",
   rib: "",
   motif: "",
+  origine_traite: "", // Changé de "Interne" à "" pour correspondre à la base de données
   commentaires: "",
   statut: "Non échu",
 }
@@ -82,12 +83,51 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       return
     }
     setForm((f) => ({ ...f, [name]: value }))
+    
+    // Effacer l'erreur lorsque l'utilisateur modifie un champ
+    if (error) {
+      setError("")
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
     setError("")
+    
+    // Validation: Check if all fields are filled
+    const emptyFields = Object.entries(form).filter(([key, value]) => {
+      // Skip validation for optional fields
+      if (['commentaires', 'rib', 'numero'].includes(key)) return false;
+      // For number fields, check if they are valid numbers
+      if (['nombre_traites', 'montant'].includes(key)) {
+        return !value || value === '';
+      }
+      // For other fields, check if they are not empty
+      return !value || value.trim() === '';
+    });
+    
+    // Validation spécifique pour le RIB : si saisi, doit contenir au maximum 26 caractères
+    const ribClean = form.rib ? form.rib.replace(/\s/g, '') : '';
+    if (ribClean.length > 26) {
+      setError("Le RIB ne doit pas dépasser 26 caractères.");
+      setSubmitting(false);
+      return;
+    }
+    
+    // Validation spécifique pour origine_traite : doit être sélectionnée
+    if (!form.origine_traite) {
+      setError("Veuillez sélectionner une origine pour la traite.");
+      setSubmitting(false);
+      return;
+    }
+    
+    if (emptyFields.length > 0) {
+      setError(`Veuillez remplir tous les champs obligatoires. Champs manquants: ${emptyFields.map(([key]) => key).join(', ')}`);
+      setSubmitting(false);
+      return;
+    }
+    
     try {
       const baseUrl = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000'
       const token = localStorage.getItem('token')
@@ -129,8 +169,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       }
     } catch (e) {
       setError(e.message || 'Erreur inconnue')
-    } finally {
-      setSubmitting(false)
+      setSubmitting(false) // Permettre à l'utilisateur de réessayer
     }
   }
 
@@ -142,93 +181,181 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
     }
   }
 
+  // Déterminer si les champs doivent être désactivés (mode lecture seule)
+  // Pour une traite existante avec origine "Externe", tous les champs sont désactivés
+  const isReadOnly = initialValue && initialValue.origine_traite === "Externe";
+
   return (
     <>
       <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         {error && <div style={{ gridColumn: '1 / -1', color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', borderRadius:6, padding: 8 }}>{error}</div>}
 
-      <div>
-        <label>Numéro de la traite </label>
-        <input name="numero" value={form.numero} onChange={handleChange} className="form-input" placeholder="Auto" />
-      </div>
-      <div>
-        <label>Nombre de traites</label>
-        <input type="number" name="nombre_traites" value={form.nombre_traites} min={1} onChange={handleChange} required className="form-input" />
-      </div>
-      <div>
-        <label>1ere Échéance</label>
-        <input type="date" name="echeance" value={form.echeance} onChange={handleChange} required className="form-input" />
-      </div>
-      <div>
-        <label>Date d'émission</label>
-        <input type="date" name="date_emission" value={form.date_emission} onChange={handleChange} required className="form-input" />
-      </div>
-      <div>
-        <label>Montant de crédit</label>
-        <input
-          type="text"
-          inputMode="numeric"
-          name="montant"
-          value={form.montant}
-          onChange={handleChange}
-          required
-          className="form-input"
-          placeholder="Montant en chiffres (sans décimales)"
-          ref={montantRef}
+        <div>
+          <label>Numéro de la traite</label>
+          <input 
+            name="numero" 
+            value={form.numero} 
+            onChange={handleChange} 
+            className="form-input" 
+            placeholder="Auto" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>Nombre de traites *</label>
+          <input 
+            type="number" 
+            name="nombre_traites" 
+            value={form.nombre_traites} 
+            min={1} 
+            onChange={handleChange} 
+            required 
+            className="form-input" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>1ere Échéance *</label>
+          <input 
+            type="date" 
+            name="echeance" 
+            value={form.echeance} 
+            onChange={handleChange} 
+            required 
+            className="form-input" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>Date d'émission *</label>
+          <input 
+            type="date" 
+            name="date_emission" 
+            value={form.date_emission} 
+            onChange={handleChange} 
+            required 
+            className="form-input" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>Montant de crédit *</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            name="montant"
+            value={form.montant}
+            onChange={handleChange}
+            required
+            className="form-input"
+            placeholder="Montant en chiffres (sans décimales)"
+            ref={montantRef}
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>Nom et prénom ou raison sociale *</label>
+          <input 
+            name="nom_raison_sociale" 
+            value={form.nom_raison_sociale} 
+            onChange={handleChange} 
+            required 
+            className="form-input" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>Domiciliation bancaire *</label>
+          <input 
+            name="domiciliation_bancaire" 
+            value={form.domiciliation_bancaire} 
+            onChange={handleChange} 
+            required 
+            className="form-input" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>RIB (max 26 caractères)</label>
+          <input 
+            name="rib" 
+            value={form.rib} 
+            onChange={handleChange} 
+            className="form-input" 
+            maxLength={26}
+            placeholder="Entrez jusqu'à 26 caractères"
+            disabled={isReadOnly}
+          />
+          {form.rib && form.rib.replace(/\s/g, '').length > 0 && (
+            <div style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px' }}>
+              {form.rib.replace(/\s/g, '').length}/26 caractères
+            </div>
+          )}
+        </div>
+        <div>
+          <label>Motif de la traite *</label>
+          <input 
+            name="motif" 
+            value={form.motif} 
+            onChange={handleChange} 
+            required 
+            className="form-input" 
+            disabled={isReadOnly}
+          />
+        </div>
+        <div>
+          <label>Origine traite *</label>
+          <select 
+            name="origine_traite" 
+            value={form.origine_traite} 
+            onChange={handleChange} 
+            required 
+            className="form-input"
+            disabled={isReadOnly || (initialValue && initialValue.id)} // Désactiver le changement d'origine après création
+          >
+            <option value="">Sélectionner une origine</option>
+            <option value="Interne">Interne</option>
+            <option value="Externe">Externe</option>
+          </select>
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label>Commentaires * </label>
+          <textarea 
+            name="commentaires" 
+            value={form.commentaires} 
+            onChange={handleChange} 
+            rows={3} 
+            className="form-input" 
+            disabled={isReadOnly}
+            required 
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
+          <button type="button" onClick={onCancel} disabled={submitting} className="logout-button">Annuler</button>
+          <button 
+            type="submit" 
+            disabled={submitting || isReadOnly} 
+            className="submit-button"
+            style={isReadOnly ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+          >
+            {submitting ? 'Enregistrement...' : (submitLabel || (initialValue?.id ? 'Modifier' : 'Créer'))}
+          </button>
+        </div>
+      </form>
+
+      {showSuccessDialog && successData && (
+        <SuccessDialog
+          isOpen={showSuccessDialog}
+          onClose={handleSuccessDialogClose}
+          title={successData.title}
+          message={successData.message}
+          numero={successData.numero}
+          montant={successData.montant}
         />
-      </div>
-      <div>
-        <label>Nom et prénom ou raison sociale</label>
-        <input name="nom_raison_sociale" value={form.nom_raison_sociale} onChange={handleChange} required className="form-input" />
-      </div>
-      <div>
-        <label>Domiciliation bancaire</label>
-        <input name="domiciliation_bancaire" value={form.domiciliation_bancaire} onChange={handleChange} className="form-input" />
-      </div>
-      <div>
-        <label>RIB</label>
-        <input name="rib" value={form.rib} onChange={handleChange} className="form-input" />
-      </div>
-      <div>
-        <label>Motif de la traite</label>
-        <input name="motif" value={form.motif} onChange={handleChange} className="form-input" />
-      </div>
-      <div style={{ gridColumn: '1 / -1' }}>
-        <label>Commentaires</label>
-        <textarea name="commentaires" value={form.commentaires} onChange={handleChange} rows={3} className="form-input" />
-      </div>
-
-      {/* <div>
-        <label>Statut de la traite</label>
-        <select name="statut" value={form.statut} onChange={handleChange} className="form-input">
-          <option>Non échu</option>
-          <option>Échu</option>
-          <option>Impayé</option>
-          <option>Rejeté</option>
-          <option>Payé</option>
-        </select>
-      </div> */}
-
-      <div style={{ display: 'flex', gap: 12, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
-        <button type="button" onClick={onCancel} disabled={submitting} className="logout-button">Annuler</button>
-        <button type="submit" disabled={submitting} className="submit-button">{submitting ? 'Enregistrement...' : (submitLabel || (initialValue?.id ? 'Modifier' : 'Créer'))}</button>
-      </div>
-    </form>
-
-    {showSuccessDialog && successData && (
-      <SuccessDialog
-        isOpen={showSuccessDialog}
-        onClose={handleSuccessDialogClose}
-        title={successData.title}
-        message={successData.message}
-        numero={successData.numero}
-        montant={successData.montant}
-      />
-    )}
+      )}
     </>
   )
 }
 
 export default TraiteForm
-
-

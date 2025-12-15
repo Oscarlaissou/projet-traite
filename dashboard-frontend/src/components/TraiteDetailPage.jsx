@@ -2,21 +2,34 @@ import React, { useEffect, useState, useMemo } from "react"
 import { useLocation } from "react-router-dom"
 import Toast from "./Toast"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Edit3, Trash2, Printer } from "lucide-react"
+import { ArrowLeft, Edit3, Trash2, Printer, FileText, X } from "lucide-react"
 import { formatMoney } from "../utils/format"
-import Can from './Can'; // Import the Can component
+import Can from './Can'
+import { useAuth } from '../hooks/useAuth'
+import axios from 'axios'
+import PageLoader from './BrandedLoader'
 import "./Traites.css"
 import MonImage from "../images/image4.png"
 
 const TraiteDetailPage = () => {
   const navigate = useNavigate()
   const { id } = useParams()
+  const { user, token } = useAuth()
   const [item, setItem] = useState(null)
   const location = useLocation()
   const [toast, setToast] = useState(() => (location.state && location.state.toast) ? location.state.toast : null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || '', [])
+  
+  // État pour le modal d'acceptation
+  const [showAcceptanceModal, setShowAcceptanceModal] = useState(false)
+  const [acceptanceData, setAcceptanceData] = useState({
+    decision: 'Encaissement',
+    branche_code: '',
+    credit: '',
+    agios: 'Tiré'
+  })
+
   const formatDateDDMMYYYY = (value) => {
     if (!value) return ''
     const d = new Date(value)
@@ -27,52 +40,58 @@ const TraiteDetailPage = () => {
     return `${dd}-${mm}-${yyyy}`
   }
 
-  
-
   useEffect(() => {
-    let mounted = true
-    const run = async () => {
+    const fetchTraite = async () => {
       try {
-        const token = localStorage.getItem('token')
-        const headers = { 'Accept': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        const res = await fetch(`${baseUrl}/api/traites/${id}`, { headers })
-        if (!res.ok) throw new Error('Erreur de chargement')
-        let data = await res.json()
+        if (!token) {
+          throw new Error('Utilisateur non authentifié')
+        }
+        
+        const response = await axios.get(`/api/traites/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        let data = response.data
+        
         // Auto-coerce statut if due reached
         try {
           const echeanceDate = data?.echeance ? new Date(data.echeance) : null
           const isNonEchu = String(data?.statut || '').toLowerCase().includes('non')
           if (echeanceDate && !isNaN(echeanceDate) && isNonEchu && echeanceDate <= new Date()) {
-            const token2 = localStorage.getItem('token')
-            const headers2 = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
-            if (token2) headers2['Authorization'] = `Bearer ${token2}`
-            fetch(`${baseUrl}/api/traites/${data.id}/statut`, { method: 'PATCH', headers: headers2, body: JSON.stringify({ statut: 'Échu' }) }).catch(() => {})
+            await axios.patch(`/api/traites/${data.id}/statut`, 
+              { statut: 'Échu' },
+              { headers: { Authorization: `Bearer ${token}` } }
+            )
             data = { ...data, statut: 'Échu' }
           }
         } catch (_) {}
-        if (mounted) setItem(data)
-      } catch (e) {
-        setError(e.message || 'Erreur inconnue')
+        
+        setItem(data)
+      } catch (err) {
+        console.error('Erreur lors du chargement de la traite:', err)
+        setError('Impossible de charger les détails de la traite')
       } finally {
-        if (mounted) setLoading(false)
+        setLoading(false)
       }
     }
-    run()
-    return () => { mounted = false }
-  }, [id, baseUrl])
+
+    fetchTraite()
+  }, [id, token])
 
   const handleDelete = async () => {
     if (!window.confirm('Supprimer cette traite ?')) return
     try {
-      const token = localStorage.getItem('auth_token')
-      const headers = { 'Accept': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`${baseUrl}/api/traites/${id}`, { method: 'DELETE', headers })
-      if (!res.ok) throw new Error('Suppression échouée')
+      if (!token) {
+        throw new Error('Utilisateur non authentifié')
+      }
+      
+      await axios.delete(`/api/traites/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       navigate('/dashboard')
-    } catch (e) {
-      alert(e.message || 'Erreur inconnue')
+    } catch (err) {
+      console.error('Erreur lors de la suppression:', err)
+      alert('Erreur lors de la suppression de la traite')
     }
   }
 
@@ -83,20 +102,59 @@ const TraiteDetailPage = () => {
     window.open(url, '_blank')
   }
 
+  const handleAcceptance = () => {
+    setShowAcceptanceModal(true)
+  }
+
+  const handleAcceptanceSubmit = () => {
+    if (!item) return
+    
+    // Validation des champs requis
+    if (!acceptanceData.branche_code || !acceptanceData.credit) {
+      alert('Veuillez remplir tous les champs obligatoires')
+      return
+    }
+
+    // Construire l'URL avec les paramètres
+    const base = (process.env.REACT_APP_API_URL || '')
+    const params = new URLSearchParams({
+      decision: acceptanceData.decision,
+      branch_dept: acceptanceData.branche_code,
+      credit_account: acceptanceData.credit,
+      agos_type: acceptanceData.agios
+    })
+    const url = `${base}/print/traites/${item.id}/acceptance?${params.toString()}`
+    
+    window.open(url, '_blank')
+    setShowAcceptanceModal(false)
+    
+    // Réinitialiser le formulaire
+    setAcceptanceData({
+      decision: 'Encaissement',
+      branche_code: '',
+      credit: '',
+      agios: 'Tiré'
+    })
+  }
+
   const handleUpdateStatus = async (newStatut) => {
     try {
-      const token = localStorage.getItem('token')
-      const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`${baseUrl}/api/traites/${id}/statut`, { method: 'PATCH', headers, body: JSON.stringify({ statut: newStatut }) })
-      if (!res.ok) throw new Error('Mise à jour du statut échouée')
+      if (!token) {
+        throw new Error('Utilisateur non authentifié')
+      }
+      
+      await axios.patch(`/api/traites/${id}/statut`,
+        { statut: newStatut },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
       setItem((prev) => ({ ...prev, statut: newStatut }))
-    } catch (e) {
-      alert(e.message || 'Erreur inconnue')
+    } catch (err) {
+      console.error('Erreur lors de la mise à jour du statut:', err)
+      alert('Erreur lors de la mise à jour du statut')
     }
   }
 
-  if (loading) return <div style={{ padding: 16 }}>Chargement...</div>
+  if (loading) return <PageLoader message="Chargement des détails de la traite..." />
   if (error) return <div style={{ padding: 16, color: 'crimson' }}>{error}</div>
 
   const statusValue = (item?.statut || 'Non échu').toLowerCase()
@@ -105,6 +163,8 @@ const TraiteDetailPage = () => {
                       statusValue.includes('impay') ? 'status-impaye' :
                       statusValue.includes('rej') ? 'status-rejete' :
                       statusValue.includes('pay') ? 'status-paye' : ''
+
+  const isReadOnly = item && item.origine_traite === "Externe"
 
   return (
     <div className="dashboard-stats">
@@ -120,13 +180,201 @@ const TraiteDetailPage = () => {
       {toast && (
         <Toast title={toast.title} message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
+
+      {/* Modal d'acceptation */}
+      {showAcceptanceModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: 12,
+            padding: 32,
+            width: '90%',
+            maxWidth: 500,
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#1a2c4e' }}>Informations d'acceptation</h2>
+              <button 
+                onClick={() => setShowAcceptanceModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#6b7280'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Décision */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                  Décision de la traite <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  className="search-input"
+                  value={acceptanceData.decision}
+                  onChange={(e) => setAcceptanceData({ ...acceptanceData, decision: e.target.value })}
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                >
+                  <option value="Encaissement">Encaissement</option>
+                  <option value="Escompte">Escompte</option>
+                </select>
+              </div>
+
+              {/* Raison sociale (affichage seulement) */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                  Raison sociale
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  value={item?.nom_raison_sociale || ''}
+                  disabled
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    backgroundColor: '#f9fafb',
+                    cursor: 'not-allowed',
+                    color: '#6b7280'
+                  }}
+                />
+              </div>
+
+              {/* Branche & Code département */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                  Branche & Code département <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Ex: B11 TYRES"
+                  value={acceptanceData.branche_code}
+                  onChange={(e) => setAcceptanceData({ ...acceptanceData, branche_code: e.target.value })}
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                />
+              </div>
+
+              {/* Crédit */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                  Crédit <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Ex: 4111"
+                  value={acceptanceData.credit}
+                  onChange={(e) => setAcceptanceData({ ...acceptanceData, credit: e.target.value })}
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                />
+              </div>
+
+              {/* Commentaire Agios */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                  Commentaire Agios <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  className="search-input"
+                  value={acceptanceData.agios}
+                  onChange={(e) => setAcceptanceData({ ...acceptanceData, agios: e.target.value })}
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                >
+                  <option value="Tireur">Agos au Tireur</option>
+                  <option value="Tiré">Agos au Tiré</option>
+                </select>
+              </div>
+
+              {/* Boutons */}
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button
+                  onClick={() => setShowAcceptanceModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    backgroundColor: 'white',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#374151'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleAcceptanceSubmit}
+                  className="submit-button"
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    fontSize: 14,
+                    fontWeight: 500
+                  }}
+                >
+                  Générer l'acceptation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 2.2fr', gap: 16, height: 'calc(100vh - 120px)' }}>
         <div style={{
           backgroundImage: `url(${MonImage})`,
           backgroundSize: 'contain',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          // border: '1px solid #e5e7eb',
           borderRadius: 10,
           minHeight: 360
         }} />
@@ -135,7 +383,7 @@ const TraiteDetailPage = () => {
           <div className="detail-header">
             <div className="detail-title">Détail de la traite</div>
             <div className="detail-status-actions">
-              <span className={`status-badge ${statusClass}`}style={{fontSize: '20px'}}>{item?.statut || 'Non échu'}</span>
+              <span className={`status-badge ${statusClass}`} style={{fontSize: '20px'}}>{item?.statut || 'Non échu'}</span>
               {(() => {
                 const current = String(item?.statut || '').toLowerCase()
                 const isManual = ['impayé','impaye','rejeté','rejete','payé','paye'].some(k => current.includes(k))
@@ -163,16 +411,46 @@ const TraiteDetailPage = () => {
               <Detail label="Domiciliation" value={item?.domiciliation_bancaire} />
               <Detail label="RIB" value={item?.rib} />
               <Detail label="Motif" value={item?.motif} />
+              <Detail label="Origine traite" value={item?.origine_traite || "Interne"} />
               <Detail label="Commentaires" value={item?.commentaires} />
             </div>
 
             <div className="detail-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
               <Can permission="edit_traites">
-                <button className="submit-button" onClick={() => navigate(`/traites/${id}/edit`)}><Edit3 size={16} style={{ marginRight: 6 }} /> Modifier</button>
+                <button 
+                  className="submit-button" 
+                  onClick={() => navigate(`/traites/${id}/edit`)}
+                  disabled={isReadOnly}
+                  style={isReadOnly ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                >
+                  <Edit3 size={16} style={{ marginRight: 6 }} /> Modifier
+                </button>
               </Can>
-              <button className="submit-button" onClick={handlePrint}><Printer size={16} style={{ marginRight: 6 }} /> Imprimer</button>
+              <button 
+                className="submit-button" 
+                onClick={handlePrint}
+                disabled={isReadOnly}
+                style={isReadOnly ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+              >
+                <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
+              </button>
+              <button 
+                className="submit-button" 
+                onClick={handleAcceptance}
+                disabled={isReadOnly}
+                style={isReadOnly ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+              >
+                <FileText size={16} style={{ marginRight: 6 }} /> Acceptation
+              </button>
               <Can permission="delete_traites">
-                <button className="submit-button" onClick={handleDelete}><Trash2 size={16} style={{ marginRight: 6 }} /> Supprimer</button>
+                <button 
+                  className="submit-button" 
+                  onClick={handleDelete}
+                  disabled={isReadOnly}
+                  style={isReadOnly ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                >
+                  <Trash2 size={16} style={{ marginRight: 6 }} /> Supprimer
+                </button>
               </Can>
             </div>
           </div>
@@ -190,6 +468,3 @@ const Detail = ({ label, value }) => (
 )
 
 export default TraiteDetailPage
-
-
-

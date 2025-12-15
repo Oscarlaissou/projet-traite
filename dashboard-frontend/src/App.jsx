@@ -12,6 +12,7 @@ import ClientDetailPage from './components/ClientDetailPage';
 import SettingsPage from './components/SettingsPage';
 import PendingClientsGrid from './components/PendingClientsGrid';
 import EditRejectedClient from './components/EditRejectedClient';
+// Removed unused import TraiteAcceptancePreview
 // Removed ClientApprovalHistory import since it will be rendered within the Dashboard
 
 // Composant pour les routes protégées

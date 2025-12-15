@@ -2,6 +2,20 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
+const CATEGORIES = [
+  "Sté Privées Hors Grp",
+  "Société Groupe",
+  "Individuel",
+  "Personnel Groupe",
+  "Administration",
+  "Collectivité locale",
+  "Entreprise Publique",
+  "Administration Privée",
+  "Société de financement",
+];
+
+const TYPE_TIERS = ["Client", "Fournisseur","Salariés"];
+
 const EditRejectedClient = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -22,9 +36,9 @@ const EditRejectedClient = () => {
     adresse_geo_2: "",
     telephone: "",
     email: "",
-    categorie: "",
+    categorie: CATEGORIES[0],
     n_contribuable: "",
-    type_tiers: "Client",
+    type_tiers: TYPE_TIERS[0],
     date_creation: "",
     montant_facture: "",
     montant_paye: "",
@@ -112,9 +126,9 @@ const EditRejectedClient = () => {
           adresse_geo_2: data.adresse_geo_2 || "",
           telephone: data.telephone || "",
           email: data.email || "",
-          categorie: data.categorie || "",
+          categorie: data.categorie || CATEGORIES[0],
           n_contribuable: data.n_contribuable || "",
-          type_tiers: data.type_tiers || "Client",
+          type_tiers: data.type_tiers || TYPE_TIERS[0],
           date_creation: data.date_creation || "",
           montant_facture: data.montant_facture || "",
           montant_paye: data.montant_paye || "",
@@ -141,6 +155,35 @@ const EditRejectedClient = () => {
   // Sauvegarder les modifications
   const handleSave = async () => {
     if (!clientExists || !id) return;
+    
+    // Validation: Check if all required fields are filled
+    const requiredFields = [
+      { name: 'nom_raison_sociale', value: clientData.nom_raison_sociale },
+      { name: 'bp', value: clientData.bp },
+      { name: 'ville', value: clientData.ville },
+      { name: 'pays', value: clientData.pays },
+      { name: 'adresse_geo_1', value: clientData.adresse_geo_1 },
+      { name: 'adresse_geo_2', value: clientData.adresse_geo_2 },
+      { name: 'telephone', value: clientData.telephone },
+      { name: 'email', value: clientData.email },
+      { name: 'categorie', value: clientData.categorie },
+      { name: 'n_contribuable', value: clientData.n_contribuable },
+      { name: 'date_creation', value: clientData.date_creation },
+      { name: 'montant_facture', value: clientData.montant_facture },
+      { name: 'montant_paye', value: clientData.montant_paye },
+      { name: 'credit', value: clientData.credit },
+      { name: 'motif', value: clientData.motif },
+      { name: 'etablissement', value: clientData.etablissement },
+      { name: 'service', value: clientData.service },
+      { name: 'nom_signataire', value: clientData.nom_signataire }
+    ];
+    
+    const emptyFields = requiredFields.filter(field => !field.value || field.value.trim() === '');
+    
+    if (emptyFields.length > 0) {
+      setError(`Veuillez remplir tous les champs obligatoires. Champs manquants: ${emptyFields.map(field => field.name).join(', ')}`);
+      return;
+    }
     
     setSaving(true);
     setError("");
@@ -331,7 +374,7 @@ const EditRejectedClient = () => {
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  BP
+                  BP *
                 </label>
                 <input
                   type="text"
@@ -345,12 +388,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Ville
+                  Ville *
                 </label>
                 <input
                   type="text"
@@ -364,12 +408,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Pays
+                  Pays *
                 </label>
                 <input
                   type="text"
@@ -383,12 +428,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Adresse Géo 1
+                  Adresse Géo 1 *
                 </label>
                 <input
                   type="text"
@@ -402,12 +448,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Adresse Géo 2
+                  Adresse Géo 2 *
                 </label>
                 <input
                   type="text"
@@ -421,12 +468,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Téléphone
+                  Téléphone *
                 </label>
                 <input
                   type="text"
@@ -440,12 +488,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Email
+                  Email *
                 </label>
                 <input
                   type="email"
@@ -459,12 +508,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Catégorie
+                  Catégorie *
                 </label>
                 <select
                   name="categorie"
@@ -477,17 +527,16 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 >
                   <option value="">Sélectionnez une catégorie</option>
-                  <option value="Particulier">Particulier</option>
-                  <option value="Entreprise">Entreprise</option>
-                  <option value="Administration">Administration</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  N° Contribuable
+                  N° Contribuable *
                 </label>
                 <input
                   type="text"
@@ -501,6 +550,7 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
@@ -519,16 +569,14 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
-                  disabled
                 >
-                  <option value="Client">Client</option>
-                  <option value="Fournisseur">Fournisseur</option>
+                  {TYPE_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Date de Création
+                  Date de Création *
                 </label>
                 <input
                   type="date"
@@ -542,12 +590,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Montant Facture
+                  Montant Facture *
                 </label>
                 <input
                   type="number"
@@ -561,12 +610,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Montant Payé
+                  Montant Payé *
                 </label>
                 <input
                   type="number"
@@ -580,12 +630,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Crédit
+                  Crédit *
                 </label>
                 <input
                   type="number"
@@ -599,12 +650,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Motif
+                  Motif *
                 </label>
                 <textarea
                   name="motif"
@@ -618,12 +670,13 @@ const EditRejectedClient = () => {
                     fontSize: '16px',
                     minHeight: '80px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Établissement
+                  Établissement *
                 </label>
                 <input
                   type="text"
@@ -637,12 +690,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Service
+                  Service *
                 </label>
                 <input
                   type="text"
@@ -656,12 +710,13 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-                  Nom du Signataire
+                  Nom du Signataire *
                 </label>
                 <input
                   type="text"
@@ -675,6 +730,7 @@ const EditRejectedClient = () => {
                     borderRadius: '6px',
                     fontSize: '16px'
                   }}
+                  required
                 />
               </div>
             </div>

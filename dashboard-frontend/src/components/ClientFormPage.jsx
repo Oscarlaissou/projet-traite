@@ -11,9 +11,10 @@ const CATEGORIES = [
   "Collectivité locale",
   "Entreprise Publique",
   "Administration Privée",
+  "Société de financement",
 ]
 
-const TYPE_TIERS = ["Client", "Fournisseur"]
+const TYPE_TIERS = ["Client", "Fournisseur","Salariés"];
 
 const ClientFormPage = () => {
   // Champs Tiers
@@ -195,6 +196,29 @@ const ClientFormPage = () => {
     setError("")
     setSubmitting(true)
     
+    // Validation: Check if all required fields are filled
+    const requiredFields = [
+      { name: 'nom_raison_sociale', value: nom_raison_sociale },
+      { name: 'categorie', value: categorie },
+      { name: 'type_tiers', value: type_tiers },
+      { name: 'date_creation', value: date_creation },
+      { name: 'montant_facture', value: montant_facture },
+      { name: 'montant_paye', value: montant_paye },
+      { name: 'credit', value: credit },
+      { name: 'motif', value: motif },
+      { name: 'etablissement', value: etablissement },
+      { name: 'service', value: service },
+      { name: 'nom_signataire', value: nom_signataire }
+    ];
+    
+    const emptyFields = requiredFields.filter(field => !field.value || field.value.trim() === '');
+    
+    if (emptyFields.length > 0) {
+      setError(`Veuillez remplir tous les champs obligatoires. Champs manquants: ${emptyFields.map(field => field.name).join(', ')}`);
+      setSubmitting(false);
+      return;
+    }
+    
     try {
       // For new clients, we don't send the numero_compte as it should be generated automatically
       const payload = id ? {
@@ -347,56 +371,56 @@ const ClientFormPage = () => {
           <input value={nom_raison_sociale} onChange={(e) => setNomRaisonSociale(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>BP</label>
-          <input value={bp} onChange={(e) => setBp(e.target.value)} className="search-input" />
+          <label>BP *</label>
+          <input value={bp} onChange={(e) => setBp(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Ville</label>
-          <input value={ville} onChange={(e) => setVille(e.target.value)} className="search-input" />
+          <label>Ville *</label>
+          <input value={ville} onChange={(e) => setVille(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Pays</label>
-          <input value={pays} onChange={(e) => setPays(e.target.value)} className="search-input" />
+          <label>Pays *</label>
+          <input value={pays} onChange={(e) => setPays(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Adresse géo 1</label>
-          <input value={adresse_geo_1} onChange={(e) => setAdresseGeo1(e.target.value)} className="search-input" />
+          <label>Adresse géo 1 *</label>
+          <input value={adresse_geo_1} onChange={(e) => setAdresseGeo1(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Adresse géo 2</label>
-          <input value={adresse_geo_2} onChange={(e) => setAdresseGeo2(e.target.value)} className="search-input" />
+          <label>Adresse géo 2 *</label>
+          <input value={adresse_geo_2} onChange={(e) => setAdresseGeo2(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Téléphone</label>
-          <input value={telephone} onChange={(e) => setTelephone(e.target.value)} className="search-input" />
+          <label>Téléphone *</label>
+          <input value={telephone} onChange={(e) => setTelephone(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="search-input" />
+          <label>Email *</label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Type d'entreprises</label>
+          <label>Type d'entreprises *</label>
           <select value={categorie} onChange={(e) => setCategorie(e.target.value)} className="search-input" required>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>N° contribuable</label>
-          <input value={n_contribuable} onChange={(e) => setNContribuable(e.target.value)} className="search-input" />
+          <label>N° contribuable *</label>
+          <input value={n_contribuable} onChange={(e) => setNContribuable(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Type de tiers</label>
+          <label>Type de tiers *</label>
           <select value={type_tiers} onChange={(e) => setTypeTiers(e.target.value)} className="search-input" required>
             {TYPE_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Date de création</label>
-          <input type="date" value={date_creation} onChange={(e) => setDateCreation(e.target.value)} className="search-input" />
+          <label>Date de création *</label>
+          <input type="date" value={date_creation} onChange={(e) => setDateCreation(e.target.value)} className="search-input" required />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label>Montant facturé</label>
+        <label>Montant facturé *</label>
         <input
           type="text"
           inputMode="numeric"
@@ -404,10 +428,11 @@ const ClientFormPage = () => {
           onChange={handleChange(setMontantFacture)}
           className="search-input"
           placeholder="Ex: 100 000"
+          required
         />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label>Montant payé</label>
+        <label>Montant payé *</label>
         <input
           type="text"
           inputMode="numeric"
@@ -415,10 +440,11 @@ const ClientFormPage = () => {
           onChange={handleChange(setMontantPaye)}
           className="search-input"
           placeholder="Ex: 100 000"
+          required
         />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label>Crédit</label>
+        <label>Crédit *</label>
         <input
           type="text"
           inputMode="numeric"
@@ -426,27 +452,28 @@ const ClientFormPage = () => {
           onChange={handleChange(setCredit)}
           className="search-input"
           placeholder="Ex: 100 000"
+          required
         />
       </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Établissement</label>
-          <input value={etablissement} onChange={(e) => setEtablissement(e.target.value)} className="search-input" />
+          <label>Établissement *</label>
+          <input value={etablissement} onChange={(e) => setEtablissement(e.target.value)} className="search-input" required />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Service</label>
-          <input value={service} onChange={(e) => setService(e.target.value)} className="search-input" />
+          <label>Service *</label>
+          <input value={service} onChange={(e) => setService(e.target.value)} className="search-input" required />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Nom du signataire</label>
-          <input value={nom_signataire} onChange={(e) => setNomSignataire(e.target.value)} className="search-input" />
+          <label>Nom du signataire *</label>
+          <input value={nom_signataire} onChange={(e) => setNomSignataire(e.target.value)} className="search-input" required />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label>Motif</label>
-          <textarea value={motif} onChange={(e) => setMotif(e.target.value)} className="search-input" rows={3} />
+          <label>Motif *</label>
+          <textarea value={motif} onChange={(e) => setMotif(e.target.value)} className="search-input" rows={3} required />
         </div>
 
         <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
