@@ -342,7 +342,7 @@
         </div>
 
         <div class="agos-note">
-            Agos au {{ $agos_type ?? '' }}
+            Agios au {{ $agos_type ?? '' }}
         </div>
 
         <!-- Pied de page -->

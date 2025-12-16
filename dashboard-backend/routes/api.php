@@ -49,6 +49,7 @@ Route::get('/traites/stats', [TraitesStatsController::class, 'stats']);
 Route::get('/traites/monthly', [TraitesStatsController::class, 'monthly']);
 Route::get('/traites/status', [TraitesStatsController::class, 'statusBreakdown']);
 Route::get('/traites/available-years', [TraitesStatsController::class, 'availableYears']);
+Route::get('/traites/external-count', [TraitesStatsController::class, 'externalCount']);
 
 // Tiers / Clients
 Route::get('/tiers', [TiersController::class, 'index']);
@@ -77,6 +78,7 @@ Route::prefix('clients')->group(function () {
     Route::get('/available-years', [ClientStatsController::class, 'availableYears']);
     Route::get('/monthly', [ClientStatsController::class, 'monthly']);
     Route::get('/type-breakdown', [ClientStatsController::class, 'typeBreakdown']);
+    Route::get('/external-count', [ClientStatsController::class, 'externalCount']); // Add this line
     
     // IMPORTANT : Middleware ajouté ici
     Route::get('/approval-history', [ClientApprovalHistoryController::class, 'index'])

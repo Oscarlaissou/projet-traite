@@ -19,25 +19,38 @@ class ClientStatsController extends Controller
             $now = Carbon::now();
             $today = $now->toDateString();
             $monthStart = $now->copy()->startOfMonth()->toDateString();
+            $monthEnd = $now->copy()->endOfMonth()->toDateString();
 
             $total = Tier::query()->count();
             
-            // Comptes sur la date de création de la table demande_ouverture_compte pour le jour en cours
-            $perDay = DB::table('demande_ouverture_compte')
-                ->whereDate('date_creation', $today)
-                ->count();
-                
-            // Comptes sur la date de création de la table demande_ouverture_compte pour le mois en cours
-            $perMonth = DB::table('demande_ouverture_compte')
-                ->whereBetween('date_creation', [$monthStart, $now->toDateString()])
-                ->count();
+            // Essayer d'abord d'utiliser la table demande_ouverture_compte
+            try {
+                // Comptes sur la date de création de la table demande_ouverture_compte pour le jour en cours
+                $perDay = DB::table('demande_ouverture_compte')
+                    ->whereDate('date_creation', $today)
+                    ->count();
+                    
+                // Comptes sur la date de création de la table demande_ouverture_compte pour le mois en cours
+                $perMonth = DB::table('demande_ouverture_compte')
+                    ->whereBetween('date_creation', [$monthStart, $monthEnd])
+                    ->count();
+            } catch (\Exception $e) {
+                // Si la table n'existe pas ou n'est pas accessible, utiliser la table tiers
+                $perDay = Tier::query()
+                    ->whereDate('created_at', $today)
+                    ->count();
+                    
+                $perMonth = Tier::query()
+                    ->whereBetween('created_at', [$monthStart, $monthEnd])
+                    ->count();
+            }
 
             // Vérifier si la colonne credit existe avant de l'utiliser
             $totalCredit = 0;
             if (Schema::hasColumn('tiers', 'credit')) {
                 $totalCredit = (float) Tier::sum('credit');
             }
-
+            
             return response()->json([
                 'total' => $total,
                 'perDay' => $perDay,
@@ -56,67 +69,29 @@ class ClientStatsController extends Controller
     }
 
     /**
-     * Retourne les années disponibles pour le filtre du graphique.
-     */
-    public function availableYears(Request $request)
-    {
-        try {
-            // Vérifier si la table existe
-            if (!Schema::hasTable('demande_ouverture_compte')) {
-                // Si la table n'existe pas, utiliser la table tiers
-                $years = Tier::query()
-                    ->selectRaw('DISTINCT YEAR(date_creation) as year')
-                    ->whereNotNull('date_creation')
-                    ->orderBy('year', 'desc')
-                    ->pluck('year')
-                    ->toArray();
-            } else {
-                $years = DB::table('demande_ouverture_compte')
-                    ->selectRaw('DISTINCT YEAR(date_creation) as year')
-                    ->whereNotNull('date_creation')
-                    ->orderBy('year', 'desc')
-                    ->pluck('year')
-                    ->toArray();
-            }
-
-            $currentYear = (int) date('Y');
-            if (!in_array($currentYear, $years)) {
-                $years[] = $currentYear;
-            }
-            rsort($years);
-
-            return response()->json($years);
-        } catch (\Throwable $e) {
-            return response()->json([(int) date('Y')]);
-        }
-    }
-
-    /**
-     * Fournit les données pour le graphique d'évolution mensuelle.
+     * Fournit les données mensuelles groupées par année.
      */
     public function monthly(Request $request)
     {
         try {
-            $year = (int) $request->get('year', date('Y'));
+            $year = (int) $request->get('year', Carbon::now()->year);
             
-            // Vérifier si la table existe
-            if (!Schema::hasTable('demande_ouverture_compte')) {
-                // Si la table n'existe pas, utiliser la table tiers
-                $rows = Tier::query()
-                    ->selectRaw("DATE_FORMAT(date_creation, '%Y-%m') as ym, COUNT(*) as total")
-                    ->whereYear('date_creation', $year)
-                    ->groupBy('ym')
-                    ->orderBy('ym')
-                    ->get();
-            } else {
+            // Essayer d'abord d'utiliser la table demande_ouverture_compte
+            try {
                 $rows = DB::table('demande_ouverture_compte')
                     ->selectRaw("DATE_FORMAT(date_creation, '%Y-%m') as ym, COUNT(*) as total")
                     ->whereYear('date_creation', $year)
                     ->groupBy('ym')
-                    ->orderBy('ym')
+                    ->get();
+            } catch (\Exception $e) {
+                // Si la table n'existe pas ou n'est pas accessible, utiliser la table tiers
+                $rows = Tier::query()
+                    ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, COUNT(*) as total")
+                    ->whereYear('created_at', $year)
+                    ->groupBy('ym')
                     ->get();
             }
-
+            
             // Créer un tableau avec tous les mois de l'année (même ceux sans données)
             $months = [];
             for ($i = 1; $i <= 12; $i++) {
@@ -144,50 +119,36 @@ class ClientStatsController extends Controller
     }
 
     /**
-     * Fournit la répartition des tiers par type (Client, Client à terme, etc.).
+     * Retourne les années disponibles pour le filtre du graphique.
      */
-    public function typeBreakdown(Request $request)
+    public function availableYears(Request $request)
     {
         try {
-            $rows = Tier::selectRaw('COALESCE(type_tiers, "Non défini") as type, COUNT(*) as value')
-                ->groupBy('type')
-                ->get();
-
-            $aggregated = [];
-            foreach ($rows as $row) {
-                $label = $this->normalizeType($row->type);
-                if (!isset($aggregated[$label])) {
-                    $aggregated[$label] = ['name' => $label, 'value' => 0];
-                }
-                $aggregated[$label]['value'] += (int) $row->value;
+            // Essayer d'abord d'utiliser la table demande_ouverture_compte
+            try {
+                $years = DB::table('demande_ouverture_compte')
+                    ->selectRaw('DISTINCT YEAR(date_creation) as year')
+                    ->whereNotNull('date_creation')
+                    ->orderBy('year', 'desc')
+                    ->pluck('year')
+                    ->toArray();
+            } catch (\Exception $e) {
+                // Si la table n'existe pas ou n'est pas accessible, utiliser la table tiers
+                $years = Tier::query()
+                    ->selectRaw('DISTINCT YEAR(created_at) as year')
+                    ->whereNotNull('created_at')
+                    ->orderBy('year', 'desc')
+                    ->pluck('year')
+                    ->toArray();
             }
-
-            $colors = [
-                'Client' => '#3b82f6',
-                'Fournisseur' => '#f59e0b',
-                'Non défini' => '#94a3b8',
-            ];
-
-            $data = array_values(array_map(function ($entry) use ($colors) {
-                $entry['color'] = $colors[$entry['name']] ?? '#6b7280';
-                return $entry;
-            }, $aggregated));
-
-            return response()->json($data);
+            
+            if (empty($years)) {
+                $years = [Carbon::now()->year];
+            }
+            
+            return response()->json($years);
         } catch (\Throwable $e) {
-            return response()->json([], 200);
+            return response()->json([Carbon::now()->year], 200);
         }
-    }
-
-    private function normalizeType(?string $raw): string
-    {
-        $value = strtolower(trim((string) $raw));
-        if (in_array($value, ['client', 'client à terme', 'client a terme'], true)) {
-            return 'Client';
-        }
-        if ($value === 'fournisseur') {
-            return 'Fournisseur';
-        }
-        return 'Non défini';
     }
 }

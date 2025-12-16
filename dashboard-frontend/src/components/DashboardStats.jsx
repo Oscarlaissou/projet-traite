@@ -9,7 +9,8 @@ import {
   Loader2,
   Users,
   UserPlus,
-  DollarSign
+  DollarSign,
+  Globe
 } from "lucide-react"
 import Can from "./Can"
 import "./DashboardStats.css"
@@ -65,6 +66,16 @@ const DashboardStats = () => {
   const [pendingClientsCount, setPendingClientsCount] = useState(0)
   const [loadingPendingClients, setLoadingPendingClients] = useState(true)
   const [errorPendingClients, setErrorPendingClients] = useState("")
+  
+  // --- ÉTATS POUR LES CLIENTS EXTERNES ---
+  // const [externalClientsCount, setExternalClientsCount] = useState(0)
+  // const [loadingExternalClients, setLoadingExternalClients] = useState(true)
+  // const [errorExternalClients, setErrorExternalClients] = useState("")
+  
+  // --- ÉTATS POUR LES TRAITES EXTERNES ---
+  const [externalTraitésCount, setExternalTraitésCount] = useState(0)
+  const [loadingExternalTraités, setLoadingExternalTraités] = useState(true)
+  const [errorExternalTraités, setErrorExternalTraités] = useState("")
 
   const monthNames = useMemo(() => ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'], [])
 
@@ -240,6 +251,84 @@ const DashboardStats = () => {
     return () => { isMounted = false }
   }, [hasPermission, refreshTimestamp]) // Add refreshTimestamp as dependency
 
+  // --- FETCH DES CLIENTS EXTERNES ---
+  // useEffect(() => {
+  //   let isMounted = true
+  //   const fetchExternalClientsCount = async () => {
+  //     // Don't fetch data if user shouldn't see dashboard stats
+  //     if (!shouldShowDashboardStats()) return;
+      
+  //     setLoadingExternalClients(true)
+  //     setErrorExternalClients("")
+  //     try {
+  //       const baseUrl = process.env.REACT_APP_API_URL || ''
+  //       const token = localStorage.getItem('token')
+  //       const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+
+  //       const res = await fetch(`${baseUrl}/api/clients/external-count`, { headers })
+      
+  //       if (!isMounted) return;
+
+  //       if (res.ok) {
+  //         const data = await res.json()
+  //         setExternalClientsCount(data.count || 0)
+  //       } else {
+  //         throw new Error("Erreur de chargement des clients externes")
+  //       }
+  //     } catch (e) {
+  //       if (isMounted) setErrorExternalClients(e.message || "Erreur inconnue")
+  //     } finally {
+  //       if (isMounted) setLoadingExternalClients(false)
+  //     }
+  //   }
+  
+  //   // Only fetch external clients for users with appropriate permissions
+  //   if (hasPermission('access_dashboard')) {
+  //     fetchExternalClientsCount()
+  //   }
+  
+  //   return () => { isMounted = false }
+  // }, [hasPermission, refreshTimestamp]) // Add refreshTimestamp as dependency
+
+  // --- FETCH DES TRAITES EXTERNES ---
+  useEffect(() => {
+    let isMounted = true
+    const fetchExternalTraitésCount = async () => {
+      // Don't fetch data if user shouldn't see dashboard stats
+      if (!shouldShowDashboardStats()) return;
+      
+      setLoadingExternalTraités(true)
+      setErrorExternalTraités("")
+      try {
+        const baseUrl = process.env.REACT_APP_API_URL || ''
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
+
+        const res = await fetch(`${baseUrl}/api/traites/external-count`, { headers })
+      
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json()
+          setExternalTraitésCount(data.count || 0)
+        } else {
+          throw new Error("Erreur de chargement des traites externes")
+        }
+      } catch (e) {
+        if (isMounted) setErrorExternalTraités(e.message || "Erreur inconnue")
+      } finally {
+        if (isMounted) setLoadingExternalTraités(false)
+      }
+    }
+  
+    // Only fetch external traites for users with appropriate permissions
+    if (hasPermission('access_dashboard')) {
+      fetchExternalTraitésCount()
+    }
+  
+    return () => { isMounted = false }
+  }, [hasPermission, refreshTimestamp]) // Add refreshTimestamp as dependency
+
   // --- FETCH DES TRAITES RÉCENTES ---
   useEffect(() => {
     let isMounted = true
@@ -321,6 +410,32 @@ const DashboardStats = () => {
     { icon: UserPlus, title: "Comptes clients/jour", value: clientStats.perDay || 0, color: "#10B981", bgColor: "#ECFDF5", permission: "view_clients" },
     { icon: Calendar, title: "Comptes clients/mois", value: clientStats.perMonth || 0, color: "#8B5CF6", bgColor: "#F5F3FF", permission: "view_clients" },
     
+  ]
+
+  // --- DONNÉES DES CARTES POUR LES CLIENTS EXTERNES ---
+  // const externalClientsCardData = [
+  //   { 
+  //     icon: Globe, 
+  //     title: "Clients externes", 
+  //     value: externalClientsCount, 
+  //     color: "#10B981", 
+  //     bgColor: "#ECFDF5", 
+  //     permission: "view_clients", 
+  //     onClick: () => navigate('/dashboard?tab=credit&view=GestionClients&external=true')
+  //   }
+  // ]
+
+  // --- DONNÉES DES CARTES POUR LES TRAITES EXTERNES ---
+  const externalTraitésCardData = [
+    { 
+      icon: Globe, 
+      title: "Traités externes", 
+      value: externalTraitésCount, 
+      color: "#10B981", 
+      bgColor: "#ECFDF5", 
+      permission: "view_traites", 
+      onClick: () => navigate('/dashboard?tab=traites&origine=Externe')
+    }
   ]
 
   // --- DONNÉES DES CARTES POUR LES CLIENTS EN ATTENTE ---
@@ -423,6 +538,18 @@ const DashboardStats = () => {
                   {card.badge}
                 </span>
               )}
+            </div>
+          </Can>
+        ))}
+        {/* Cartes des Traités Externes */}
+        {externalTraitésCardData.map((card, index) => (
+          <Can key={`external-traite-${index}`} permission={card.permission}>
+            <div className="stat-card" onClick={card.onClick} style={{ cursor: card.onClick ? 'pointer' : 'default' }}>
+              <div className="card-icon-container" style={{ backgroundColor: card.bgColor }}><card.icon size={20} color={card.color} /></div>
+              <div className="card-content">
+                <p className="card-title">{card.title}</p>
+                <p className="card-value">{loadingExternalTraités ? <Loader2 size={16} className="loading-spinner" /> : card.value.toLocaleString()}</p>
+              </div>
             </div>
           </Can>
         ))}

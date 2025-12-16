@@ -167,6 +167,26 @@ class TraitesStatsController extends Controller
             return response()->json([], 200);
         }
     }
+
+    /**
+     * Compte le nombre de traites externes.
+     */
+    public function externalCount(Request $request)
+    {
+        try {
+            // Compter les traites qui ont origine_traite = 'Externe'
+            $externalCount = Traite::where('origine_traite', 'Externe')->count();
+
+            return response()->json([
+                'count' => $externalCount,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'count' => 0,
+                'error' => 'Impossible de compter les traites externes : ' . $e->getMessage(),
+            ], 200);
+        }
+    }
 }
 
 

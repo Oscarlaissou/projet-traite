@@ -44,6 +44,7 @@ const TraitesGrid = () => {
   const [statut, setStatut] = useState("")
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
+  const [origine, setOrigine] = useState("") // Add this line
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10) // Reste à 10 pour l'affichage normal
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
@@ -828,6 +829,7 @@ const TraitesGrid = () => {
       if (statut) params.append('statut', statut)
       if (from) params.append('from', from)
       if (to) params.append('to', to)
+      if (origine) params.append('origine_traite', origine) // Add this line
       if (sort?.key) params.append('sort', sort.key)
       if (sort?.dir) params.append('dir', sort.dir)
       params.append('page', String(page))
@@ -869,7 +871,7 @@ const TraitesGrid = () => {
     if (initialized) {
       fetchItems();
     }
-  }, [initialized, page, perPage, sort, from, to, statut]);
+  }, [initialized, page, perPage, sort, from, to, statut, origine]); // Add origine to dependencies
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -879,11 +881,13 @@ const TraitesGrid = () => {
       const urlFrom = params.get('from') || ''
       const urlTo = params.get('to') || ''
       const urlStatut = params.get('statut') || ''
+      const urlOrigine = params.get('origine') || '' // Add this line
       let changed = false
       if (urlSearch && urlSearch !== search) { setSearch(urlSearch); changed = true }
       if (urlFrom && urlFrom !== from) { setFrom(urlFrom); changed = true }
       if (urlTo && urlTo !== to) { setTo(urlTo); changed = true }
       if (urlStatut && urlStatut !== statut) { setStatut(urlStatut); changed = true }
+      if (urlOrigine && urlOrigine !== origine) { setOrigine(urlOrigine); changed = true } // Add this line
       if (changed) { setPage(1) }
       setInitialized(true)
     } else {
@@ -933,7 +937,7 @@ const TraitesGrid = () => {
         </div>
       )}
       
-      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setSort({ key: 'numero', dir: 'desc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
+      <button className="icon-button" onClick={() => { setSearch(''); setStatut(''); setFrom(''); setTo(''); setOrigine(''); setSort({ key: 'numero', dir: 'desc' }); setPage(1); fetchItems() }} aria-label="Retour" style={{ marginBottom: 8, color: 'red' }}>
         <ArrowLeft size={18} />
       </button>
       
@@ -948,6 +952,11 @@ const TraitesGrid = () => {
           <option>Impayé</option>
           <option>Rejeté</option>
           <option>Payé</option>
+        </select>
+        <select className="search-input" value={origine} onChange={(e) => setOrigine(e.target.value)}>
+          <option value="">Toutes les origines</option>
+          <option>Interne</option>
+          <option>Externe</option>
         </select>
         De <input type="date" placeholder="jj/mm/aaaa" value={from} onChange={(e) => setFrom(e.target.value)} className="search-input" />
         à <input type="date" placeholder="jj/mm/aaaa" value={to} onChange={(e) => setTo(e.target.value)} className="search-input" />

@@ -56,7 +56,7 @@ class PendingClientsController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'categorie' => ['required', 'string', Rule::in(self::CATEGORIES)],
             'n_contribuable' => ['nullable', 'string', 'max:100'],
-            'type_tiers' => ['required', 'string', Rule::in(['Client', 'Fournisseur'])],
+            'type_tiers' => ['required', 'string', Rule::in(['Client', 'Fournisseur', 'Salariés'])],
 
             // Champs Demande d'ouverture de compte
             'date_creation' => ['nullable', 'date'],
@@ -553,7 +553,7 @@ class PendingClientsController extends Controller
                 'email' => ['nullable', 'email', 'max:255'],
                 'categorie' => ['required', 'string', Rule::in(self::CATEGORIES)],
                 'n_contribuable' => ['nullable', 'string', 'max:100'],
-                'type_tiers' => ['required', 'string', Rule::in(['Client', 'Fournisseur'])],
+                'type_tiers' => ['required', 'string', Rule::in(['Client', 'Fournisseur', 'Salariés'])],
 
                 // Champs Demande d'ouverture de compte
                 'date_creation' => ['nullable', 'date'],

@@ -276,7 +276,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
           />
         </div>
         <div>
-          <label>RIB (max 26 caractères)</label>
+          <label>RIB (max 26 caractères) *</label>
           <input 
             name="rib" 
             value={form.rib} 
@@ -285,6 +285,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
             maxLength={26}
             placeholder="Entrez jusqu'à 26 caractères"
             disabled={isReadOnly}
+            required 
           />
           {form.rib && form.rib.replace(/\s/g, '').length > 0 && (
             <div style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px' }}>

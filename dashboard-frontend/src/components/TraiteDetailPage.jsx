@@ -165,7 +165,6 @@ const TraiteDetailPage = () => {
                       statusValue.includes('pay') ? 'status-paye' : ''
 
   const isReadOnly = item && item.origine_traite === "Externe"
-
   return (
     <div className="dashboard-stats">
       <div className="breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -293,7 +292,7 @@ const TraiteDetailPage = () => {
               {/* Crédit */}
               <div>
                 <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
-                  Crédit <span style={{ color: '#ef4444' }}>*</span>
+                 Compte crédit <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
@@ -328,8 +327,8 @@ const TraiteDetailPage = () => {
                     fontSize: 14
                   }}
                 >
-                  <option value="Tireur">Agos au Tireur</option>
-                  <option value="Tiré">Agos au Tiré</option>
+                  <option value="Tireur">Agios au Tireur</option>
+                  <option value="Tiré">Agios au Tiré</option>
                 </select>
               </div>
 
@@ -437,8 +436,8 @@ const TraiteDetailPage = () => {
               <button 
                 className="submit-button" 
                 onClick={handleAcceptance}
-                disabled={isReadOnly}
-                style={isReadOnly ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                disabled={isReadOnly && item?.origine_traite !== "Externe"}
+                style={(isReadOnly && item?.origine_traite !== "Externe") ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 <FileText size={16} style={{ marginRight: 6 }} /> Acceptation
               </button>

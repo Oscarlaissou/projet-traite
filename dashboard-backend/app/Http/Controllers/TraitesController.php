@@ -57,6 +57,11 @@ class TraitesController extends Controller
         if ($statut = $request->get('statut')) {
             $query->where('statut', $statut);
         }
+        
+        // Filtre par origine_traite
+        if ($origine_traite = $request->get('origine_traite')) {
+            $query->where('origine_traite', $origine_traite);
+        }
         $from = $request->get('from');
         $to = $request->get('to');
         if ($from || $to) {
