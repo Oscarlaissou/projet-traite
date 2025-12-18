@@ -244,12 +244,38 @@ const EditRejectedClient = () => {
     }
   };
 
+  // Function to format number as currency without decimals
+  const formatCurrency = (value) => {
+    if (!value) return '';
+    const num = parseFloat(value.toString().replace(/\s+/g, '').replace(',', '.'));
+    if (isNaN(num)) return '';
+    return new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(Math.floor(num));
+  };
+
+  // Function to parse formatted currency back to number
+  const parseCurrency = (formattedValue) => {
+    if (!formattedValue) return '';
+    return formattedValue.toString().replace(/\s/g, '').replace(/,/g, '.');
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setClientData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // Handle currency fields specially
+    if (['montant_facture', 'montant_paye', 'credit'].includes(name)) {
+      setClientData(prev => ({
+        ...prev,
+        [name]: parseCurrency(value)
+      }));
+    } else {
+      setClientData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleCancel = () => {
@@ -599,9 +625,9 @@ const EditRejectedClient = () => {
                   Montant Facture *
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   name="montant_facture"
-                  value={clientData.montant_facture}
+                  value={formatCurrency(clientData.montant_facture)}
                   onChange={handleChange}
                   style={{
                     width: '100%',
@@ -619,9 +645,9 @@ const EditRejectedClient = () => {
                   Montant Payé *
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   name="montant_paye"
-                  value={clientData.montant_paye}
+                  value={formatCurrency(clientData.montant_paye)}
                   onChange={handleChange}
                   style={{
                     width: '100%',
@@ -639,9 +665,9 @@ const EditRejectedClient = () => {
                   Crédit *
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   name="credit"
-                  value={clientData.credit}
+                  value={formatCurrency(clientData.credit)}
                   onChange={handleChange}
                   style={{
                     width: '100%',
@@ -652,6 +678,7 @@ const EditRejectedClient = () => {
                   }}
                   required
                 />
+
               </div>
               
               <div>

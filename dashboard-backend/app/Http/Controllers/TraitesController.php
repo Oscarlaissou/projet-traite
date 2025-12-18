@@ -710,6 +710,15 @@ class TraitesController extends Controller
         return response()->json($traite);
     }
 
+    public function updateDecision(Request $request, Traite $traite)
+    {
+        $validated = $request->validate([
+            'decision' => ['required', 'string', 'max:100']
+        ]);
+        $traite->update(['decision' => $validated['decision']]);
+        return response()->json($traite);
+    }
+
     private function validateData(Request $request, $id = null): array
     {
         $validated = $request->validate([
@@ -725,6 +734,7 @@ class TraitesController extends Controller
             'origine_traite' => ['nullable','string','max:100'],
             'commentaires' => ['nullable','string','max:1000'],
             'statut' => ['nullable', Rule::in(['Non échu', 'Échu', 'Impayé', 'Rejeté', 'Payé'])],
+            'decision' => ['nullable', 'string', 'max:100'],
         ]);
         
         // S'assurer que statut n'est jamais null (utiliser la valeur par défaut)

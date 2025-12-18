@@ -151,4 +151,78 @@ class ClientStatsController extends Controller
             return response()->json([Carbon::now()->year], 200);
         }
     }
+
+    /**
+     * Fournit la répartition des clients par type.
+     */
+    public function typeBreakdown(Request $request)
+    {
+        try {
+            // Couleurs pour chaque type de client
+            $colors = [
+                'Client' => '#3b82f6',
+                'Fournisseur' => '#10b981',
+                'Salariés' => '#f59e0b',
+                'Autre' => '#8b5cf6'
+            ];
+
+            // Essayer d'abord d'utiliser la table demande_ouverture_compte
+            try {
+                // Vérifier si la colonne type_tiers existe dans la table demande_ouverture_compte
+                if (Schema::hasColumn('demande_ouverture_compte', 'type_tiers')) {
+                    $rows = DB::table('demande_ouverture_compte')
+                        ->selectRaw("type_tiers as type, COUNT(*) as total")
+                        ->groupBy('type_tiers')
+                        ->get();
+                } else {
+                    // Si la colonne n'existe pas, utiliser la table tiers
+                    throw new \Exception('Colonne type_tiers non trouvée dans demande_ouverture_compte');
+                }
+            } catch (\Exception $e) {
+                // Si la table n'existe pas ou n'est pas accessible, utiliser la table tiers
+                $rows = Tier::query()
+                    ->selectRaw("type_tiers as type, COUNT(*) as total")
+                    ->groupBy('type_tiers')
+                    ->get();
+            }
+
+            // Convertir en tableau de données pour le graphique
+            $data = [];
+            foreach ($rows as $row) {
+                $typeName = $row->type ?? 'Inconnu';
+                // Si le type est vide ou null, le regrouper sous "Inconnu"
+                if (empty($typeName)) {
+                    $typeName = 'Inconnu';
+                }
+                
+                $data[] = [
+                    'name' => $typeName,
+                    'value' => (int) $row->total,
+                    'color' => $colors[$typeName] ?? $colors['Autre']
+                ];
+            }
+
+            // S'assurer que "Salariés" est toujours inclus même s'il n'y a pas de données
+            $hasSalaries = false;
+            foreach ($data as $item) {
+                if ($item['name'] === 'Salariés') {
+                    $hasSalaries = true;
+                    break;
+                }
+            }
+            
+            if (!$hasSalaries) {
+                $data[] = [
+                    'name' => 'Salariés',
+                    'value' => 0,
+                    'color' => $colors['Salariés']
+                ];
+            }
+
+            return response()->json($data);
+        } catch (\Throwable $e) {
+            \Log::error('Erreur dans typeBreakdown: ' . $e->getMessage());
+            return response()->json([], 200);
+        }
+    }
 }

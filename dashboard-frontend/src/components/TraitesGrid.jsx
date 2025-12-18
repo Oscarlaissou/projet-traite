@@ -18,7 +18,8 @@ const Columns = [
   { key: 'date_emission', label: 'Émission', minWidth: 120 }, // Increased width as requested
   { key: 'montant', label: 'Montant', minWidth: 100 },
   { key: 'nom_raison_sociale', label: 'Tiré', minWidth: 150 },
-  { key: 'statut', label: 'Statut', minWidth: 100 }
+  { key: 'statut', label: 'Statut', minWidth: 100 },
+  { key: 'origine_traite', label: 'Origine', minWidth: 100 } // Add this line
 ]
 
 // Define PrintColumns array for professional printing with all form fields
@@ -33,7 +34,8 @@ const PrintColumns = [
   { key: 'rib', label: 'RIB' },
   { key: 'motif', label: 'Motif' },
   { key: 'commentaires', label: 'Commentaires' },
-  { key: 'statut', label: 'Statut' }
+  { key: 'statut', label: 'Statut' },
+  { key: 'origine_traite', label: 'Origine' } // Add this line
 ]
 
 const TraitesGrid = () => {
@@ -460,6 +462,7 @@ const TraitesGrid = () => {
       if (statut) params.append('statut', statut)
       if (from) params.append('from', from)
       if (to) params.append('to', to)
+      if (origine) params.append('origine_traite', origine) // Add this line
       if (sort?.key) params.append('sort', sort.key)
       if (sort?.dir) params.append('dir', sort.dir)
       params.append('per_page', '1000')
@@ -519,6 +522,83 @@ const TraitesGrid = () => {
     } catch (e) {
       console.error('Erreur lors de l\'exportation:', e)
       alert(e.message || 'Export Excel échoué')
+    }
+  }
+
+  // Nouvelle fonction pour exporter uniquement les traites externes
+  const exportExternalTraites = async () => {
+    try {
+      console.log('Début de l\'exportation des traites externes...')
+      const params = new URLSearchParams()
+      // Ajouter le filtre pour les traites externes
+      params.append('search', 'Externe')
+      params.append('per_page', '1000')
+
+      const url = `${apiBaseUrl}/api/traites?${params.toString()}`
+      const res = await fetch(url, { headers: getApiHeaders() })
+
+      if (!res.ok) {
+        throw new Error(`Erreur lors du chargement des données pour l'export: ${res.status} ${res.statusText}`)
+      }
+
+      const data = await res.json()
+      const allItems = data.data || data || []
+
+      // Filtrer uniquement les traites externes
+      const externalTraites = allItems.filter(item => 
+        item.origine_traite && item.origine_traite.toLowerCase() === 'externe'
+      )
+
+      if (externalTraites.length === 0) {
+        alert('Aucune traite externe à exporter.')
+        return
+      }
+
+      const sortedItems = externalTraites.slice().sort((a, b) => {
+        const an = Number(a.numero)
+        const bn = Number(b.numero)
+        if (!isNaN(an) && !isNaN(bn)) return an - bn
+        return String(a.numero).localeCompare(String(b.numero))
+      })
+
+      const headerLabels = Columns.map(c => c.label)
+
+      const dataForSheet = sortedItems.map(item => {
+        const rowData = {}
+        Columns.forEach(col => {
+          let value = item[col.key]
+          if (col.key === 'echeance' || col.key === 'date_emission') {
+            value = formatDateDDMMYYYY(value)
+          } else if (col.key === 'montant') {
+            value = Number(item[col.key] || 0)
+          } else {
+            value = value ?? ''
+          }
+          rowData[col.label] = value
+        })
+        return rowData
+      })
+      
+      const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerLabels })
+
+      const colWidths = headerLabels.map(header => ({
+        wch: Math.max(
+          header.length,
+          ...dataForSheet.map(row => row[header]?.toString().length ?? 0)
+        ) + 2
+      }))
+      worksheet['!cols'] = colWidths
+
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Traites_Externes")
+
+      const fileName = `traites_externes_${new Date().toISOString().slice(0, 10)}.xlsx`
+      XLSX.writeFile(workbook, fileName)
+
+      console.log('Exportation des traites externes terminée avec succès')
+    } catch (e) {
+      console.error('Erreur lors de l\'exportation des traites externes:', e)
+      alert(e.message || 'Export des traites externes échoué')
     }
   }
 
@@ -965,34 +1045,46 @@ const TraitesGrid = () => {
         <Can permission="create_traites">
           <button className="submit-button" onClick={handleNew}><Plus size={16} style={{ marginRight: 6 }} /> Nouvelle traite</button>
         </Can>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Can permission="view_traites">
+        
+        {/* Groupe de boutons principaux - reste sur la même ligne */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {/* Masquer le bouton Exporter Excel pour les gestionnaires de traites */}
+          <Can permission="view_traites" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
             <button className="submit-button" onClick={exportExcel}><Download size={16} style={{ marginRight: 6 }} /> Exporter Excel</button>
           </Can>
           <Can permission="create_traites" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
             <button className="submit-button" onClick={handleImportClick}><Upload size={16} style={{ marginRight: 6 }} /> Importer CSV</button>
           </Can>
-          {/* ÉTAPE 4: Ajouter le bouton d'impression */}
-          <Can permission="view_traites">
-            <button className="submit-button" onClick={openPrintModal} disabled={isPrinting}>
-              {isPrinting ? (
-                <>
-                  <div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '6px' }} />
-                  Impression...
-                </>
-              ) : (
-                <>
-                  <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
-                </>
-              )}
-            </button>
-          </Can>
-          <Can permission="create_traites">
-            <input ref={importInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileChange} />
-          </Can>
         </div>
       </div>
-
+      
+      {/* Nouvelle ligne pour les boutons Exporter Traités Externes et Imprimer */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        {/* Bouton pour exporter les traites externes - uniquement visible pour admin et super_admin */}
+        <Can permission="view_traites" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
+          {/* <button className="submit-button" onClick={exportExternalTraites}><Download size={16} style={{ marginRight: 6 }} /> Exporter Traités Externes</button> */}
+        </Can>
+        {/* ÉTAPE 4: Ajouter le bouton d'impression */}
+        <Can permission="view_traites">
+          <button className="submit-button" onClick={openPrintModal} disabled={isPrinting}>
+            {isPrinting ? (
+              <>
+                <div style={{ width: '16px', height: '16px', border: '2px solid #ffffff', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '6px' }} />
+                Impression...
+              </>
+            ) : (
+              <>
+                <Printer size={16} style={{ marginRight: 6 }} /> Imprimer
+              </>
+            )}
+          </button>
+        </Can>
+        
+        <Can permission="create_traites">
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileChange} />
+        </Can>
+      </div>
+      
       {error && <div className="error-message">{error}</div>}
       {loading ? (
         <div>Chargement...</div>

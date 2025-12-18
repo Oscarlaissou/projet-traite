@@ -106,13 +106,36 @@ const TraiteDetailPage = () => {
     setShowAcceptanceModal(true)
   }
 
-  const handleAcceptanceSubmit = () => {
+  const handleAcceptanceSubmit = async () => {
     if (!item) return
     
     // Validation des champs requis
     if (!acceptanceData.branche_code || !acceptanceData.credit) {
       alert('Veuillez remplir tous les champs obligatoires')
       return
+    }
+
+    try {
+      // Envoyer la décision à l'API pour la sauvegarder dans la base de données
+      const response = await axios.patch(`/api/traites/${item.id}/decision`, {
+        decision: acceptanceData.decision
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (response.status === 200) {
+        console.log('Décision enregistrée avec succès dans la base de données')
+        
+        // Mettre à jour l'item local avec la nouvelle décision
+        setItem(prevItem => ({
+          ...prevItem,
+          decision: acceptanceData.decision
+        }))
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'enregistrement de la décision:', error)
+      alert('Erreur lors de l\'enregistrement de la décision dans la base de données')
+      // On continue malgré l'erreur pour permettre l'impression
     }
 
     // Construire l'URL avec les paramètres
@@ -411,6 +434,7 @@ const TraiteDetailPage = () => {
               <Detail label="RIB" value={item?.rib} />
               <Detail label="Motif" value={item?.motif} />
               <Detail label="Origine traite" value={item?.origine_traite || "Interne"} />
+              <Detail label="Décision" value={item?.decision} />
               <Detail label="Commentaires" value={item?.commentaires} />
             </div>
 

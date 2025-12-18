@@ -647,12 +647,12 @@ const DashboardStats = () => {
             <div style={{ padding: '1rem' }}><h3 style={{ margin: 0, color: '#1a365d' }}>Repartition par Type</h3></div>
             <div className="chart-container">
               {loadingClients ? <Loader2 size={20} className="loading-spinner" /> : (clientTypeTotal > 0) ? (
-                <ResponsiveContainer width="100%" height={450}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie 
                       data={clientTypeData} 
                       cx="50%" 
-                      cy="45%" 
+                      cy="50%" 
                       innerRadius={50} 
                       outerRadius={120} 
                       paddingAngle={1} 
@@ -668,7 +668,7 @@ const DashboardStats = () => {
                           onClick={() => {
                             // Naviguer vers la grille des clients avec un filtre par type
                             const typeName = entry.name;
-                            if (typeName === 'Client' || typeName === 'Fournisseur') {
+                            if (typeName === 'Client' || typeName === 'Fournisseur' || typeName === 'Salariés') {
                               navigate(`/dashboard?tab=credit&view=GestionClients&type_tiers=${encodeURIComponent(typeName)}`);
                             }
                           }}
@@ -689,7 +689,7 @@ const DashboardStats = () => {
                           onClick={() => {
                             // Naviguer vers la grille des clients avec un filtre par type
                             const typeName = entry.value;
-                            if (typeName === 'Client' || typeName === 'Fournisseur') {
+                            if (typeName === 'Client' || typeName === 'Fournisseur' || typeName === 'Salariés') {
                               navigate(`/dashboard?tab=credit&view=GestionClients&type_tiers=${encodeURIComponent(typeName)}`);
                             }
                           }}
@@ -703,6 +703,7 @@ const DashboardStats = () => {
               ) : <div className="no-data">Aucune donnée à afficher</div>}
             </div>
           </div>
+
         </div>
       </Can>
     </div>

@@ -313,9 +313,9 @@
         <div class="below-table">
             <div class="below-col-1"></div>
             <div class="below-col-2"></div>
-            <div class="below-col-3">{{ $current_date ?? '' }}</div>
+            <div class="below-col-3" style="padding-top: 18px;">{{ $current_date ?? '' }}</div>
             <div class="below-col-4">
-                <div class="info-item-label">{{ $branch_department ?: '' }}</div>
+                <div class="info-item-label" style="padding-top: 18px;">{{ $branch_department ?: '' }}</div>
             </div>
         </div>
 

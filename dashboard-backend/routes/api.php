@@ -71,6 +71,7 @@ Route::get('/traites/{traite}', [TraitesController::class, 'show']);
 Route::put('/traites/{traite}', [TraitesController::class, 'update'])->middleware('auth:sanctum');
 Route::delete('/traites/{traite}', [TraitesController::class, 'destroy'])->middleware('auth:sanctum');
 Route::patch('/traites/{traite}/statut', [TraitesController::class, 'updateStatus'])->middleware('auth:sanctum');
+Route::patch('/traites/{traite}/decision', [TraitesController::class, 'updateDecision'])->middleware('auth:sanctum');
 
 // --- CORRECTION ICI : Ajout du middleware auth:sanctum ---
 Route::prefix('clients')->group(function () {
