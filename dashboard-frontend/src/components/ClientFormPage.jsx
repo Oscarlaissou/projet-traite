@@ -491,3 +491,48 @@ const ClientFormPage = () => {
 }
 
 export default ClientFormPage
+
+// Add responsive styles for the client form page
+const style = document.createElement('style')
+style.textContent = `
+  @media (max-width: 768px) {
+    .dashboard-stats form {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    .dashboard-stats form > div {
+      width: 100%;
+    }
+    
+    .search-input {
+      font-size: 16px; /* Prevent zoom on iOS */
+      padding: 10px;
+    }
+    
+    .dashboard-stats form > div:last-child {
+      flex-direction: column;
+    }
+    
+    .dashboard-stats form > div:last-child > button {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .dashboard-stats form {
+      gap: 12px;
+    }
+    
+    .search-input {
+      padding: 8px;
+      font-size: 14px;
+    }
+    
+    .dashboard-stats h2.stats-title {
+      font-size: 18px;
+    }
+  }
+`
+document.head.appendChild(style)

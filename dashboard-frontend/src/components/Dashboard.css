@@ -39,7 +39,7 @@
 /* Compact paddings for 1366x768 screens */
 @media (max-width: 1400px) {
   .dashboard-container {
-    padding: 0;
+    padding: 10px;
   }
   .content-area {
     padding: 0 12px 12px 12px;
@@ -48,7 +48,7 @@
 
 @media (max-width: 992px) {
   .dashboard-container {
-    padding: 0;
+    padding: 10px;
   }
   .content-area {
     padding: 0 16px 16px 16px;
@@ -57,10 +57,10 @@
 
 @media (max-width: 768px) {
   .dashboard-container {
-    padding: 0;
+    padding: 10px;
   }
   .dashboard-wrapper {
-    border-radius: 0;
+    border-radius: 10px;
   }
   .content-area {
     padding: 0 12px 12px 12px;
@@ -69,7 +69,7 @@
 
 @media (max-width: 600px) {
   .dashboard-container {
-    padding: 0;
+    padding: 8px;
   }
   .content-area {
     padding: 0 10px 10px 10px;

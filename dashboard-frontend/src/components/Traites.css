@@ -166,7 +166,7 @@
   .dashboard-stats.two-frames {
     padding: 8px;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: auto;
   }
   
   .dashboard-stats.two-frames h2 {
@@ -229,7 +229,7 @@
     padding: 8px;
     max-width: 100%;
     box-sizing: border-box;
-    overflow-x: hidden;
+    overflow-x: auto;
   }
   
   .notif-section-title {
@@ -240,11 +240,11 @@
   .detail-card {
     padding: 8px;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: auto;
   }
   
   .detail-card > div {
-    overflow-x: hidden;
+    overflow-x: auto;
     max-width: 100%;
   }
   
@@ -253,20 +253,38 @@
   .detail-card,
   .notification-frame {
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: auto;
   }
   
-  /* Styles plus agressifs pour éviter les débordements */
-  * {
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+  /* Improve search/filter controls stacking */
+  .dashboard-stats > div:first-child {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
   }
   
-  .dashboard-stats *,
-  .detail-card *,
-  .notification-frame * {
-    max-width: 100% !important;
-    overflow-x: hidden !important;
+  .dashboard-stats > div:first-child > div {
+    width: 100%;
+  }
+  
+  .dashboard-stats .search-input {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  select.search-input {
+    width: 100%;
+  }
+  
+  .dashboard-stats > div:first-child > div:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .dashboard-stats > div:first-child > div:last-child > button {
+    flex: 1;
+    min-width: 120px;
   }
 }
 
@@ -317,6 +335,22 @@
   .table-basic th:nth-child(6),
   .table-basic td:nth-child(6) {
     display: none;
+  }
+  
+  /* Further improve button layout on small screens */
+  .dashboard-stats > div:first-child > div:last-child {
+    flex-direction: column;
+  }
+  
+  .dashboard-stats > div:first-child > div:last-child > button {
+    width: 100%;
+    margin-bottom: 0.25rem;
+  }
+  
+  /* Improve form controls */
+  .search-input, select.search-input {
+    font-size: 16px; /* Prevent zoom on iOS */
+    padding: 0.5rem;
   }
 }
 
@@ -383,6 +417,46 @@
   }
   .page-button {
     padding: 4px 8px;
+  }
+  
+  /* Further improve button layout on small screens */
+  .dashboard-stats > div:first-child > div:last-child {
+    flex-direction: column;
+  }
+  
+  .dashboard-stats > div:first-child > div:last-child > button {
+    width: 100%;
+    margin-bottom: 0.25rem;
+  }
+  
+  /* Improve form controls */
+  .search-input, select.search-input {
+    font-size: 16px; /* Prevent zoom on iOS */
+    padding: 0.5rem;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 400px) {
+  /* Client grid improvements for extra small screens */
+  .table-basic {
+    min-width: 400px;
+    font-size: 11px;
+  }
+  
+  .table-basic th,
+  .table-basic td {
+    padding: 4px 2px;
+  }
+  
+  /* Make sure filter controls don't overflow */
+  .dashboard-stats .search-input {
+    font-size: 13px;
+    padding: 6px;
+  }
+  
+  select.search-input {
+    padding: 6px;
   }
 }
 

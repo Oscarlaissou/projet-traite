@@ -88,7 +88,7 @@ const ClientDetailPage = () => {
         <span className="crumb-current">Détail du compte client</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 2.2fr', gap: 16, height: 'calc(100vh - 120px)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 2.2fr', gap: 16, height: 'calc(100vh - 120px)' }} className="client-detail-layout">
         <div style={{
           backgroundImage: `url(${MonImage})`,
           backgroundSize: 'contain',
@@ -153,3 +153,63 @@ const Detail = ({ label, value }) => (
 )
 
 export default ClientDetailPage
+
+// Add responsive styles for the client detail page
+const style = document.createElement('style')
+style.textContent = `
+  @media (max-width: 768px) {
+    .client-detail-layout {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      height: auto !important;
+    }
+    
+    .client-detail-layout > div:first-child {
+      min-height: 200px;
+      background-size: contain !important;
+    }
+    
+    .detail-card {
+      padding: 12px;
+    }
+    
+    .detail-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    
+    .detail-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    
+    .detail-actions > button {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .client-detail-layout {
+      gap: 8px;
+    }
+    
+    .detail-card {
+      padding: 8px;
+    }
+    
+    .detail-grid {
+      gap: 8px;
+    }
+    
+    .detail-label {
+      font-size: 11px;
+    }
+    
+    .detail-value {
+      font-size: 13px;
+      padding: 8px;
+    }
+  }
+`
+document.head.appendChild(style)

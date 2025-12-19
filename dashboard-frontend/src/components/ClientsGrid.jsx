@@ -20,7 +20,8 @@ const Columns = [
 
 const DEFAULT_CATEGORIES = [
   "Client",
-  "Fournisseur"
+  "Fournisseur",
+  "Salariés"
 ]
 
 const ClientsGrid = () => {

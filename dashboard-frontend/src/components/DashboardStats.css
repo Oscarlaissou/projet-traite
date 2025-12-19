@@ -161,3 +161,59 @@
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 }
+
+/* Additional responsive improvements for smaller screens */
+@media (max-width: 576px) {
+  .dashboard-stats {
+    padding: 0.5rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .stat-card {
+    padding: 0.75rem;
+    min-height: 60px;
+  }
+  
+  .card-icon-container {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .card-title {
+    font-size: 0.7rem;
+  }
+  
+  .card-value {
+    font-size: 1.1rem;
+  }
+  
+  .stats-title {
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 400px) {
+  .stat-card {
+    padding: 0.5rem;
+    min-height: 50px;
+  }
+  
+  .card-icon-container {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .card-title {
+    font-size: 0.65rem;
+  }
+  
+  .card-value {
+    font-size: 1rem;
+  }
+}

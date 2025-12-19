@@ -125,7 +125,7 @@ const ClientEditForm = ({ client, onSave, onCancel }) => {
     "Administration Privée",
   ];
 
-  const TYPE_TIERS = ["Client", "Fournisseur"];
+  const TYPE_TIERS = ["Client", "Fournisseur", "Salariés"];
 
   const handleChange = (field) => (e) => {
     setFormData({
@@ -825,3 +825,138 @@ const PendingClientsGrid = () => {
 }
 
 export default PendingClientsGrid
+
+// Add responsive styles for the pending clients grid
+const style = document.createElement('style')
+style.textContent = `
+  @media (max-width: 768px) {
+    .dashboard-stats form {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    .dashboard-stats form > div {
+      width: 100%;
+    }
+    
+    .search-input {
+      font-size: 16px; /* Prevent zoom on iOS */
+      padding: 10px;
+    }
+    
+    .dashboard-stats > div:first-child {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+    
+    .dashboard-stats > div:first-child > div {
+      width: 100%;
+    }
+    
+    .dashboard-stats .search-input {
+      min-width: auto;
+      width: 100%;
+    }
+    
+    select.search-input {
+      width: 100%;
+    }
+    
+    .dashboard-stats > div:first-child > div:last-child {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    
+    .dashboard-stats > div:first-child > div:last-child > button {
+      flex: 1;
+      min-width: 120px;
+    }
+    
+    /* Table responsive */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .table-basic {
+      min-width: 600px;
+      font-size: 13px;
+    }
+    
+    .table-basic th,
+    .table-basic td {
+      padding: 8px 6px;
+      white-space: nowrap;
+    }
+    
+    /* Status badges responsive */
+    .status-badge {
+      font-size: 11px;
+      padding: 2px 6px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .dashboard-stats > div:first-child > div:last-child {
+      flex-direction: column;
+    }
+    
+    .dashboard-stats > div:first-child > div:last-child > button {
+      width: 100%;
+      margin-bottom: 0.25rem;
+    }
+    
+    .search-input, select.search-input {
+      font-size: 16px; /* Prevent zoom on iOS */
+      padding: 0.5rem;
+    }
+    
+    /* Table responsive */
+    .table-basic {
+      min-width: 500px;
+      font-size: 12px;
+    }
+    
+    .table-basic th,
+    .table-basic td {
+      padding: 6px 4px;
+    }
+    
+    /* Hide some columns on very small screens */
+    .table-basic th:nth-child(6),
+    .table-basic td:nth-child(6) {
+      display: none;
+    }
+    
+    .dashboard-stats h2.stats-title {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+  }
+  
+  @media (max-width: 400px) {
+    /* Client grid improvements for extra small screens */
+    .table-basic {
+      min-width: 400px;
+      font-size: 11px;
+    }
+    
+    .table-basic th,
+    .table-basic td {
+      padding: 4px 2px;
+    }
+    
+    /* Make sure filter controls don't overflow */
+    .dashboard-stats .search-input {
+      font-size: 13px;
+      padding: 6px;
+    }
+    
+    select.search-input {
+      padding: 6px;
+    }
+  }
+`
+document.head.appendChild(style)
