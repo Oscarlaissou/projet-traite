@@ -729,7 +729,7 @@ class TraitesController extends Controller
             'montant' => ['required','numeric','min:0'],
             'nom_raison_sociale' => ['required','string','max:255'],
             'domiciliation_bancaire' => ['nullable','string','max:255'],
-            'rib' => ['nullable','string','max:50'],
+            'rib' => ['nullable','string','max:50', 'regex:/^[0-9\s-]+$/'],
             'motif' => ['nullable','string','max:500'],
             'origine_traite' => ['nullable','string','max:100'],
             'commentaires' => ['nullable','string','max:1000'],

@@ -270,6 +270,13 @@ const EditRejectedClient = () => {
         ...prev,
         [name]: parseCurrency(value)
       }));
+    } else if (name === 'telephone') {
+      // Only allow digits for telephone field
+      const phoneValue = value.replace(/[^0-9]/g, '');
+      setClientData(prev => ({
+        ...prev,
+        [name]: phoneValue
+      }));
     } else {
       setClientData(prev => ({
         ...prev,

@@ -128,10 +128,19 @@ const ClientEditForm = ({ client, onSave, onCancel }) => {
   const TYPE_TIERS = ["Client", "Fournisseur", "Salariés"];
 
   const handleChange = (field) => (e) => {
-    setFormData({
-      ...formData,
-      [field]: e.target.value
-    });
+    if (field === 'telephone') {
+      // Only allow digits for telephone field
+      const phoneValue = e.target.value.replace(/[^0-9]/g, '');
+      setFormData({
+        ...formData,
+        [field]: phoneValue
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [field]: e.target.value
+      });
+    }
   };
 
   const handleSubmit = (e) => {

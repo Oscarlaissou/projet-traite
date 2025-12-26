@@ -392,7 +392,16 @@ const ClientFormPage = () => {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label>Téléphone *</label>
-          <input value={telephone} onChange={(e) => setTelephone(e.target.value)} className="search-input" required />
+          <input 
+            value={telephone} 
+            onChange={(e) => {
+              // Only allow digits
+              const value = e.target.value.replace(/[^0-9]/g, '');
+              setTelephone(value);
+            }} 
+            className="search-input" 
+            required 
+          />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label>Email *</label>

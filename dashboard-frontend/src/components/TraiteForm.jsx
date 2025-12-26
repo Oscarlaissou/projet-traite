@@ -82,7 +82,14 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       })
       return
     }
-    setForm((f) => ({ ...f, [name]: value }))
+    
+    if (name === 'rib') {
+      // Allow digits, spaces, and hyphens for RIB field
+      const ribValue = value.replace(/[^0-9\s-]/g, '');
+      setForm((f) => ({ ...f, [name]: ribValue }));
+    } else {
+      setForm((f) => ({ ...f, [name]: value }));
+    }
     
     // Effacer l'erreur lorsque l'utilisateur modifie un champ
     if (error) {
