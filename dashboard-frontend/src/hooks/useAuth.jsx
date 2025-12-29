@@ -1,24 +1,13 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Créer le contexte
 const AuthContext = createContext();
 
-// Hook personnalisé
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
-};
-
-// Provider
 export const AuthProvider = ({ children }) => {
     const [authState, setAuthState] = useState({
         isAuthenticated: false,
         user: null,
-        permissions: [], // Ajout d'un champ séparé pour les permissions
+        permissions: [],
         token: localStorage.getItem('token'),
         organization: {
             name: 'CFAO MOBILITY CAMEROON',
@@ -64,16 +53,39 @@ export const AuthProvider = ({ children }) => {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setAuthState(prev => ({
-                    ...prev,
-                    isAuthenticated: true,
-                    user: data.user,
-                    permissions: data.permissions || [], // Stocker les permissions séparément
-                    token: token,
-                }));
+                const userData = await response.json();
+                // Charger les permissions de l'utilisateur
+                const permissionsResponse = await fetch(`${baseUrl}/api/user/${userData.id}/permissions`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                    },
+                });
+                
+                if (permissionsResponse.ok) {
+                    const permissionsData = await permissionsResponse.json();
+                    const permissions = permissionsData.permissions || [];
+                    
+                    localStorage.setItem('permissions', JSON.stringify(permissions));
+                    
+                    setAuthState(prev => ({
+                        ...prev,
+                        isAuthenticated: true,
+                        user: userData,
+                        permissions: permissions,
+                        token: token,
+                    }));
+                } else {
+                    // Même si les permissions échouent, l'utilisateur est authentifié
+                    setAuthState(prev => ({
+                        ...prev,
+                        isAuthenticated: true,
+                        user: userData,
+                        token: token,
+                    }));
+                }
             } else {
-                // Token invalide, déconnecter
+                // Token invalide ou expiré
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 setAuthState(prev => ({
@@ -161,18 +173,17 @@ export const AuthProvider = ({ children }) => {
                     ...prev,
                     isAuthenticated: true,
                     user: data.user,
-                    permissions: data.permissions || [], // Stocker les permissions séparément
+                    permissions: data.permissions || [],
                     token: data.token,
-                    isLoading: false,
                 }));
-
+                
                 return { success: true };
             } else {
                 throw new Error(data.message || 'Erreur de connexion');
             }
         } catch (error) {
-            return { 
-                success: false, 
+            return {
+                success: false,
                 message: error.message 
             };
         }
@@ -245,6 +256,17 @@ export const AuthProvider = ({ children }) => {
         }));
     };
 
+    // Fonction utilitaire pour gérer les erreurs de fetch
+    const handleFetchError = async (response) => {
+        if (response.status === 401) {
+            // Token expiré ou invalide, déconnecter l'utilisateur
+            console.warn('Token expiré ou invalide, déconnexion automatique...');
+            await logout();
+            return false; // Indiquer que la requête a échoué à cause d'une authentification
+        }
+        return true; // La requête peut continuer normalement
+    };
+
     const value = {
         ...authState,
         login,
@@ -252,6 +274,7 @@ export const AuthProvider = ({ children }) => {
         hasPermission,
         hasAnyPermission,
         updateOrganizationSettings,
+        handleFetchError, // Ajouter la fonction pour gérer les erreurs de fetch
     };
 
     return (
@@ -259,4 +282,12 @@ export const AuthProvider = ({ children }) => {
             {children}
         </AuthContext.Provider>
     );
+};
+
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
 };

@@ -7,10 +7,10 @@ import * as XLSX from 'xlsx'
 import { useAuth } from "../hooks/useAuth" // Importer le hook d'authentification
 
 const ClientsHistoriquePage = () => {
-  const { hasPermission } = useAuth() // Utiliser le hook d'authentification
+  const { hasPermission, handleFetchError } = useAuth() // Utiliser le hook d'authentification avec handleFetchError
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || "", [])
   const [mode, setMode] = useState("client") // 'client' | 'mois'
-  const [rows, setRows] = useState([])
+  const [activities, setActivities] = useState([]) // Ajouter l'état pour les activités
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
@@ -84,22 +84,21 @@ const ClientsHistoriquePage = () => {
         headers: { Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` }
       })
       
+      // Vérifier si la réponse indique une erreur d'authentification
+      const authOk = await handleFetchError(res);
+      if (!authOk) {
+        // handleFetchError a déjà géré la déconnexion
+        return;
+      }
+
       // Améliorer la gestion des erreurs
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const errorMessage = errorData.message || `Erreur ${res.status}: ${res.statusText}`;
-        throw new Error(errorMessage);
+        throw new Error(errorData.message || `Erreur ${res.status}: Impossible de charger l'historique`)
       }
       
       const data = await res.json()
-      const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
-      const sorted = arr.slice().sort((a, b) => {
-        const da = a && a.date ? new Date(a.date).getTime() : 0
-        const db = b && b.date ? new Date(b.date).getTime() : 0
-        return db - da
-      })
-      setRows(sorted)
-      setPage(1)
+      setActivities(data.data || data || [])
     } catch (e) {
       console.error('Erreur lors du chargement de l\'historique:', e);
       setError(e.message || "Erreur inconnue lors du chargement de l'historique")
@@ -134,66 +133,38 @@ const ClientsHistoriquePage = () => {
         headers: { Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` }
       })
       
+      // Vérifier si la réponse indique une erreur d'authentification
+      const authOk = await handleFetchError(res);
+      if (!authOk) {
+        // handleFetchError a déjà géré la déconnexion
+        return;
+      }
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const errorMessage = errorData.message || `Erreur ${res.status}: ${res.statusText}`;
-        throw new Error(errorMessage);
+        throw new Error(errorData.message || `Erreur ${res.status}: Impossible d'exporter`)
       }
       
-      const data = await res.json()
-      const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
-      
-      // Trier TOUTES les données par date descendante (du plus récent au plus ancien)
-      // Tous types d'actions confondus (création et modification)
-      const sortedData = arr.slice().sort((a, b) => {
-        const da = a && a.date ? new Date(a.date).getTime() : 0
-        const db = b && b.date ? new Date(b.date).getTime() : 0
-        return db - da // Tri descendant - les plus récentes en premier
-      })
-      
-      // Préparer les données pour Excel
-      const worksheetData = sortedData.map(item => ({
-        'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
-        'Numéro de compte': item.numero_compte || '',
-        'Nom/Raison sociale': item.nom_raison_sociale || '',
-        'Action': item.action || '',
-        'Utilisateur': item.username + (item.original_creator && item.username !== item.original_creator ? ` (Initialement par: ${item.original_creator})` : ''),
-        'Détails': item.action === 'Modification' ? formatChangesForCSV(item.changes) : '',
-        'Type': item.is_summary_row ? 'Récapitulatif' : 'Détail'
-      }));
-      
-      // Créer la feuille de calcul Excel
-      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-      
-      // Ajuster la largeur des colonnes
-      const colWidths = [
-        { wch: 15 }, // Date
-        { wch: 20 }, // Numéro de compte
-        { wch: 25 }, // Nom/Raison sociale
-        { wch: 15 }, // Action
-        { wch: 30 }, // Utilisateur
-        { wch: 40 }, // Détails
-        { wch: 15 }  // Type
-      ];
-      worksheet['!cols'] = colWidths;
-      
-      // Créer le classeur Excel
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Historique Clients");
-      
-      // Générer le fichier Excel et le télécharger
-      const fileName = `historique_clients_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `export_historique_${mode}_${date}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (e) {
-      console.error('Erreur lors de l\'exportation de l\'historique:', e);
-      alert(e.message || "Erreur inconnue lors de l'exportation de l'historique");
+      console.error('Erreur lors de l\'export:', e);
+      setError(e.message || "Erreur lors de l'export");
     }
   }
 
   const filteredRows = React.useMemo(() => {
     const q = globalQuery.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter(item => {
+    if (!q) return activities
+    return activities.filter(item => {
       const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
       const fields = [
         dateStr,
@@ -203,7 +174,7 @@ const ClientsHistoriquePage = () => {
       ].join(' ')
       return fields.toLowerCase().includes(q)
     })
-  }, [rows, globalQuery])
+  }, [activities, globalQuery])
 
   useEffect(() => {
     setPage(1)
@@ -284,7 +255,7 @@ const ClientsHistoriquePage = () => {
           </>
         )}
         <button className="submit-button" onClick={fetchData}><SearchIcon size={16} style={{ marginRight: 6 }} /> Rechercher</button>
-        <button className="submit-button" onClick={handleExport} disabled={!rows.length}><Download size={16} style={{ marginRight: 6 }} /> Exporter Excel</button>
+        <button className="submit-button" onClick={handleExport} disabled={!activities.length}><Download size={16} style={{ marginRight: 6 }} /> Exporter Excel</button>
       </div>
       {/* <div style={{ marginBottom: 12 }}>
         <input
@@ -354,7 +325,7 @@ const ClientsHistoriquePage = () => {
                 
                 return filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ padding: 16, textAlign: "center", color: "#6b7280" }}>
+                    <td colSpan={6} style={{ padding: 16, textAlign: "center", color: "#6b7280" }}>
                       Aucun enregistrement pour les critères sélectionnés.
                     </td>
                   </tr>

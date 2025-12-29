@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle, XCircle, Clock, Filter, RefreshCw } from "lucide-react"
 import "./Traites.css" 
-import { useAuth } from "../hooks/useAuth"
+import { useAuth } from '../hooks/useAuth'
 // Import Pagination component
 import Pagination from "./Pagination"
 
@@ -18,6 +18,7 @@ const ClientApprovalHistory = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(5) // 5 items per page as requested
 
+  const { handleFetchError } = useAuth(); // Récupérer la fonction handleFetchError
   const authHeaders = () => {
     const token = localStorage.getItem('token')
     const headers = { 'Accept': 'application/json' }
@@ -33,7 +34,10 @@ const ClientApprovalHistory = () => {
         headers: authHeaders()
       })
       
-      if (res.status === 401) {
+      // Vérifier si la réponse indique une erreur d'authentification
+      const authOk = await handleFetchError(res);
+      if (!authOk) {
+        // handleFetchError a déjà géré la déconnexion
         throw new Error("Session expirée. Veuillez vous reconnecter.")
       }
 

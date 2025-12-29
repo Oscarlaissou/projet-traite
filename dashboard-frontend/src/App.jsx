@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import PageLoader from './components/BrandedLoader';
 import TraiteDetailPage from './components/TraiteDetailPage';
 import ClientFormPage from './components/ClientFormPage';
+import SessionTimeout from './components/SessionTimeout';
 
 // AJOUTS : import des composants clients
 import ClientsGrid from './components/ClientsGrid';
@@ -199,6 +200,7 @@ function App() {
     return (
         <Router>
             <AuthProvider>
+                <SessionTimeout />
                 <AppRoutes />
             </AuthProvider>
         </Router>
