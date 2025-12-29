@@ -216,7 +216,7 @@ const Sidebar = ({ activeMenuItem, activeSubItem, setActiveMenuItem, setActiveSu
                   <span className="nav-icon">
                     <Edit size={16} />
                   </span>
-                  <span className="nav-text">Edition</span>
+                  <span className="nav-text">Modification</span>
                 </button>
                 <Can permission="manage_pending_clients">
                   <button className={`nav-subitem ${activeSubItem === "Historique" ? "active" : ""}`} onClick={() => { 

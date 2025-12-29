@@ -286,7 +286,7 @@
             <thead>
                 <tr>
                     <th style="width: 15%;">N° Ordre</th>
-                    <th style="width: 25%;">Traite</th>
+                    <th style="width: 25%;">N° Traite</th>
                     <th style="width: 25%;">Échéance</th>
                     <th style="width: 35%;">Montants</th>
                 </tr>
@@ -315,12 +315,13 @@
             <div class="below-col-2"></div>
             <div class="below-col-3" style="padding-top: 18px;">{{ $current_date ?? '' }}</div>
             <div class="below-col-4">
-                <div class="info-item-label" style="padding-top: 18px;">{{ $branch_department ?: '' }}</div>
             </div>
         </div>
-
-        <!-- Section comptable -->
+<!-- Section comptable -->
         <div class="journal-entry">
+            <div style="text-align: left; margin-bottom: 15px; padding-left: 40px;">
+                <span style=" font-weight: 500; font-size: 16px;">{{ $branch_department ?? '' }}</span>
+            </div>
             <div class="accounting-container">
                 <div class="accounting-left">
                     <div class="accounting-line">
@@ -339,12 +340,10 @@
                     {{ $montant_formatted ?? '' }}
                 </div>
             </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <span style=" font-weight: 500; font-size: 16px;">Agios au {{ $agos_type ?? '' }}</span>
+            </div>
         </div>
-
-        <div class="agos-note">
-            Agios au {{ $agos_type ?? '' }}
-        </div>
-
         <!-- Pied de page -->
         <div class="footer-section">
             <div class="footer-title">

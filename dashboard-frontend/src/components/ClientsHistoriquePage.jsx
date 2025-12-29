@@ -145,16 +145,30 @@ const ClientsHistoriquePage = () => {
         throw new Error(errorData.message || `Erreur ${res.status}: Impossible d'exporter`)
       }
       
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const date = new Date().toISOString().slice(0, 10);
-      a.download = `export_historique_${mode}_${date}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Récupérer les données JSON au lieu d'un blob
+      const data = await res.json();
+      const exportData = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      
+      // Les données sont déjà triées côté backend du plus récent au plus ancien
+      const worksheetData = exportData.map(item => ({
+        'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
+        'Nom/Raison sociale': item.nom_raison_sociale || '',
+        'Numéro Compte': item.numero_compte || '',
+        'Action': item.action || '',
+        'Utilisateur': item.username || item.user_name || item.user_email || '',
+        'Détails': item.changes ? formatChangesForCSV(item.changes) : '-'
+      }));
+
+      // Créer la feuille de calcul Excel
+      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+      
+      // Créer le classeur Excel
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Historique Clients");
+      
+      // Générer le fichier Excel et le télécharger
+      const fileName = `Historique_Clients_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
     } catch (e) {
       console.error('Erreur lors de l\'export:', e);
       setError(e.message || "Erreur lors de l'export");
@@ -344,7 +358,7 @@ const ClientsHistoriquePage = () => {
                       )}
                     </td>
                     <td style={{ fontSize: '0.85em', maxWidth: '300px' }}>
-                      {r.action === 'Modification' ? formatChanges(r.changes) : '-'}
+                      {r.changes ? formatChanges(r.changes) : '-'}
                     </td>
                   </tr>
                 ))})()}

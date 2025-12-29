@@ -9,6 +9,17 @@ import "./Traites.css"
 // Ajout de la bibliothèque XLSX pour l'export Excel
 import * as XLSX from 'xlsx'
 
+// Helper function to format dates
+const formatDateDDMMYYYY = (value) => {
+  if (!value) return ''
+  const d = new Date(value)
+  if (isNaN(d)) return value
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  return `${dd}-${mm}-${yyyy}`
+}
+
 const Columns = [
   { key: "numero_compte", label: "Numéro de compte" },
   { key: "nom_raison_sociale", label: "Nom / Raison sociale" },
@@ -20,8 +31,7 @@ const Columns = [
 
 const DEFAULT_CATEGORIES = [
   "Client",
-  "Fournisseur",
-  "Salariés"
+  "Fournisseur"
 ]
 
 const ClientsGrid = () => {
@@ -157,27 +167,47 @@ const ClientsGrid = () => {
         params.append("type_tiers", selectedTypeTiers)
       }
 
-      const response = await fetch(`${apiBaseUrl}/api/tiers?${params.toString()}`, {
+      const response = await fetch(`${apiBaseUrl}/api/tiers/export-with-details?${params.toString()}`, {
         headers: getApiHeaders(),
       })
 
       if (!response.ok) {
-        throw new Error("Export Excel impossible pour le moment")
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`Export Excel impossible pour le moment (Status: ${response.status})`)
       }
 
       const payload = await response.json()
       const data = payload?.data ?? []
       
+      // Export all fields from the details, not just grid columns
+      const allFieldHeaders = [
+        'id', 'numero_compte', 'nom_raison_sociale', 'bp', 'ville', 'pays', 
+        'adresse_geo_1', 'adresse_geo_2', 'telephone', 'email', 'categorie', 
+        'n_contribuable', 'type_tiers', 'date_creation', 'montant_facture', 
+        'montant_paye', 'credit', 'motif', 'etablissement', 'service', 
+        'nom_signataire'
+      ];
+      
       const worksheet = XLSX.utils.json_to_sheet(data.map(row => {
-        const formattedRow = {}
-        Columns.forEach(col => {
-          formattedRow[col.label] = row[col.key] ?? ""
-        })
-        return formattedRow
-      }))
+        const formattedRow = {};
+        allFieldHeaders.forEach(field => {
+          let value = row[field];
+          
+          if (field === 'date_creation') {
+            value = formatDateDDMMYYYY(value);
+          } else if (['montant_facture', 'montant_paye', 'credit'].includes(field)) {
+            value = Number(value || 0);
+          } else {
+            value = value ?? '';
+          }
+          formattedRow[field] = value;
+        });
+        return formattedRow;
+      }));
 
-      const colWidths = Columns.map(col => ({
-        wch: Math.max(col.label.length, ...data.map(row => String(row[col.key] ?? "").length))
+      const colWidths = allFieldHeaders.map(field => ({
+        wch: Math.max(field.length, ...data.map(row => String(row[field] ?? "").length))
       }))
       worksheet['!cols'] = colWidths
 

@@ -730,7 +730,7 @@ class TiersController extends Controller
                 'HGP' => 'Sté Privées Hors Grp',
                 'ADM' => 'Administration',
                 'COL LOC' => 'Collectivité locale',
-                'ONG' => 'Administration Privée',
+                'ONG' => 'Société de financement',
                 'IND' => 'Individuel',
                 'PG' => 'Personnel Groupe'
             ];
@@ -919,7 +919,7 @@ class TiersController extends Controller
                 'HGP' => 'Sté Privées Hors Grp',
                 'ADM' => 'Administration',
                 'COL LOC' => 'Collectivité locale',
-                'ONG' => 'Administration Privée',
+                'ONG' => 'Société de financement',
                 'IND' => 'Individuel',
                 'PG' => 'Personnel Groupe'
             ];
@@ -1169,7 +1169,7 @@ class TiersController extends Controller
                     $date = $firstActivity->created_at->toDateTimeString();
                 } else {
                     // Utiliser la date de création du client si disponible
-                    $latestDate = $tier->created_at ? $tier->created_at->toDateTimeString() : now()->toDateTimeString();
+                    $date = $t->created_at ? $t->created_at->toDateTimeString() : now()->toDateTimeString();
                 }
             }
             
@@ -1335,6 +1335,134 @@ class TiersController extends Controller
         })->values();
 
         return response()->json($sortedActivities, 200, [], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Export complet des clients - Retourne tous les clients avec les informations de demande d'ouverture de compte et agence.
+     */
+    public function exportWithDetails(Request $request): JsonResponse
+    {
+        $query = DB::table('tiers')
+            ->select([
+                'tiers.id',
+                'tiers.numero_compte',
+                'tiers.nom_raison_sociale',
+                'tiers.bp',
+                'tiers.ville',
+                'tiers.pays',
+                'tiers.adresse_geo_1',
+                'tiers.adresse_geo_2',
+                'tiers.telephone',
+                'tiers.email',
+                'tiers.categorie',
+                'tiers.n_contribuable',
+                'tiers.type_tiers'
+            ]);
+            
+        // Add demande_ouverture_compte fields if the table exists
+        if (Schema::hasTable('demande_ouverture_compte')) {
+            $query->leftJoin('demande_ouverture_compte', 'tiers.id', '=', 'demande_ouverture_compte.id')
+                  ->addSelect([
+                    'demande_ouverture_compte.date_creation as date_creation_demande',
+                    'demande_ouverture_compte.montant_facture',
+                    'demande_ouverture_compte.montant_paye',
+                    'demande_ouverture_compte.credit',
+                    'demande_ouverture_compte.motif as demande_motif'
+                  ]);
+            
+            // Add agence fields if agence table exists and agence_id column exists
+            if (Schema::hasTable('agence') && Schema::hasColumn('demande_ouverture_compte', 'agence_id')) {
+                $query->leftJoin('agence', 'demande_ouverture_compte.agence_id', '=', 'agence.id')
+                      ->addSelect([
+                        'agence.etablissement',
+                        'agence.service',
+                        'agence.nom_signataire'
+                      ]);
+            }
+        }
+        
+        // Recherche
+
+        // Recherche
+        if ($search = trim((string) $request->get('search', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('tiers.numero_compte', 'like', "%{$search}%")
+                  ->orWhere('tiers.nom_raison_sociale', 'like', "%{$search}%")
+                  ->orWhere('tiers.bp', 'like', "%{$search}%")
+                  ->orWhere('tiers.ville', 'like', "%{$search}%")
+                  ->orWhere('tiers.pays', 'like', "%{$search}%")
+                  ->orWhere('tiers.categorie', 'like', "%{$search}%");
+            });
+        }
+
+        // Filtrage par type_tiers
+        $typeTiersFilter = $request->input('type_tiers');
+        if (!empty($typeTiersFilter)) {
+            $query->where('tiers.type_tiers', $typeTiersFilter);
+        }
+
+        // Tri
+        $sortRequest = (string) $request->get('sort', 'tiers.nom_raison_sociale');
+        $direction = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $allowedSorts = [
+            'numero_compte' => 'tiers.numero_compte',
+            'nom_raison_sociale' => 'tiers.nom_raison_sociale',
+            'bp' => 'tiers.bp',
+            'ville' => 'tiers.ville',
+            'pays' => 'tiers.pays',
+            'categorie' => 'tiers.categorie',
+            'type_tiers' => 'tiers.type_tiers',
+        ];
+
+        if (!array_key_exists($sortRequest, $allowedSorts)) {
+            $sortRequest = 'tiers.nom_raison_sociale';
+        }
+
+        $query->orderBy($allowedSorts[$sortRequest], $direction);
+
+        // Limiter le nombre de résultats pour l'export
+        $perPage = max(1, min((int) $request->get('per_page', 1000), 10000));
+        $results = $query->paginate($perPage);
+
+        // Traitement des résultats pour combiner les champs provenant de différentes tables
+        $collection = $results->getCollection()->map(function ($row) {
+            return [
+                'id' => $row->id,
+                'numero_compte' => $row->numero_compte,
+                'nom_raison_sociale' => $row->nom_raison_sociale,
+                'bp' => $row->bp,
+                'ville' => $row->ville,
+                'pays' => $row->pays,
+                'adresse_geo_1' => $row->adresse_geo_1,
+                'adresse_geo_2' => $row->adresse_geo_2,
+                'telephone' => $row->telephone,
+                'email' => $row->email,
+                'categorie' => $row->categorie,
+                'n_contribuable' => $row->n_contribuable,
+                'type_tiers' => $row->type_tiers,
+                // Utiliser les données de demande_ouverture_compte si disponibles
+                'date_creation' => $row->date_creation_demande,
+                'montant_facture' => $row->montant_facture,
+                'montant_paye' => $row->montant_paye,
+                'credit' => $row->credit,
+                'motif' => $row->demande_motif,
+                // Utiliser les données de agence si disponibles
+                'etablissement' => $row->etablissement,
+                'service' => $row->service,
+                'nom_signataire' => $row->nom_signataire,
+            ];
+        });
+
+        $results->setCollection($collection);
+
+        return response()->json([
+            'data' => $results->items(),
+            'current_page' => $results->currentPage(),
+            'last_page' => $results->lastPage(),
+            'per_page' => $results->perPage(),
+            'total' => $results->total(),
+        ], 200, [], JSON_UNESCAPED_UNICODE);
     }
 
     /**

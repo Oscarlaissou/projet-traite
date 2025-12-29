@@ -294,7 +294,7 @@ const TraiteDetailPage = () => {
               {/* Branche & Code département */}
               <div>
                 <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
-                  Branche & Code département <span style={{ color: '#ef4444' }}>*</span>
+                  Branche, Code département & Marque <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
@@ -315,7 +315,7 @@ const TraiteDetailPage = () => {
               {/* Crédit */}
               <div>
                 <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
-                 Compte crédit <span style={{ color: '#ef4444' }}>*</span>
+                 Compte client <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"

@@ -247,7 +247,7 @@
             <td>Administration<br><span class="checkbox">{{ $isCategory('Administration') }}</span></td>
             <td>Collectivité locale<br><span class="checkbox">{{ $isCategory('Collectivité locale') }}</span></td>
             <td>Entreprise Publique<br><span class="checkbox">{{ $isCategory('Entreprise Publique') }}</span></td>
-            <td>Administration Privée<br><span class="checkbox">{{ $isCategory('Administration Privée') }}</span></td>
+            <td>Société de financement<br><span class="checkbox">{{ $isCategory('Société de financement') }}</span></td>
         </tr>
     </table>
 

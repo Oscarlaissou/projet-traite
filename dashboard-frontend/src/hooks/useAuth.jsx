@@ -55,35 +55,35 @@ export const AuthProvider = ({ children }) => {
             if (response.ok) {
                 const userData = await response.json();
                 // Charger les permissions de l'utilisateur
-                const permissionsResponse = await fetch(`${baseUrl}/api/user/${userData.id}/permissions`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json',
-                    },
-                });
-                
-                if (permissionsResponse.ok) {
-                    const permissionsData = await permissionsResponse.json();
-                    const permissions = permissionsData.permissions || [];
+                let permissions = [];
+                if (userData && userData.id) {
+                    const permissionsResponse = await fetch(`${baseUrl}/api/user/${userData.id}/permissions`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                        },
+                    });
                     
-                    localStorage.setItem('permissions', JSON.stringify(permissions));
-                    
-                    setAuthState(prev => ({
-                        ...prev,
-                        isAuthenticated: true,
-                        user: userData,
-                        permissions: permissions,
-                        token: token,
-                    }));
+                    if (permissionsResponse.ok) {
+                        const permissionsData = await permissionsResponse.json();
+                        permissions = permissionsData.permissions || [];
+                        
+                        localStorage.setItem('permissions', JSON.stringify(permissions));
+                    }
                 } else {
-                    // Même si les permissions échouent, l'utilisateur est authentifié
-                    setAuthState(prev => ({
-                        ...prev,
-                        isAuthenticated: true,
-                        user: userData,
-                        token: token,
-                    }));
+                    // Charger les permissions depuis le stockage local si l'ID utilisateur n'est pas disponible
+                    const storedPermissions = localStorage.getItem('permissions');
+                    permissions = storedPermissions ? JSON.parse(storedPermissions) : [];
                 }
+
+                
+                setAuthState(prev => ({
+                    ...prev,
+                    isAuthenticated: true,
+                    user: userData,
+                    permissions: permissions,
+                    token: token,
+                }));
             } else {
                 // Token invalide ou expiré
                 localStorage.removeItem('token');

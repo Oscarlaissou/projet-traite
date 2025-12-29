@@ -106,12 +106,27 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
     const emptyFields = Object.entries(form).filter(([key, value]) => {
       // Skip validation for optional fields
       if (['commentaires', 'rib', 'numero'].includes(key)) return false;
+      
+      // Special handling for origine_traite: only required during creation, not during edit
+      if (key === 'origine_traite') {
+        const isEdit = Boolean(initialValue && initialValue.id);
+        // If editing and the original traite didn't have origine_traite, don't require it
+        if (isEdit && !initialValue.origine_traite) {
+          return false;
+        }
+        // Otherwise, validate normally
+      }
+      
       // For number fields, check if they are valid numbers
       if (['nombre_traites', 'montant'].includes(key)) {
         return !value || value === '';
       }
       // For other fields, check if they are not empty
-      return !value || value.trim() === '';
+      // Ensure value is a string before calling trim
+      if (value == null) return true;
+      if (typeof value === 'string') return value.trim() === '';
+      // For non-string values, convert to string and check
+      return String(value).trim() === '';
     });
     
     // Validation spécifique pour le RIB : si saisi, doit contenir au maximum 26 caractères
@@ -122,11 +137,15 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
       return;
     }
     
-    // Validation spécifique pour origine_traite : doit être sélectionnée
+    // Validation spécifique pour origine_traite : doit être sélectionnée lors de la création seulement
     if (!form.origine_traite) {
-      setError("Veuillez sélectionner une origine pour la traite.");
-      setSubmitting(false);
-      return;
+      // L'origine n'est requise que lors de la création d'une nouvelle traite
+      const isEdit = Boolean(initialValue && initialValue.id);
+      if (!isEdit) {
+        setError("Veuillez sélectionner une origine pour la traite.");
+        setSubmitting(false);
+        return;
+      }
     }
     
     if (emptyFields.length > 0) {

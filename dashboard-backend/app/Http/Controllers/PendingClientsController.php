@@ -27,7 +27,6 @@ class PendingClientsController extends Controller
         'Administration',
         'Collectivité locale',
         'Entreprise Publique',
-        'Administration Privée',
         'Société de financement', // Ajout de cette catégorie
     ];
 

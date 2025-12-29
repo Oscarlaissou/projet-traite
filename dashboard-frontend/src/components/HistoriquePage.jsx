@@ -74,35 +74,86 @@ const HistoriquePage = () => {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const handleExport = () => {
-    // Export ascendant: date (du plus ancien au plus récent)
-    const sortedData = historiqueData.slice().sort((a, b) => {
-      const da = a && a.date ? new Date(a.date).getTime() : 0
-      const db = b && b.date ? new Date(b.date).getTime() : 0
-      return da - db;
-    });
+  // Fonction pour formater les changements pour l'affichage
+  const formatChanges = (changes) => {
+    if (!changes || typeof changes !== 'object') return '-';
 
-    // Préparer les données pour Excel
-    const worksheetData = sortedData.map(item => ({
-      'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
-      'Nom/Raison sociale': item.nom_raison_sociale || '',
-      'Numéro Traite': item.numero_traite || '',
-      'Montant': Number(item.montant) || 0,
-      'Action': item.action || '',
-      'Utilisateur': item.username || item.user_name || item.user_email || '',
-      'Statut': item.statut || ''
-    }));
+    const fieldLabels = {
+      'numero': 'Numéro traite',
+      'nombre_traites': 'Nombre traites',
+      'echeance': 'Échéance',
+      'date_emission': 'Date émission',
+      'montant': 'Montant',
+      'nom_raison_sociale': 'Nom/Raison sociale',
+      'domiciliation_bancaire': 'Domiciliation bancaire',
+      'rib': 'RIB',
+      'motif': 'Motif',
+      'origine_traite': 'Origine traite',
+      'commentaires': 'Commentaires',
+      'statut': 'Statut',
+      'decision': 'Décision'
+    };
 
-    // Créer la feuille de calcul Excel
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    
-    // Créer le classeur Excel
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Historique");
-    
-    // Générer le fichier Excel et le télécharger
-    const fileName = `historique_${mode}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
+    const items = [];
+    for (const [key, value] of Object.entries(changes)) {
+      const label = fieldLabels[key] || key;
+      let oldVal = value.old || value.from || 'vide';
+      let newVal = value.new || value.to || 'vide';
+      
+      // Convertir en chaîne de caractères si ce n'est pas déjà le cas
+      oldVal = String(oldVal);
+      newVal = String(newVal);
+      
+      items.push(`${label}: ${oldVal} → ${newVal}`);
+    }
+
+    return items.length > 0 ? items.join(' | ') : '-';
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      // Appeler l'API d'export détaillé pour obtenir toutes les modifications
+      const params = new URLSearchParams()
+      params.append('type', mode)
+      if (mode === 'client' && searchClient) {
+        params.append('nom_raison_sociale', searchClient)
+      } else if (mode === 'mois' && selectedMonth) {
+        params.append('month', selectedMonth)
+      }
+
+      const res = await fetch(`${baseUrl}/api/traites/export-historique?${params.toString()}`, { headers: authHeaders() })
+      if (!res.ok) throw new Error('Erreur lors du chargement des données d\'export')
+      const data = await res.json()
+      const exportData = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+
+      // Les données sont déjà triées côté backend du plus récent au plus ancien
+      const worksheetData = exportData.map(item => ({
+        'Date': item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '',
+        'Nom/Raison sociale': item.nom_raison_sociale || '',
+        'Numéro Traite': item.numero_traite || item.numero_compte || '',
+        'Montant': Number(item.montant) || 0,
+        'Action': item.action || '',
+        'Utilisateur': item.username || item.user_name || item.user_email || '',
+        'Statut': item.statut || '',
+        'Détails': item.changes ? formatChanges(item.changes) : '-'
+      }));
+
+      // Créer la feuille de calcul Excel
+      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+      
+      // Créer le classeur Excel
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Historique");
+      
+      // Générer le fichier Excel et le télécharger
+      const fileName = `Historique_Traites${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (e) {
+      setError(e.message || 'Erreur lors de l\'export');
+    } finally {
+      setLoading(false);
+    }
   }
   
 
@@ -238,7 +289,7 @@ const HistoriquePage = () => {
                     <th>Montant</th>
                     <th>Action</th>
                     <th>Utilisateur</th>
-  
+                    <th>Détails</th>
                     <th>Statut</th>
                   </tr>
                 </thead>
@@ -248,6 +299,7 @@ const HistoriquePage = () => {
                     const filtered = q ? historiqueData.filter(item => {
                       const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
                       const user = item.username || item.user_name || item.user_email || ''
+                      const details = item.changes ? formatChanges(item.changes) : '-'
                       const fields = [
                         dateStr,
                         item.nom_raison_sociale,
@@ -255,6 +307,7 @@ const HistoriquePage = () => {
                         String(item.montant ?? ''),
                         item.action,
                         user,
+                        details,
                         item.statut,
                       ].join(' \u2002 ')
                       return fields.toLowerCase().includes(q)
@@ -269,7 +322,7 @@ const HistoriquePage = () => {
                         <td style={{ whiteSpace: 'nowrap' }}>{formatMoney(item.montant)}</td>
                         <td>{item.action }</td>
                         <td>{item.username || item.user_name || item.user_email || ''}</td>
-                       
+                        <td>{item.changes ? formatChanges(item.changes) : '-'}</td>
                         <td>
                           <span className={`status-badge ${
                             item.statut === 'Non échu' ? 'status-non-echu' :
@@ -301,7 +354,8 @@ const HistoriquePage = () => {
                       const filteredCount = (q ? historiqueData.filter(item => {
                         const dateStr = item.date ? new Date(item.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''
                         const user = item.username || item.user_name || item.user_email || ''
-                        const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, item.statut].join(' ')
+                        const details = item.changes ? formatChanges(item.changes) : '-'
+                        const fields = [dateStr, item.nom_raison_sociale, item.numero_traite, String(item.montant ?? ''), item.action, user, details, item.statut].join(' ')
                         return fields.toLowerCase().includes(q)
                       }) : historiqueData).length
                       const lastPage = Math.max(1, Math.ceil(filteredCount / perPage))

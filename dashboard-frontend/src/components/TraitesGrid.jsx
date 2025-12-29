@@ -252,6 +252,24 @@ const TraitesGrid = () => {
         return formattedItem;
       });
       
+      // Calculate total amount based on the selected status filter
+      let totalAmount = 0;
+      let printTitle = "Liste de toutes les traites";
+      
+      // Determine title based on status filter
+      if (statut) {
+        printTitle = `Liste des traites ${statut}`;
+        totalAmount = formattedItems.reduce((sum, item) => {
+          const montant = parseFloat(item['Montant'].replace(/[^0-9.-]+/g, "")) || 0;
+          return sum + montant;
+        }, 0);
+      } else {
+        totalAmount = formattedItems.reduce((sum, item) => {
+          const montant = parseFloat(item['Montant'].replace(/[^0-9.-]+/g, "")) || 0;
+          return sum + montant;
+        }, 0);
+      }
+      
       // Create professional landscape print layout with 27 items per page
       const itemsPerPage = 27;
       const totalPages = Math.ceil(formattedItems.length / itemsPerPage);
@@ -303,6 +321,22 @@ const TraitesGrid = () => {
                 font-size: 14pt;
                 font-weight: bold;
                 color: #2c3e50;
+              }
+              
+              .title-info {
+                text-align: center;
+                margin-bottom: 8px;
+                font-size: 12pt;
+                font-weight: bold;
+                color: #2c3e50;
+              }
+              
+              .total-info {
+                text-align: center;
+                margin-bottom: 8px;
+                font-size: 10pt;
+                font-weight: bold;
+                color: #27ae60;
               }
               
               .date-info {
@@ -388,8 +422,15 @@ const TraitesGrid = () => {
         const startElement = startIndex + 1;
         const endElement = endIndex;
         
+        // Calculate total amount for this page
+        let pageTotal = 0;
+        pageItems.forEach(item => {
+          const montant = parseFloat(item['Montant'].replace(/[^0-9.-]+/g, "")) || 0;
+          pageTotal += montant;
+        });
+        
         htmlContent += `
-          <div class="header">Liste des traites - Page ${pageNum + 1}/${totalPages}</div>
+          <div class="title-info">${printTitle}</div>
           <div class="date-info">Imprimé le: ${new Date().toLocaleDateString('fr-FR')}</div>
           <table>
             <thead>
@@ -407,6 +448,23 @@ const TraitesGrid = () => {
             </tr>
           `;
         });
+        
+        // Add total row at the end of each page
+        htmlContent += `
+          <tr style="font-weight: bold; background-color: #f0f0f0;">
+            <td class="col-numero"></td>
+            <td class="col-nombre_traites"></td>
+            <td class="col-echeance"></td>
+            <td class="col-date_emission"></td>
+            <td class="col-Montant">TOTAL: ${pageTotal.toLocaleString('fr-FR')} FCFA</td>
+            <td class="col-Nom\\/RS"></td>
+            <td class="col-Domiciliation"></td>
+            <td class="col-RIB"></td>
+            <td class="col-Motif"></td>
+            <td class="col-Commentaires"></td>
+            <td class="col-Statut"></td>
+          </tr>
+        `;
         
         htmlContent += `
             </tbody>
@@ -467,7 +525,7 @@ const TraitesGrid = () => {
       if (sort?.dir) params.append('dir', sort.dir)
       params.append('per_page', '1000')
 
-      const url = `${apiBaseUrl}/api/traites?${params.toString()}`
+      const url = `${apiBaseUrl}/api/traites/export-with-details?${params.toString()}`
       const res = await fetch(url, { headers: getApiHeaders() })
 
       if (!res.ok) {
@@ -477,34 +535,32 @@ const TraitesGrid = () => {
       const data = await res.json()
       const allItems = data.data || data || []
 
-      const sortedItems = allItems.slice().sort((a, b) => {
-        const an = Number(a.numero)
-        const bn = Number(b.numero)
-        if (!isNaN(an) && !isNaN(bn)) return an - bn
-        return String(a.numero).localeCompare(String(b.numero))
-      })
-
-      const headerLabels = Columns.map(c => c.label)
-
-      const dataForSheet = sortedItems.map(item => {
-        const rowData = {}
-        Columns.forEach(col => {
-          let value = item[col.key]
-          if (col.key === 'echeance' || col.key === 'date_emission') {
-            value = formatDateDDMMYYYY(value)
-          } else if (col.key === 'montant') {
-            value = Number(item[col.key] || 0)
+      // Export all fields from the details, not just grid columns
+      const allFieldHeaders = [
+        'id', 'numero', 'nombre_traites', 'echeance', 'date_emission', 'montant', 
+        'nom_raison_sociale', 'domiciliation_bancaire', 'rib', 'motif', 
+        'commentaires', 'statut', 'decision', 'origine_traite'
+      ];
+      
+      const dataForSheet = allItems.map(item => {
+        const rowData = {};
+        allFieldHeaders.forEach(field => {
+          let value = item[field];
+          if (field === 'echeance' || field === 'date_emission') {
+            value = formatDateDDMMYYYY(value);
+          } else if (field === 'montant') {
+            value = Number(item[field] || 0);
           } else {
-            value = value ?? ''
+            value = value ?? '';
           }
-          rowData[col.label] = value
-        })
-        return rowData
+          rowData[field] = value;
+        });
+        return rowData;
       })
       
-      const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerLabels })
+      const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: allFieldHeaders })
 
-      const colWidths = headerLabels.map(header => ({
+      const colWidths = allFieldHeaders.map(header => ({
         wch: Math.max(
           header.length,
           ...dataForSheet.map(row => row[header]?.toString().length ?? 0)
@@ -1048,8 +1104,7 @@ const TraitesGrid = () => {
         
         {/* Groupe de boutons principaux - reste sur la même ligne */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {/* Masquer le bouton Exporter Excel pour les gestionnaires de traites */}
-          <Can permission="view_traites" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
+          <Can permission="view_traites" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin' || user.role.name === 'traites_manager'))}>
             <button className="submit-button" onClick={exportExcel}><Download size={16} style={{ marginRight: 6 }} /> Exporter Excel</button>
           </Can>
           <Can permission="create_traites" condition={user && (user.role && (user.role.name === 'admin' || user.role.name === 'super_admin'))}>
@@ -1143,6 +1198,29 @@ const TraitesGrid = () => {
                   </tr>
                 ))}
               </tbody>
+              {/* Cacher la pagination lors de l'impression */}
+              {!isPrintingAll && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={Columns.length}>
+                      <Pagination
+                        currentPage={pagination.current_page || page}
+                        totalPages={pagination.last_page || 1}
+                        totalItems={pagination.total || 0}
+                        itemsPerPage={perPage}
+                        onPageChange={(newPage) => setPage(newPage)}
+                        onItemsPerPageChange={(newPerPage) => {
+                          setPerPage(newPerPage)
+                          setPage(1)
+                        }}
+                        itemsPerPageOptions={[10, 20, 53, 100, 200]} // Ajout de plus d'options incluant 53
+                        showItemsPerPage={true}
+                        showTotal={true}
+                      />
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           ) : (
             /* Tableau spécifique pour l'impression */
@@ -1168,30 +1246,6 @@ const TraitesGrid = () => {
                 ))}
               </tbody>
             </table>
-          )}
-          
-          {/* Cacher la pagination lors de l'impression */}
-          {!isPrintingAll && (
-            <tfoot>
-              <tr>
-                <td colSpan={Columns.length}>
-                  <Pagination
-                    currentPage={pagination.current_page || page}
-                    totalPages={pagination.last_page || 1}
-                    totalItems={pagination.total || 0}
-                    itemsPerPage={perPage}
-                    onPageChange={(newPage) => setPage(newPage)}
-                    onItemsPerPageChange={(newPerPage) => {
-                      setPerPage(newPerPage)
-                      setPage(1)
-                    }}
-                    itemsPerPageOptions={[10, 20, 53, 100, 200]} // Ajout de plus d'options incluant 53
-                    showItemsPerPage={true}
-                    showTotal={true}
-                  />
-                </td>
-              </tr>
-            </tfoot>
           )}
         </div>
       )}

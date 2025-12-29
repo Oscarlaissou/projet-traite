@@ -10,7 +10,6 @@ const CATEGORIES = [
   "Administration",
   "Collectivité locale",
   "Entreprise Publique",
-  "Administration Privée",
   "Société de financement",
 ];
 
@@ -178,7 +177,14 @@ const EditRejectedClient = () => {
       { name: 'nom_signataire', value: clientData.nom_signataire }
     ];
     
-    const emptyFields = requiredFields.filter(field => !field.value || field.value.trim() === '');
+    const emptyFields = requiredFields.filter(field => {
+      const value = field.value;
+      // Check if value is null/undefined or if it's a string that is empty or only whitespace
+      if (value == null) return true;
+      if (typeof value === 'string') return value.trim() === '';
+      // For non-string values, convert to string and check
+      return String(value).trim() === '';
+    });
     
     if (emptyFields.length > 0) {
       setError(`Veuillez remplir tous les champs obligatoires. Champs manquants: ${emptyFields.map(field => field.name).join(', ')}`);

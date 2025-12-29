@@ -76,7 +76,7 @@ const NotificationsPage = () => {
         todayArr.push(t)
         continue
       }
-      if (isNonEchuStatus(t.statut) && diff > 0 && diff < 3) {
+      if (isNonEchuStatus(t.statut) && diff > 0 && diff < 5) {
         upcoming.push(t)
       }
     }
@@ -84,7 +84,7 @@ const NotificationsPage = () => {
     todayArr.sort((a,b) => new Date(a.echeance) - new Date(b.echeance))
     return {
       sections: [
-        { key: 'upcoming', title: 'À échéance sous 3 jours', icon: <Clock size={16} color="#1f2c49" />, items: upcoming },
+        { key: 'upcoming', title: 'À échéance sous 5 jours', icon: <Clock size={16} color="#1f2c49" />, items: upcoming },
       ],
       today: todayArr,
     }
@@ -123,12 +123,12 @@ const NotificationsPage = () => {
         return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
       })()
 
-      // 2) Requête: traites Non échu sous 3 jours (y compris aujourd'hui)
+      // 2) Requête: traites Non échu sous 5 jours (y compris aujourd'hui)
       const p2 = (async () => {
         const p = new URLSearchParams()
         p.append('per_page', String(perPage))
         p.append('page', String(page))
-        p.append('upcoming_days', '3')
+        p.append('upcoming_days', '5')
         p.append('sort', 'numero')
         p.append('dir', 'desc')
         const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
@@ -482,7 +482,7 @@ const NotificationsPage = () => {
                             textOverflow: 'ellipsis',
                             maxWidth: '100%'
                           }}>
-                            Traite {it.numero} à échéance sous 3 jours
+                            Traite {it.numero} à échéance sous 5 jours
                           </div>
                         </div>
                         <div style={{ 

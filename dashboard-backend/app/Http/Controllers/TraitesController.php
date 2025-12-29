@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Barryvdh\DomPDF\Facade\Pdf;
 // Browsershot (optionnel, pour rendu navigateur pixel-perfect)
@@ -920,6 +921,9 @@ class TraitesController extends Controller
         return response()->view('traites.acceptance', $data);
     }
 
+    /**
+     * Historique des traites - Affiche uniquement la dernière activité pour l'affichage dans l'interface.
+     */
     public function historique(Request $request)
     {
         $type = $request->get('type'); // 'client' or 'mois'
@@ -954,6 +958,7 @@ class TraitesController extends Controller
             $action = $act?->action ?? 'Création';
             $user = $act?->user; // peut être null
             $displayUser = $user?->username ?? $user?->name ?? null;
+            $changes = $act?->changes; // Ajouter les détails des modifications
             // Choisir une date sûre: priorité à la date de l'activité, sinon date_emission, sinon echeance, sinon created_at de la traite
             $date = $act && $act->created_at ? $act->created_at->toDateTimeString() : (
                 ($t->date_emission ?: ($t->echeance ?: ($t->created_at ?? '')))
@@ -966,6 +971,7 @@ class TraitesController extends Controller
                 'action' => $action,
                 'statut' => $t->statut,
                 'username' => $displayUser,
+                'changes' => $changes, // Inclure les détails des modifications
             ];
         })
         // trier par la date calculée décroissante (plus récent en premier)
@@ -975,6 +981,227 @@ class TraitesController extends Controller
         ->values();
 
         return response()->json($mapped);
+    }
+
+    /**
+     * Export des historiques traites - Retourne toutes les activités pour l'exportation avec le contenu complet de la grille.
+     */
+    public function exportHistorique(Request $request)
+    {
+        $type = $request->get('type'); // 'client' or 'mois'
+        $nom = $request->get('nom_raison_sociale');
+        $month = $request->get('month'); // YYYY-MM
+
+        // Objectif: retourner TOUTES les traites, avec toutes les activités et les utilisateurs associés pour l'exportation
+        $query = Traite::query()
+            ->with(['activities.user:id,username'])
+            ->select(['id','numero','nom_raison_sociale','montant','statut','echeance','date_emission','created_at']);
+
+        if ($type === 'client' && $nom) {
+            $query->where('nom_raison_sociale', 'like', "%$nom%");
+        }
+
+        if ($type === 'mois' && $month && preg_match('/^\\d{4}-\\d{2}$/', $month)) {
+            // Filtrer par mois sur la date d'émission (ou created_at si vous préférez)
+            $parts = explode('-', $month);
+            $yyyy = (int)($parts[0] ?? date('Y'));
+            $mm = (int)($parts[1] ?? date('m'));
+            $lastDay = cal_days_in_month(CAL_GREGORIAN, $mm, $yyyy);
+            $start = sprintf('%04d-%02d-01', $yyyy, $mm);
+            $end = sprintf('%04d-%02d-%02d', $yyyy, $mm, $lastDay);
+            $query->whereBetween('date_emission', [$start, $end]);
+        }
+
+        $traites = $query->orderByDesc('date_emission')->get();
+
+        // Collecter toutes les activités de toutes les traites avec leurs informations complètes
+        $allActivities = collect();
+        
+        foreach ($traites as $traite) {
+            // Regrouper les activités par date et utilisateur pour éviter les duplications
+            $activitiesByDate = [];
+            
+            foreach ($traite->activities as $activity) {
+                $dateKey = $activity->created_at ? $activity->created_at->toDateTimeString() : ($traite->created_at ? $traite->created_at->toDateTimeString() : now()->toDateTimeString());
+                
+                // Créer une clé unique basée sur la date et la traite
+                $uniqueKey = $dateKey . '_' . $traite->id;
+                
+                if (!isset($activitiesByDate[$uniqueKey])) {
+                    $activitiesByDate[$uniqueKey] = [
+                        'date' => $dateKey,
+                        'nom_raison_sociale' => $traite->nom_raison_sociale,
+                        'numero_traite' => $traite->numero,
+                        'montant' => $traite->montant,
+                        'action' => $activity->action,
+                        'statut' => $traite->statut,
+                        'username' => $activity->user?->username ?? $activity->user?->name ?? null,
+                        'changes' => [],
+                    ];
+                }
+                
+                // Fusionner les changements s'il y a plusieurs activités à la même date
+                if ($activity->changes) {
+                    foreach ($activity->changes as $field => $change) {
+                        if (!isset($activitiesByDate[$uniqueKey]['changes'][$field])) {
+                            $activitiesByDate[$uniqueKey]['changes'][$field] = $change;
+                        }
+                    }
+                }
+            }
+            
+            // Si la traite n'a pas d'activités, ajouter une entrée pour la création
+            if ($traite->activities->isEmpty()) {
+                $dateKey = $traite->created_at ? $traite->created_at->toDateTimeString() : now()->toDateTimeString();
+                $uniqueKey = $dateKey . '_' . $traite->id;
+                
+                $activitiesByDate[$uniqueKey] = [
+                    'date' => $dateKey,
+                    'nom_raison_sociale' => $traite->nom_raison_sociale,
+                    'numero_traite' => $traite->numero,
+                    'montant' => $traite->montant,
+                    'action' => 'Création',
+                    'statut' => $traite->statut,
+                    'username' => null,
+                    'changes' => null,
+                ];
+            }
+            
+            // Ajouter les activités regroupées à la collection principale
+            foreach ($activitiesByDate as $activity) {
+                // Convertir le tableau de changements en objet si nécessaire
+                if (!empty($activity['changes'])) {
+                    $activity['changes'] = (object)$activity['changes'];
+                }
+                
+                $allActivities->push($activity);
+            }
+        }
+
+        // Trier TOUTES les données par date décroissante (plus récent en premier)
+        // Tous types d'actions confondus (création et modification)
+        $sortedActivities = $allActivities->sortByDesc(function($row) {
+            return $row['date'] ?? '';
+        })->values();
+
+        return response()->json($sortedActivities);
+    }
+
+    /**
+     * Export complet des traites - Retourne toutes les traites avec tous les détails.
+     */
+    public function exportWithDetails(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            \Log::info('ExportWithDetails called with params:', $request->all());
+            $query = DB::table('traites')
+            ->select([
+                'traites.id',
+                'traites.numero',
+                'traites.nombre_traites',
+                'traites.echeance',
+                'traites.date_emission',
+                'traites.montant',
+                'traites.nom_raison_sociale',
+                'traites.domiciliation_bancaire',
+                'traites.rib',
+                'traites.motif',
+                'traites.commentaires',
+                'traites.statut',
+                'traites.decision',
+                'traites.origine_traite'
+            ]);
+
+        // Recherche
+        if ($search = trim((string) $request->get('search', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('traites.numero', 'LIKE', "%{$search}%")
+                  ->orWhere('traites.nom_raison_sociale', 'LIKE', "%{$search}%")
+                  ->orWhere('traites.statut', 'LIKE', "%{$search}%")
+                  ->orWhere('traites.origine_traite', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Filtre par statut
+        if ($statut = $request->get('statut')) {
+            $query->where('traites.statut', $statut);
+        }
+
+        // Filtre par origine_traite
+        if ($origine_traite = $request->get('origine_traite')) {
+            $query->where('traites.origine_traite', $origine_traite);
+        }
+
+        // Filtre par date
+        if ($from = $request->get('from')) {
+            $query->where('traites.echeance', '>=', $from);
+        }
+        if ($to = $request->get('to')) {
+            $query->where('traites.echeance', '<=', $to);
+        }
+
+        // Tri
+        $sortRequest = (string) $request->get('sort', 'echeance');
+        $direction = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $allowedSorts = [
+            'numero' => 'traites.numero',
+            'echeance' => 'traites.echeance',
+            'date_emission' => 'traites.date_emission',
+            'montant' => 'traites.montant',
+            'nom_raison_sociale' => 'traites.nom_raison_sociale',
+            'statut' => 'traites.statut',
+            'origine_traite' => 'traites.origine_traite',
+            'created_at' => 'traites.created_at',
+        ];
+
+        if (!array_key_exists($sortRequest, $allowedSorts)) {
+            $sortRequest = 'echeance';
+        }
+        
+        \Log::info('About to apply orderBy with sortRequest: ' . $sortRequest . ' and direction: ' . $direction);
+        \Log::info('Value from allowedSorts: ' . ($allowedSorts[$sortRequest] ?? 'KEY_NOT_FOUND'));
+        
+        if (!isset($allowedSorts[$sortRequest])) {
+            \Log::error('Sort request key not found in allowedSorts: ' . $sortRequest);
+            throw new \Exception('Invalid sort parameter');
+        }
+        
+        $query->orderBy($allowedSorts[$sortRequest], $direction);
+
+        // Limiter le nombre de résultats pour l'export
+        $perPage = max(1, min((int) $request->get('per_page', 1000), 10000));
+        \Log::info('Query prepared, about to paginate with perPage: ' . $perPage);
+        \Log::info('Query SQL: ' . $query->toSql());
+        \Log::info('Query bindings: ', $query->getBindings());
+        
+        try {
+            $results = $query->paginate($perPage);
+            \Log::info('Pagination successful, total results: ' . $results->total());
+        } catch (\Exception $e) {
+            \Log::error('Error in exportWithDetails pagination: ' . $e->getMessage());
+            throw $e;
+        }
+
+        return response()->json([
+            'data' => $results->items(),
+            'current_page' => $results->currentPage(),
+            'last_page' => $results->lastPage(),
+            'per_page' => $results->perPage(),
+            'total' => $results->total(),
+        ], 200, [], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            \Log::error('Error in exportWithDetails: ' . $e->getMessage(), [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'error' => 'Erreur lors de l\'exportation',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

@@ -122,7 +122,7 @@ const ClientEditForm = ({ client, onSave, onCancel }) => {
     "Administration",
     "Collectivité locale",
     "Entreprise Publique",
-    "Administration Privée",
+    "Société de financement",
   ];
 
   const TYPE_TIERS = ["Client", "Fournisseur", "Salariés"];

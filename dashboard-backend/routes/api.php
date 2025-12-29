@@ -58,12 +58,15 @@ Route::post('/tiers/import-csv', [TiersController::class, 'importCsv'])->middlew
 Route::get('/agences', [TiersController::class, 'agences'])->middleware('auth:sanctum');
 Route::get('/tiers/historique', [TiersController::class, 'historique'])->middleware('auth:sanctum');
 Route::get('/tiers/export-historique', [TiersController::class, 'exportHistorique'])->middleware('auth:sanctum');
+Route::get('/tiers/export-with-details', [TiersController::class, 'exportWithDetails'])->middleware('auth:sanctum');
 Route::get('/tiers/{tier}', [TiersController::class, 'show']);
 Route::put('/tiers/{tier}', [TiersController::class, 'update'])->middleware('auth:sanctum');
 Route::delete('/tiers/{tier}', [TiersController::class, 'destroy'])->middleware('auth:sanctum');
 
 // Traites
 Route::get('/traites/historique', [TraitesController::class, 'historique']);
+Route::get('/traites/export-historique', [TraitesController::class, 'exportHistorique']);
+Route::get('/traites/export-with-details', [TraitesController::class, 'exportWithDetails'])->middleware('auth:sanctum');
 Route::get('/traites', [TraitesController::class, 'index']);
 Route::post('/traites', [TraitesController::class, 'store'])->middleware('auth:sanctum');
 Route::post('/traites/import-csv', [TraitesController::class, 'importCsv']); 

@@ -97,8 +97,8 @@ const NotificationsMenu = () => {
         todayArr.push(t)
         continue
       }
-      // Sous 3 jours (1..2) si statut Non échu
-      if (isNonEchuStatus(t.statut) && diff > 0 && diff < 3) {
+      // Sous 5 jours (1..4) si statut Non échu
+      if (isNonEchuStatus(t.statut) && diff > 0 && diff < 5) {
         upcoming.push(t)
       }
     }
@@ -111,7 +111,7 @@ const NotificationsMenu = () => {
     if (upcoming.length) {
       mapped.push({
         type: 'upcoming',
-        title: 'À échéance sous 3 jours',
+        title: 'À échéance sous 5 jours',
         icon: <Clock size={16} color="#1f2c49" />,
         items: upcoming.map(t => ({
           id: t.id,
@@ -176,7 +176,7 @@ const NotificationsMenu = () => {
         return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
       })()
 
-      // 2) À venir (Non échu) sous 3 jours
+      // 2) À venir (Non échu) sous 5 jours
       // Seulement pour les utilisateurs avec accès aux traites et pas seulement gestionnaires clients
       const p2 = (async () => {
         // Ne pas charger les notifications de traites pour les gestionnaires clients uniquement
@@ -187,7 +187,7 @@ const NotificationsMenu = () => {
         
         const p = new URLSearchParams()
         p.append('per_page', '200')
-        p.append('upcoming_days', '3')
+        p.append('upcoming_days', '5')
         p.append('sort', 'numero')
         p.append('dir', 'desc')
         const res = await fetch(`${baseUrl}/api/traites?${p.toString()}`, { headers: authHeaders() })
