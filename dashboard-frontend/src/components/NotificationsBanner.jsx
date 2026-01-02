@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom" // Add useNavigate import
 const NotificationsBanner = () => {
   const baseUrl = useMemo(() => process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000', [])
   const [pendingClientsCount, setPendingClientsCount] = useState(0)
+  const [traitesEcheanceCount, setTraitEcheanceCount] = useState(0) // Add state for traites à échéance
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const navigate = useNavigate() // Add useNavigate hook
@@ -16,7 +17,6 @@ const NotificationsBanner = () => {
   }
 
   const fetchPendingClientsCount = async () => {
-    setLoading(true); setError("")
     try {
       // Fetch pending clients count
       const res = await fetch(`${baseUrl}/api/pending-clients`, { headers: authHeaders() })
@@ -32,19 +32,51 @@ const NotificationsBanner = () => {
       console.error('NotificationsBanner - error:', e)
       setError(e.message || 'Erreur inconnue')
       setPendingClientsCount(0)
-    } finally {
-      setLoading(false)
+    }
+  }
+
+  const fetchTraitEcheanceCount = async () => {
+    try {
+      // Fetch traites à échéance sous 5 jours
+      const params = new URLSearchParams()
+      params.append('upcoming_days', '5')
+      params.append('statut', 'Non échu') // Only non-échu traites
+      params.append('per_page', '200') // Get all matching records
+      
+      const res = await fetch(`${baseUrl}/api/traites?${params.toString()}`, { headers: authHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        const count = Array.isArray(data?.data) ? data.data.length : 0
+        setTraitEcheanceCount(count)
+        console.log('NotificationsBanner - traites à échéance count:', count)
+      } else {
+        throw new Error('Erreur chargement traites à échéance')
+      }
+    } catch (e) {
+      console.error('NotificationsBanner - error:', e)
+      setError(e.message || 'Erreur inconnue')
+      setTraitEcheanceCount(0)
     }
   }
 
   useEffect(() => {
-    fetchPendingClientsCount()
-    const id = setInterval(fetchPendingClientsCount, 5000) // refresh chaque 5s
+    const fetchData = async () => {
+      setLoading(true)
+      setError("")
+      await Promise.all([
+        fetchPendingClientsCount(),
+        fetchTraitEcheanceCount()
+      ])
+      setLoading(false)
+    }
+    
+    fetchData()
+    const id = setInterval(fetchData, 5000) // refresh chaque 5s
     return () => clearInterval(id)
   }, [])
 
-  // If no pending clients or loading/error, don't show anything
-  if (loading || error || pendingClientsCount === 0) return null
+  // If no notifications or loading/error, don't show anything
+  if (loading || error || (pendingClientsCount === 0 && traitesEcheanceCount === 0)) return null
 
   const containerStyle = {
     position: 'fixed',
@@ -81,31 +113,57 @@ const NotificationsBanner = () => {
     fontSize: 16
   }
 
-  const handleDismiss = (e) => {
+  const handleDismiss = (e, type) => {
     // Prevent navigation when closing
     e.stopPropagation()
-    // Dismiss all pending client notifications by setting count to 0
-    setPendingClientsCount(0)
+    // Dismiss specific notification by setting count to 0
+    if (type === 'pendingClients') {
+      setPendingClientsCount(0)
+    } else if (type === 'traitesEcheance') {
+      setTraitEcheanceCount(0)
+    }
   }
 
-  const handleNavigate = () => {
-    // Navigate to pending clients view
-    navigate('/dashboard?tab=credit&view=PendingClients')
+  const handleNavigate = (type) => {
+    if (type === 'pendingClients') {
+      // Navigate to pending clients view
+      navigate('/dashboard?tab=credit&view=PendingClients')
+    } else if (type === 'traitesEcheance') {
+      // Navigate to traites view filtered by upcoming
+      navigate('/dashboard?tab=traites')
+    }
   }
 
   return (
     <div style={containerStyle}>
       <div>
-        <div style={cardStyle} onClick={handleNavigate}>
-          <button aria-label="Fermer" onClick={handleDismiss} style={closeBtnStyle}>×</button>
-          <div style={{ fontWeight: 700, color: '#9a3412' }}>Clients en attente</div>
-          <div style={{ color: '#b45309', marginTop: 2 }}>
-            Vous avez {pendingClientsCount} client{pendingClientsCount > 1 ? 's' : ''} en attente d'approbation
+        {/* Pending Clients Card */}
+        {pendingClientsCount > 0 && (
+          <div style={cardStyle} onClick={() => handleNavigate('pendingClients')}>
+            <button aria-label="Fermer" onClick={(e) => handleDismiss(e, 'pendingClients')} style={closeBtnStyle}>×</button>
+            <div style={{ fontWeight: 700, color: '#9a3412' }}>Clients en attente</div>
+            <div style={{ color: '#b45309', marginTop: 2 }}>
+              Vous avez {pendingClientsCount} client{pendingClientsCount > 1 ? 's' : ''} en attente d'approbation
+            </div>
+            <div style={{ color: '#b45309', marginTop: 4 }}>
+              Cliquez ici pour les consulter
+            </div>
           </div>
-          <div style={{ color: '#b45309', marginTop: 4 }}>
-            Cliquez ici pour les consulter
+        )}
+        
+        {/* Traités à échéance Card */}
+        {traitesEcheanceCount > 0 && (
+          <div style={cardStyle} onClick={() => handleNavigate('traitesEcheance')}>
+            <button aria-label="Fermer" onClick={(e) => handleDismiss(e, 'traitesEcheance')} style={closeBtnStyle}>×</button>
+            <div style={{ fontWeight: 700, color: '#9a3412' }}>Traites à échéance</div>
+            <div style={{ color: '#b45309', marginTop: 2 }}>
+              Vous avez {traitesEcheanceCount} traite{traitesEcheanceCount > 1 ? 's' : ''} à échéance sous 5 jours
+            </div>
+            <div style={{ color: '#b45309', marginTop: 4 }}>
+              Cliquez ici pour les consulter
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

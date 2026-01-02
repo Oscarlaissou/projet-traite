@@ -29,6 +29,13 @@ const TraiteDetailPage = () => {
     credit: '',
     agios: 'Tiré'
   })
+  
+  // État pour le changement de statut avec date impayé
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [statusChangeData, setStatusChangeData] = useState({
+    statut: '',
+    date_impaye: ''
+  })
 
   const formatDateDDMMYYYY = (value) => {
     if (!value) return ''
@@ -166,6 +173,16 @@ const TraiteDetailPage = () => {
         throw new Error('Utilisateur non authentifié')
       }
       
+      // Si le statut est 'Impayé', demander la date d'impayé
+      if (newStatut === 'Impayé') {
+        setStatusChangeData({
+          statut: newStatut,
+          date_impaye: ''
+        })
+        setShowStatusModal(true)
+        return
+      }
+      
       await axios.patch(`/api/traites/${id}/statut`,
         { statut: newStatut },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -174,6 +191,42 @@ const TraiteDetailPage = () => {
     } catch (err) {
       console.error('Erreur lors de la mise à jour du statut:', err)
       alert('Erreur lors de la mise à jour du statut')
+    }
+  }
+
+  // Fonction pour soumettre le changement de statut avec la date d'impayé
+  const handleStatusChangeSubmit = async () => {
+    try {
+      if (!token) {
+        throw new Error('Utilisateur non authentifié')
+      }
+      
+      const payload = {
+        statut: statusChangeData.statut
+      };
+      
+      // Si le statut est 'Impayé', inclure la date d'impayé
+      if (statusChangeData.statut === 'Impayé') {
+        if (!statusChangeData.date_impaye) {
+          alert('Veuillez renseigner la date d\'impayé');
+          return;
+        }
+        payload.date_impaye = statusChangeData.date_impaye;
+      }
+      
+      await axios.patch(`/api/traites/${id}/statut`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setItem((prev) => ({ ...prev, statut: statusChangeData.statut, date_impaye: statusChangeData.date_impaye }))
+      setShowStatusModal(false)
+      setStatusChangeData({
+        statut: '',
+        date_impaye: ''
+      })
+    } catch (err) {
+      console.error('Erreur lors de la mise à jour du statut:', err)
+      alert(err.response?.data?.message || 'Erreur lors de la mise à jour du statut')
     }
   }
 
@@ -201,6 +254,139 @@ const TraiteDetailPage = () => {
 
       {toast && (
         <Toast title={toast.title} message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+
+      {/* Modal de changement de statut avec date impayé */}
+      {showStatusModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: 12,
+            padding: 32,
+            width: '90%',
+            maxWidth: 500,
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#1a2c4e' }}>Changement de statut</h2>
+              <button 
+                onClick={() => {
+                  setShowStatusModal(false)
+                  setStatusChangeData({
+                    statut: '',
+                    date_impaye: ''
+                  })
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#6b7280'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                  Statut <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  className="search-input"
+                  value={statusChangeData.statut}
+                  onChange={(e) => setStatusChangeData({ ...statusChangeData, statut: e.target.value })}
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                >
+                  <option value="Impayé">Impayé</option>
+                  <option value="Rejeté">Rejeté</option>
+                  <option value="Payé">Payé</option>
+                </select>
+              </div>
+
+              {statusChangeData.statut === 'Impayé' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 14, color: '#374151' }}>
+                    Date d'impayé <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="search-input"
+                    value={statusChangeData.date_impaye}
+                    onChange={(e) => setStatusChangeData({ ...statusChangeData, date_impaye: e.target.value })}
+                    style={{ 
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      fontSize: 14
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button
+                  onClick={() => {
+                    setShowStatusModal(false)
+                    setStatusChangeData({
+                      statut: '',
+                      date_impaye: ''
+                    })
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    backgroundColor: 'white',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#374151'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleStatusChangeSubmit}
+                  className="submit-button"
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    fontSize: 14,
+                    fontWeight: 500
+                  }}
+                >
+                  Confirmer le changement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal d'acceptation */}
@@ -435,6 +621,7 @@ const TraiteDetailPage = () => {
               <Detail label="Motif" value={item?.motif} />
               <Detail label="Origine traite" value={item?.origine_traite || "Interne"} />
               <Detail label="Décision" value={item?.decision} />
+              <Detail label="Date d'impayé" value={formatDateDDMMYYYY(item?.date_impaye)} />
               <Detail label="Commentaires" value={item?.commentaires} />
             </div>
 

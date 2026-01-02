@@ -11,7 +11,22 @@ class Traite extends Model
 
     protected $table = 'traites';
 
-    protected $guarded = [];
+    protected $fillable = [
+        'numero',
+        'nombre_traites',
+        'echeance',
+        'date_emission',
+        'montant',
+        'nom_raison_sociale',
+        'domiciliation_bancaire',
+        'rib',
+        'motif',
+        'commentaires',
+        'statut',
+        'decision',
+        'origine_traite',
+        'date_impaye',
+    ];
 
     // Valeur par défaut pour statut si non fourni
     protected $attributes = [

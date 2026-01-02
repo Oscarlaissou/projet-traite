@@ -224,7 +224,7 @@ const TraiteForm = ({ initialValue, onCancel, onSaved, submitLabel }) => {
             onChange={handleChange} 
             className="form-input" 
             placeholder="Auto" 
-            disabled={isReadOnly}
+            disabled={true} // Toujours désactivé car généré automatiquement
           />
         </div>
         <div>

@@ -705,9 +705,22 @@ class TraitesController extends Controller
             'statut' => [
                 'required',
                 Rule::in(['Non échu', 'Échu', 'Impayé', 'Rejeté', 'Payé'])
-            ]
+            ],
+            'date_impaye' => ['nullable', 'date', function ($attribute, $value, $fail) use ($request) {
+                if ($request->input('statut') === 'Impayé' && empty($value)) {
+                    $fail('La date d\'impayé est obligatoire lorsque le statut est Impayé.');
+                }
+            }]
         ]);
-        $traite->update(['statut' => $validated['statut']]);
+        
+        $updateData = ['statut' => $validated['statut']];
+        
+        // Si le statut est 'Impayé', enregistrer la date d'impayé
+        if ($validated['statut'] === 'Impayé' && isset($validated['date_impaye'])) {
+            $updateData['date_impaye'] = $validated['date_impaye'];
+        }
+        
+        $traite->update($updateData);
         return response()->json($traite);
     }
 
@@ -723,7 +736,7 @@ class TraitesController extends Controller
     private function validateData(Request $request, $id = null): array
     {
         $validated = $request->validate([
-            'numero' => ['nullable','string','max:100'],
+            'numero' => ['nullable','string','max:10', 'regex:/^(TR-\d{6}-\d{6}|\d{6})$/'],  // Ancien format TR-YYYYMM-###### ou nouveau format 6 chiffres
             'nombre_traites' => ['required','integer','min:1'],
             'echeance' => ['required','date'],
             'date_emission' => ['required','date'],
@@ -736,6 +749,7 @@ class TraitesController extends Controller
             'commentaires' => ['nullable','string','max:1000'],
             'statut' => ['nullable', Rule::in(['Non échu', 'Échu', 'Impayé', 'Rejeté', 'Payé'])],
             'decision' => ['nullable', 'string', 'max:100'],
+            'date_impaye' => ['nullable', 'date'],
         ]);
         
         // S'assurer que statut n'est jamais null (utiliser la valeur par défaut)
@@ -748,10 +762,21 @@ class TraitesController extends Controller
 
     private function generateNumero(): string
     {
-        // Format: TR-YYYYMM-###### basé sur le prochain ID
-        $nextId = (int) (Traite::max('id') ?? 0) + 1;
-        $prefix = 'TR-'.date('Ym').'-';
-        return $prefix . str_pad((string)$nextId, 6, '0', STR_PAD_LEFT);
+        // Nouveau système: séquence à 6 chiffres commençant à 100000
+        // Trouver le numéro maximum existant dans la base
+        $lastNumero = Traite::where('numero', '>=', '100000')
+                         ->where('numero', '<=', '999999')
+                         ->whereRaw('numero REGEXP "^[0-9]{6}$"')
+                         ->max('numero');
+        
+        if ($lastNumero && is_numeric($lastNumero) && $lastNumero >= 100000) {
+            $nextNumero = (int)$lastNumero + 1;
+        } else {
+            // Si aucun numéro dans le nouveau format n'existe encore, commencer à 100000
+            $nextNumero = 100000;
+        }
+        
+        return (string)$nextNumero;
     }
 
     /**
@@ -1109,7 +1134,8 @@ class TraitesController extends Controller
                 'traites.commentaires',
                 'traites.statut',
                 'traites.decision',
-                'traites.origine_traite'
+                'traites.origine_traite',
+                'traites.date_impaye'
             ]);
 
         // Recherche
@@ -1362,6 +1388,7 @@ class TraitesController extends Controller
                         'origine_traite' => $item['origine_traite'] ?? '',
                         'commentaires' => $item['commentaires'] ?? '',
                         'statut' => $statut, // toujours prendre le statut calculé
+                        'date_impaye' => isset($item['date_impaye']) ? $this->convertDateFormat($item['date_impaye']) : null,
                     ];
                     
                     \Log::info("Données traite ligne " . ($actualIndex + 1) . ": " . json_encode($traiteData));

@@ -35,6 +35,7 @@ const PrintColumns = [
   { key: 'motif', label: 'Motif' },
   { key: 'commentaires', label: 'Commentaires' },
   { key: 'statut', label: 'Statut' },
+  { key: 'date_impaye', label: 'Date d\'impayé' },
   { key: 'origine_traite', label: 'Origine' } // Add this line
 ]
 
@@ -120,6 +121,7 @@ const TraitesGrid = () => {
       if (to) params.append('to', to);
       if (sort?.key) params.append('sort', sort.key);
       if (sort?.dir) params.append('dir', sort.dir);
+      if (origine) params.append('origine_traite', origine);
       
       // Implementation depends on selected option
       switch (printOptions.selectedOption) {
@@ -235,12 +237,20 @@ const TraitesGrid = () => {
         return;
       }
       
-      // Format all data for printing with ALL fields from form
+      // Determine if we should include date_impaye column based on status filter
+      const includeDateImpaye = statut === 'Impayé';
+      
+      // Define columns to use for printing based on status filter
+      const columnsForPrinting = includeDateImpaye 
+        ? PrintColumns 
+        : PrintColumns.filter(col => col.key !== 'date_impaye');
+      
+      // Format all data for printing with appropriate fields
       formattedItems = allItems.map(item => {
         const formattedItem = {};
-        PrintColumns.forEach(col => {
+        columnsForPrinting.forEach(col => {
           let value = item[col.key];
-          if (col.key === 'echeance' || col.key === 'date_emission') {
+          if (col.key === 'echeance' || col.key === 'date_emission' || col.key === 'date_impaye') {
             value = formatDateDDMMYYYY(value);
           } else if (col.key === 'montant') {
             value = formatMoney(value);
@@ -435,7 +445,7 @@ const TraitesGrid = () => {
           <table>
             <thead>
               <tr>
-                ${PrintColumns.map(col => `<th class="col-${col.label.replace('/', '\\/')}">${col.label}</th>`).join('')}
+                ${columnsForPrinting.map(col => `<th class="col-${col.label.replace('/', '\/')}">${col.label}</th>`).join('')}
               </tr>
             </thead>
             <tbody>
@@ -444,25 +454,23 @@ const TraitesGrid = () => {
         pageItems.forEach(item => {
           htmlContent += `
             <tr>
-              ${PrintColumns.map(col => `<td class="col-${col.label.replace('/', '\\/')}">${item[col.label] || ''}</td>`).join('')}
+              ${columnsForPrinting.map(col => `<td class="col-${col.label.replace('/', '\/')}">${item[col.label] || ''}</td>`).join('')}
             </tr>
           `;
         });
         
         // Add total row at the end of each page
+        const totalRowCells = columnsForPrinting.map(col => {
+          if (col.label === 'Montant') {
+            return `<td class="col-${col.label.replace('/', '\/')}" style="font-weight: bold;">TOTAL: ${pageTotal.toLocaleString('fr-FR')} FCFA</td>`;
+          } else {
+            return `<td class="col-${col.label.replace('/', '\/')}" style="font-weight: bold;"></td>`;
+          }
+        }).join('');
+                
         htmlContent += `
           <tr style="font-weight: bold; background-color: #f0f0f0;">
-            <td class="col-numero"></td>
-            <td class="col-nombre_traites"></td>
-            <td class="col-echeance"></td>
-            <td class="col-date_emission"></td>
-            <td class="col-Montant">TOTAL: ${pageTotal.toLocaleString('fr-FR')} FCFA</td>
-            <td class="col-Nom\\/RS"></td>
-            <td class="col-Domiciliation"></td>
-            <td class="col-RIB"></td>
-            <td class="col-Motif"></td>
-            <td class="col-Commentaires"></td>
-            <td class="col-Statut"></td>
+            ${totalRowCells}
           </tr>
         `;
         
@@ -535,18 +543,26 @@ const TraitesGrid = () => {
       const data = await res.json()
       const allItems = data.data || data || []
 
+      // Determine if we should include date_impaye column based on status filter
+      const includeDateImpaye = statut === 'Impayé';
+      
       // Export all fields from the details, not just grid columns
-      const allFieldHeaders = [
+      let allFieldHeaders = [
         'id', 'numero', 'nombre_traites', 'echeance', 'date_emission', 'montant', 
         'nom_raison_sociale', 'domiciliation_bancaire', 'rib', 'motif', 
         'commentaires', 'statut', 'decision', 'origine_traite'
       ];
       
+      // Add date_impaye field only if status is 'Impayé'
+      if (includeDateImpaye) {
+        allFieldHeaders = [...allFieldHeaders, 'date_impaye'];
+      }
+      
       const dataForSheet = allItems.map(item => {
         const rowData = {};
         allFieldHeaders.forEach(field => {
           let value = item[field];
-          if (field === 'echeance' || field === 'date_emission') {
+          if (field === 'echeance' || field === 'date_emission' || field === 'date_impaye') {
             value = formatDateDDMMYYYY(value);
           } else if (field === 'montant') {
             value = Number(item[field] || 0);
@@ -754,7 +770,8 @@ const TraitesGrid = () => {
     rib: ['NumCompte'],
     motif: ['motif'],
     commentaires: ['commentaires'],
-    statut: ['statut']
+    statut: ['statut'],
+    date_impaye: ['date_impaye', 'date d\'impaye', 'date_impayé', 'date impaye']
   }
 
   const detectDuplicates = async (headers, records, columnMapping) => {
@@ -914,6 +931,7 @@ const TraitesGrid = () => {
           motif: toVal(row, 'motif') || '',
           commentaires: toVal(row, 'commentaires') || '',
           statut: toVal(row, 'statut') || '',
+          date_impaye: toVal(row, 'date_impaye') || '',
         }
         dataToImport.push(payload)
       }
