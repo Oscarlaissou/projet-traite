@@ -202,12 +202,13 @@ class LdapService
                 'is_ad_user' => true, // Marquer comme utilisateur AD
             ]);
         } else {
-            // Mettre à jour l'utilisateur existant pour le marquer comme utilisateur AD
-            // et supprimer le mot de passe s'il en avait un
-            $user->update([
-                'password' => null, // Ne pas stocker le mot de passe pour les utilisateurs AD
-                'is_ad_user' => true,
-            ]);
+            // Ne mettre à jour que si nécessaire (si ce n'est pas déjà un utilisateur AD)
+            if (!$user->is_ad_user) {
+                $user->update([
+                    'password' => null, // Ne pas stocker le mot de passe pour les utilisateurs AD
+                    'is_ad_user' => true,
+                ]);
+            }
         }
         
         return $user;
@@ -248,12 +249,18 @@ class LdapService
             // Ajoutez d'autres mappings selon vos besoins
         ];
         
+        // Charger tous les rôles une seule fois
+        $allRoles = \App\Models\Role::all()->keyBy('name');
+        
         foreach ($userInfo['memberOf'] as $group) {
             foreach ($adGroupToRole as $adGroup => $roleName) {
                 if (strpos($group, $adGroup) !== false) {
-                    $role = Role::where('name', $roleName)->first();
+                    $role = $allRoles->get($roleName);
                     if ($role) {
-                        $user->update(['role_id' => $role->id]);
+                        // Ne mettre à jour que si le rôle est différent
+                        if ($user->role_id !== $role->id) {
+                            $user->update(['role_id' => $role->id]);
+                        }
                         break;
                     }
                 }

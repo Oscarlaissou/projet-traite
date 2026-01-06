@@ -43,7 +43,7 @@ class AuthController extends Controller
             }
 
             // Charger la relation role avec ses permissions
-            $user->load('roleModel.permissions');
+            $user->load(['roleModel.permissions']);
 
             $token = $user->createToken('auth-token')->plainTextToken;
 
@@ -82,7 +82,7 @@ class AuthController extends Controller
             }
 
             // Charger la relation role avec ses permissions
-            $user->load('roleModel.permissions');
+            $user->load(['roleModel.permissions']);
 
             $token = $user->createToken('auth-token')->plainTextToken;
 
@@ -115,7 +115,7 @@ class AuthController extends Controller
         $user = $request->user();
         
         // Charger la relation role avec ses permissions
-        $user->load('roleModel.permissions');
+        $user->load(['roleModel.permissions']);
         
         return response()->json([
             'user' => [

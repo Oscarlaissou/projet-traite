@@ -54,33 +54,17 @@ export const AuthProvider = ({ children }) => {
 
             if (response.ok) {
                 const userData = await response.json();
-                // Charger les permissions de l'utilisateur
-                let permissions = [];
-                if (userData && userData.id) {
-                    const permissionsResponse = await fetch(`${baseUrl}/api/user/${userData.id}/permissions`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/json',
-                        },
-                    });
-                    
-                    if (permissionsResponse.ok) {
-                        const permissionsData = await permissionsResponse.json();
-                        permissions = permissionsData.permissions || [];
-                        
-                        localStorage.setItem('permissions', JSON.stringify(permissions));
-                    }
-                } else {
-                    // Charger les permissions depuis le stockage local si l'ID utilisateur n'est pas disponible
-                    const storedPermissions = localStorage.getItem('permissions');
-                    permissions = storedPermissions ? JSON.parse(storedPermissions) : [];
-                }
-
                 
+                // Extraire les permissions directement de la réponse
+                const permissions = userData.permissions || [];
+                
+                // Stocker les permissions dans le localStorage
+                localStorage.setItem('permissions', JSON.stringify(permissions));
+
                 setAuthState(prev => ({
                     ...prev,
                     isAuthenticated: true,
-                    user: userData,
+                    user: userData.user, // Extraire l'utilisateur de la réponse
                     permissions: permissions,
                     token: token,
                 }));

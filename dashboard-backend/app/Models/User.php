@@ -44,35 +44,55 @@ class User extends Authenticatable
 
     public function hasPermission($permissionName)
     {
+        // Charger les relations en une seule requête pour éviter les problèmes de N+1
+        $this->loadMissing(['roleModel.permissions', 'directPermissions']);
+        
         // Check direct permissions first
-        if ($this->directPermissions()->where('name', $permissionName)->exists()) {
+        if ($this->directPermissions->contains('name', $permissionName)) {
             return true;
         }
         
         // Fall back to role-based permissions
-        return $this->roleModel && $this->roleModel->hasPermission($permissionName);
+        return $this->roleModel && $this->roleModel->permissions->contains('name', $permissionName);
     }
 
     public function hasAnyPermission(array $permissions)
     {
+        // Charger les relations en une seule requête pour éviter les problèmes de N+1
+        $this->loadMissing(['roleModel.permissions', 'directPermissions']);
+        
+        // Vérifier d'abord les permissions directes
         foreach ($permissions as $permission) {
-            if ($this->hasPermission($permission)) {
+            if ($this->directPermissions->contains('name', $permission)) {
                 return true;
             }
         }
+        
+        // Si aucune permission directe n'est trouvée, vérifier les permissions de rôle
+        if ($this->roleModel) {
+            foreach ($permissions as $permission) {
+                if ($this->roleModel->permissions->contains('name', $permission)) {
+                    return true;
+                }
+            }
+        }
+        
         return false;
     }
 
     public function getPermissions()
     {
+        // Charger les relations en une seule requête pour éviter les problèmes de N+1
+        $this->loadMissing(['roleModel.permissions', 'directPermissions']);
+        
         // Get role-based permissions
         $rolePermissions = [];
         if ($this->roleModel) {
-            $rolePermissions = $this->roleModel->permissions()->pluck('name')->toArray();
+            $rolePermissions = $this->roleModel->permissions->pluck('name')->toArray();
         }
         
         // Get direct permissions
-        $directPermissions = $this->directPermissions()->pluck('name')->toArray();
+        $directPermissions = $this->directPermissions->pluck('name')->toArray();
         
         // If user has direct permissions, use only those (override role permissions)
         // Otherwise, use role permissions

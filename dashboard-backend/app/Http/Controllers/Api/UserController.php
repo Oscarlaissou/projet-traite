@@ -22,7 +22,9 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::all();
+        $users = User::select('id', 'username', 'role', 'role_id', 'ville', 'is_ad_user', 'created_at', 'updated_at')
+                     ->with('roleModel') // Charger uniquement la relation de rôle sans les permissions
+                     ->get();
         return response()->json($users);
     }
 
