@@ -12,6 +12,12 @@ use App\Http\Controllers\PendingClientsController;
 use App\Http\Controllers\ClientApprovalHistoryController;
 
 Route::post('/login', [AuthController::class, 'login']);
+
+// Routes pour la gestion des utilisateurs AD
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/users/ad/check', [UserManagementController::class, 'checkAdUser']);
+    Route::post('/users/ad/create', [UserManagementController::class, 'createAdUser']);
+});
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::get('/user', [AuthController::class, 'user'])->middleware('auth:sanctum');
 

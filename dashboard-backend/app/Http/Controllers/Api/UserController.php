@@ -12,6 +12,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -37,22 +38,31 @@ class UserController extends Controller
         
         $request->validate([
             'username' => 'required|string|max:255|unique:users',
-            'password' => 'required|string|min:8',
+            'password' => $request->boolean('is_ad_user') ? 'nullable' : 'required|string|min:8',
             'role' => 'required|string|in:traites_manager,clients_manager,admin,super_admin',
             'ville' => 'nullable|string|max:255',
+            'is_ad_user' => 'boolean',
         ]);
 
         // Map role name to role_id
         $role = Role::where('name', $request->role)->first();
         $roleId = $role ? $role->id : null;
 
-        $user = User::create([
+        // Prepare user data
+        $userData = [
             'username' => $request->username,
-            'password' => Hash::make($request->password),
             'role' => $request->role,
             'role_id' => $roleId,
             'ville' => $request->ville,
-        ]);
+            'is_ad_user' => $request->boolean('is_ad_user', false),
+        ];
+
+        // Only include password if not AD user or if password is provided
+        if (!$request->boolean('is_ad_user') && !empty($request->password)) {
+            $userData['password'] = Hash::make($request->password);
+        }
+
+        $user = User::create($userData);
 
         return response()->json($user, 201);
     }
@@ -80,21 +90,30 @@ class UserController extends Controller
 
         $request->validate([
             'username' => ['required', 'string', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'password' => 'nullable|string|min:8',
+            'password' => $request->boolean('is_ad_user') ? 'nullable' : 'nullable|string|min:8',
             'role' => 'required|string|in:traites_manager,clients_manager,admin,super_admin',
             'ville' => 'nullable|string|max:255',
+            'is_ad_user' => 'boolean',
         ]);
 
         // Map role name to role_id
         $role = Role::where('name', $request->role)->first();
         $roleId = $role ? $role->id : null;
 
-        $userData = $request->only(['username', 'role', 'ville']);
-        $userData['role_id'] = $roleId;
+        $userData = [
+            'username' => $request->username,
+            'role' => $request->role,
+            'role_id' => $roleId,
+            'ville' => $request->ville,
+            'is_ad_user' => $request->boolean('is_ad_user', $user->is_ad_user),
+        ];
         
-        // Only update password if provided
-        if ($request->filled('password')) {
+        // Only update password if provided and user is not AD user
+        if ($request->filled('password') && !$request->boolean('is_ad_user')) {
             $userData['password'] = Hash::make($request->password);
+        } elseif ($request->filled('is_ad_user') && $request->boolean('is_ad_user')) {
+            // If user is marked as AD user, remove the password
+            $userData['password'] = null;
         }
 
         $user->update($userData);

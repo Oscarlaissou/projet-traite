@@ -17,7 +17,8 @@ class User extends Authenticatable
         'password',
         'role',
         'role_id',
-        'ville'
+        'ville',
+        'is_ad_user'
     ];
 
     protected $hidden = [
@@ -27,6 +28,7 @@ class User extends Authenticatable
 
     protected $casts = [
         'password' => 'hashed',
+        'is_ad_user' => 'boolean',
     ];
 
     // Relations et méthodes de permissions

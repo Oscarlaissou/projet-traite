@@ -32,7 +32,8 @@ const SettingsPage = () => {
     username: '',
     password: '',
     role: 'admin', // Default to admin role
-    ville: ''
+    ville: '',
+    is_ad_user: false
   });
   
   // Password visibility states
@@ -55,7 +56,8 @@ const SettingsPage = () => {
     username: '',
     password: '',
     role: 'admin',
-    ville: ''
+    ville: '',
+    is_ad_user: false
   });
   
   // State for permissions tab
@@ -290,6 +292,12 @@ const SettingsPage = () => {
     
     try {
       const token = localStorage.getItem('token');
+      // Create user object without password if it's empty (for AD users)
+      const userPayload = { ...newUser };
+      if (!newUser.password.trim()) {
+        delete userPayload.password; // Don't send password field if it's empty
+      }
+      
       const res = await fetch(`${baseUrl}/api/users`, {
         method: 'POST',
         headers: {
@@ -297,7 +305,7 @@ const SettingsPage = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify(userPayload)
       });
       
       if (res.ok) {
@@ -329,7 +337,8 @@ const SettingsPage = () => {
       username: user.username,
       password: '',
       role: user.role || 'admin',
-      ville: user.ville || ''
+      ville: user.ville || '',
+      is_ad_user: user.is_ad_user || false
     });
   };
   
@@ -377,6 +386,12 @@ const SettingsPage = () => {
     
     try {
       const token = localStorage.getItem('token');
+      // Create form object without password if it's empty (for AD users)
+      const formPayload = { ...editForm };
+      if (!editForm.password.trim()) {
+        delete formPayload.password; // Don't send password field if it's empty
+      }
+      
       const res = await fetch(`${baseUrl}/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: {
@@ -384,7 +399,7 @@ const SettingsPage = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(formPayload)
       });
       
       if (res.ok) {
@@ -511,6 +526,14 @@ const SettingsPage = () => {
 
   const permissionGroups = groupPermissions(permissions);
 
+  const getUsersForCurrentPage = () => {
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    return users.slice(startIndex, endIndex);
+  };
+
+  const usersForCurrentPage = getUsersForCurrentPage();
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-wrapper">
@@ -629,7 +652,21 @@ const SettingsPage = () => {
                           </div>
                           
                           <div className="form-group">
-                            <label htmlFor="password">Mot de passe</label>
+                            <label htmlFor="ville">Ville</label>
+                            <input
+                              type="text"
+                              id="ville"
+                              name="ville"
+                              value={newUser.ville}
+                              onChange={handleNewUserChange}
+                              className="form-control"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label htmlFor="password">Mot de passe (optionnel pour les utilisateurs AD)</label>
                             <input
                               type={showNewUserPassword ? 'text' : 'password'}
                               id="password"
@@ -637,8 +674,7 @@ const SettingsPage = () => {
                               value={newUser.password}
                               onChange={handleNewUserChange}
                               className="form-control"
-                              required
-                              minLength="8"
+                              minLength="0"
                             />
                             <button 
                               type="button" 
@@ -648,6 +684,20 @@ const SettingsPage = () => {
                             >
                               {showNewUserPassword ? '👁️' : '👁️‍🗨️'}
                             </button>
+                          </div>
+                          
+                          <div className="form-group checkbox-group">
+                            <label className="checkbox-label">
+                              <input
+                                type="checkbox"
+                                id="is_ad_user"
+                                name="is_ad_user"
+                                checked={newUser.is_ad_user}
+                                onChange={(e) => setNewUser({...newUser, is_ad_user: e.target.checked})}
+                                className="checkbox-input"
+                              />
+                              <span className="checkbox-text">Utilisateur Active Directory</span>
+                            </label>
                           </div>
                         </div>
                         
@@ -671,18 +721,6 @@ const SettingsPage = () => {
                                 </option>
                               ))}
                             </select>
-                          </div>
-                          
-                          <div className="form-group">
-                            <label htmlFor="ville">Ville</label>
-                            <input
-                              type="text"
-                              id="ville"
-                              name="ville"
-                              value={newUser.ville}
-                              onChange={handleNewUserChange}
-                              className="form-control"
-                            />
                           </div>
                         </div>
                         
@@ -710,7 +748,7 @@ const SettingsPage = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {users.map(user => (
+                            {usersForCurrentPage.map(user => (
                               <tr key={user.id}>
                                 <td>{user.username}</td>
                                 <td>
@@ -796,48 +834,6 @@ const SettingsPage = () => {
                             </div>
                             
                             <div className="form-group">
-                              <label htmlFor="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
-                              <input
-                                type={showEditUserPassword ? 'text' : 'password'}
-                                id="edit-password"
-                                name="password"
-                                value={editForm.password}
-                                onChange={handleEditUserChange}
-                                className="form-control"
-                                minLength="8"
-                              />
-                              <button 
-                                type="button" 
-                                className="toggle-password"
-                                onClick={() => setShowEditUserPassword(!showEditUserPassword)}
-                                title={showEditUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                              >
-                                {showEditUserPassword ? '👁️' : '👁️‍🗨️'}
-                              </button>
-                            </div>
-                            
-                            <div className="form-group">
-                              <label htmlFor="edit-role">Rôle</label>
-                              <select
-                                id="edit-role"
-                                name="role"
-                                value={editForm.role}
-                                onChange={handleEditUserChange}
-                                className="form-control"
-                              >
-                                {roles.map(role => (
-                                  <option 
-                                    key={role.name} 
-                                    value={role.name}
-                                    disabled={role.name === 'super_admin' && users.some(u => u.role === 'super_admin' && u.id !== editingUser.id)}
-                                  >
-                                    {role.description}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            
-                            <div className="form-group">
                               <label htmlFor="edit-ville">Ville</label>
                               <input
                                 type="text"
@@ -847,6 +843,66 @@ const SettingsPage = () => {
                                 onChange={handleEditUserChange}
                                 className="form-control"
                               />
+                            </div>
+                            
+                            <div className="form-row">
+                              <div className="form-group">
+                                <label htmlFor="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
+                                <input
+                                  type={showEditUserPassword ? 'text' : 'password'}
+                                  id="edit-password"
+                                  name="password"
+                                  value={editForm.password}
+                                  onChange={handleEditUserChange}
+                                  className="form-control"
+                                  minLength="8"
+                                />
+                                <button 
+                                  type="button" 
+                                  className="toggle-password"
+                                  onClick={() => setShowEditUserPassword(!showEditUserPassword)}
+                                  title={showEditUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                                >
+                                  {showEditUserPassword ? '👁️' : '👁️‍🗨️'}
+                                </button>
+                              </div>
+                              
+                              <div className="form-group checkbox-group">
+                                <label className="checkbox-label">
+                                  <input
+                                    type="checkbox"
+                                    id="edit-is_ad_user"
+                                    name="is_ad_user"
+                                    checked={editForm.is_ad_user}
+                                    onChange={(e) => setEditForm({...editForm, is_ad_user: e.target.checked})}
+                                    className="checkbox-input"
+                                  />
+                                  <span className="checkbox-text">Utilisateur Active Directory</span>
+                                </label>
+                              </div>
+                            </div>
+                            
+                            <div className="form-row">
+                              <div className="form-group">
+                                <label htmlFor="edit-role">Rôle</label>
+                                <select
+                                  id="edit-role"
+                                  name="role"
+                                  value={editForm.role}
+                                  onChange={handleEditUserChange}
+                                  className="form-control"
+                                >
+                                  {roles.map(role => (
+                                    <option 
+                                      key={role.name} 
+                                      value={role.name}
+                                      disabled={role.name === 'super_admin' && users.some(u => u.role === 'super_admin' && u.id !== editingUser.id)}
+                                    >
+                                      {role.description}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                             
                             <div className="modal-actions">
