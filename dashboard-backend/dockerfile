@@ -1,20 +1,16 @@
 FROM php:8.2-fpm-alpine
 
-# Installer les dépendances système
+# Installer les extensions PHP nécessaires directement
 RUN apk add --no-cache \
-    git \
-    zip \
-    unzip \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
     libzip-dev \
     oniguruma-dev \
     libxml2-dev \
-    libpng-dev \
-    libjpeg-turbo-dev \
-    freetype-dev \
     && docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg \
     && docker-php-ext-install mysqli pdo pdo_mysql zip gd bcmath xml \
-    && apk del --no-cache \
-    && rm -rf /tmp/*
+    && docker-php-ext-enable opcache
 
 # Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -29,6 +25,9 @@ RUN composer install --no-dev --optimize-autoloader
 # Donner les droits d'écriture au dossier de stockage
 RUN chown -R www-data:www-data /var/www/html/storage \
     && chown -R www-data:www-data /var/www/html/bootstrap/cache
+
+# Configurer PHP-FPM pour écouter sur le port 9000
+RUN echo "listen = 0.0.0.0:9000" >> /usr/local/etc/php-fpm.d/zz-docker.conf
 
 EXPOSE 9000
 
