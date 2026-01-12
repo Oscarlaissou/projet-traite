@@ -4,12 +4,12 @@ services:
     container_name: projet-traite-db
     restart: always
     environment:
-      MYSQL_DATABASE: projet_traite
-      MYSQL_USER: projet_traite_user
-      MYSQL_PASSWORD: projet_traite_password
+      MYSQL_DATABASE: traite
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ""
       MYSQL_ROOT_PASSWORD: root_password
     ports:
-      - "3306:3306"
+      - "3307:3306"  # Changé de 3306 à 3307 pour éviter le conflit
     volumes:
       - db_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -27,15 +27,27 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_DATABASE: projet_traite
-      DB_USERNAME: projet_traite_user
-      DB_PASSWORD: projet_traite_password
+      DB_DATABASE: traite
+      DB_USERNAME: root
+      DB_PASSWORD: ""
       APP_KEY: base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=
+    networks:
+      - projet-traite-network
     volumes:
       - ./dashboard-backend:/var/www/html
       - ./storage:/var/www/html/storage
-    networks:
-      - projet-traite-network
+    command: >
+      sh -c "if [ ! -f .env ]; then cp .env.example .env; fi &&
+              sed -i \"s|^APP_KEY=.*|APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=|\" .env &&
+              sed -i \"s|^DB_HOST=.*|DB_HOST=db|\" .env &&
+              sed -i \"s|^DB_PORT=.*|DB_PORT=3306|\" .env &&
+              sed -i \"s|^DB_DATABASE=.*|DB_DATABASE=traite|\" .env &&
+              sed -i \"s|^DB_USERNAME=.*|DB_USERNAME=root|\" .env &&
+              sed -i \"s|^DB_PASSWORD=.*|DB_PASSWORD=|\" .env &&
+              php artisan key:generate --force &&
+              php artisan config:cache &&
+              php artisan migrate --force &&
+              php artisan serve --host=0.0.0.0 --port=9000"
 
   web:
     build:
