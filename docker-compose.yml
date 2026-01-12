@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
   db:
     image: mysql:8.0
     container_name: projet-traite-db
     restart: always
     environment:
-      MYSQL_DATABASE: traite
-      MYSQL_USER: root
-      MYSQL_PASSWORD: 
-      MYSQL_ROOT_PASSWORD: 
+      MYSQL_DATABASE: projet_traite
+      MYSQL_USER: projet_traite_user
+      MYSQL_PASSWORD: projet_traite_password
+      MYSQL_ROOT_PASSWORD: root_password
     ports:
       - "3306:3306"
     volumes:
@@ -29,10 +27,24 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_DATABASE: traite
-      DB_USERNAME: root
-      DB_PASSWORD: 
-      APP_KEY: ${APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=}
+      DB_DATABASE: projet_traite
+      DB_USERNAME: projet_traite_user
+      DB_PASSWORD: projet_traite_password
+      APP_KEY: base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=
+    volumes:
+      - ./dashboard-backend:/var/www/html
+      - ./storage:/var/www/html/storage
+    networks:
+      - projet-traite-network
+
+  web:
+    build:
+      context: ./dashboard-backend
+      dockerfile: Dockerfile.web
+    container_name: projet-traite-web
+    restart: always
+    depends_on:
+      - backend
     ports:
       - "8000:80"
     volumes:
@@ -40,11 +52,6 @@ services:
       - ./storage:/var/www/html/storage
     networks:
       - projet-traite-network
-    command: >
-      sh -c "cp .env.example .env &&
-              php artisan key:generate &&
-              php artisan config:cache &&
-              apache2-foreground"
 
   frontend:
     build:
@@ -53,7 +60,7 @@ services:
     container_name: projet-traite-frontend
     restart: always
     depends_on:
-      - backend
+      - web
     ports:
       - "3000:80"
     environment:
