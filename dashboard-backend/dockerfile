@@ -1,0 +1,39 @@
+FROM php:8.2-apache
+
+# Installer les extensions PHP nécessaires
+RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    zip \
+    unzip \
+    git \
+    libonig-dev \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg \
+    && docker-php-ext-install mysqli pdo pdo_mysql zip gd bcmath xml
+
+# Installer Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Activer le module rewrite d'Apache
+RUN a2enmod rewrite
+
+# Copier les fichiers de l'application
+WORKDIR /var/www/html
+COPY . .
+
+# Installer les dépendances PHP
+RUN composer install
+
+# Donner les droits d'écriture au dossier de stockage
+RUN chown -R www-data:www-data /var/www/html/storage \
+    && chown -R www-data:www-data /var/www/html/bootstrap/cache
+
+# Copier le fichier de configuration Apache personnalisé
+COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
+
+EXPOSE 80
+
+CMD ["apache2-foreground"]

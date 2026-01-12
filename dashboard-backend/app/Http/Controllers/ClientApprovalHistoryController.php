@@ -31,10 +31,7 @@ class ClientApprovalHistoryController extends Controller
                 'target_user_id' => $targetUserId
             ]);
             
-            // 2. Requête SQL
-            // Récupérer l'historique des clients créés par cet utilisateur
-            // On joint les tables 'tiers' (approuvés) et 'pending_clients' (rejetés/archivés)
-            // Récupérer l'historique avec une approche qui gère les conflits potentiels
+            // 2. Requête SQL améliorée pour récupérer l'historique des clients
             $history = DB::table('client_approvals as ca')
                 ->select(
                     'ca.id',
@@ -42,16 +39,41 @@ class ClientApprovalHistoryController extends Controller
                     'ca.status',
                     'ca.rejection_reason',
                     'ca.created_at',
+                    'ca.approved_tier_id',
                     DB::raw('CASE 
-                        WHEN ca.status = "approved" THEN COALESCE((SELECT t.nom_raison_sociale FROM tiers t WHERE t.id = ca.approved_tier_id), "Client approuvé")
-                        WHEN ca.status = "rejected" THEN COALESCE((SELECT pc.nom_raison_sociale FROM pending_clients pc WHERE pc.id = ca.tier_id), "Client rejeté")
-                        WHEN ca.status = "pending" THEN COALESCE((SELECT pc.nom_raison_sociale FROM pending_clients pc WHERE pc.id = ca.tier_id), (SELECT t.nom_raison_sociale FROM tiers t WHERE t.id = ca.approved_tier_id), "Client en attente")
-                        ELSE "Inconnu"
+                        WHEN ca.status = "approved" AND ca.approved_tier_id IS NOT NULL THEN (
+                            SELECT t.nom_raison_sociale 
+                            FROM tiers t 
+                            WHERE t.id = ca.approved_tier_id
+                        )
+                        WHEN ca.status = "rejected" THEN (
+                            SELECT pc.nom_raison_sociale 
+                            FROM pending_clients pc 
+                            WHERE pc.id = ca.tier_id
+                        )
+                        WHEN ca.status = "pending" THEN (
+                            SELECT pc.nom_raison_sociale 
+                            FROM pending_clients pc 
+                            WHERE pc.id = ca.tier_id
+                        )
+                        ELSE "Client inconnu"
                     END as client_name'),
                     DB::raw('CASE 
-                        WHEN ca.status = "approved" THEN COALESCE((SELECT t.numero_compte FROM tiers t WHERE t.id = ca.approved_tier_id), "N/A")
-                        WHEN ca.status = "rejected" THEN COALESCE((SELECT pc.numero_compte FROM pending_clients pc WHERE pc.id = ca.tier_id), "N/A")
-                        WHEN ca.status = "pending" THEN COALESCE((SELECT pc.numero_compte FROM pending_clients pc WHERE pc.id = ca.tier_id), (SELECT t.numero_compte FROM tiers t WHERE t.id = ca.approved_tier_id), "N/A")
+                        WHEN ca.status = "approved" AND ca.approved_tier_id IS NOT NULL THEN (
+                            SELECT t.numero_compte 
+                            FROM tiers t 
+                            WHERE t.id = ca.approved_tier_id
+                        )
+                        WHEN ca.status = "rejected" THEN (
+                            SELECT pc.numero_compte 
+                            FROM pending_clients pc 
+                            WHERE pc.id = ca.tier_id
+                        )
+                        WHEN ca.status = "pending" THEN (
+                            SELECT pc.numero_compte 
+                            FROM pending_clients pc 
+                            WHERE pc.id = ca.tier_id
+                        )
                         ELSE "N/A"
                     END as account_number')
                 )

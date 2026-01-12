@@ -538,8 +538,27 @@ class PendingClientsController extends Controller
                     'nullable',
                     'string',
                     'max:100',
-                    // Vérifier que le numéro de compte n'existe pas déjà dans les tiers existants (sauf pour ce client)
-                    Rule::unique('tiers', 'numero_compte'),
+                    // Vérifier que le numéro de compte n'existe pas déjà dans les tiers existants (sauf pour ce client s'il a été approuvé)
+                    function ($attribute, $value, $fail) use ($pendingClient) {
+                        if ($value) {
+                            // Vérifier dans la table tiers
+                            $query = \App\Models\Tier::where('numero_compte', $value);
+                            
+                            // Si le client a été approuvé, ignorer le tier correspondant
+                            $approvalRecord = \Illuminate\Support\Facades\DB::table('client_approvals')
+                                ->where('tier_id', $pendingClient->id)
+                                ->where('status', 'approved')
+                                ->first();
+                            
+                            if ($approvalRecord && $approvalRecord->approved_tier_id) {
+                                $query->where('id', '!=', $approvalRecord->approved_tier_id);
+                            }
+                            
+                            if ($query->exists()) {
+                                $fail('Le numéro de compte est déjà utilisé.');
+                            }
+                        }
+                    },
                     // Vérifier que le numéro de compte n'existe pas déjà dans les clients en attente (sauf pour ce client)
                     Rule::unique('pending_clients', 'numero_compte')->ignore($pendingClient->id)
                 ],
@@ -665,8 +684,18 @@ class PendingClientsController extends Controller
                 }
             }
             
-            // Mettre à jour le statut du client en attente
-            $pendingClient->update(['status' => 'pending']);
+            // Mettre à jour le statut du client en attente - utiliser update directement sans passer par le modèle
+            try {
+                $pendingClient->status = 'pending';
+                $pendingClient->save();
+            } catch (\Throwable $e) {
+                \Log::error('Error updating pending client status: ' . $e->getMessage(), [
+                    'exception' => $e,
+                    'pending_client_id' => $pendingClient->id,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e; // Relancer l'exception pour qu'elle soit gérée par le bloc catch externe
+            }
             
             \Log::info('Client resubmission completed successfully', [
                 'pending_client_id' => $pendingClient->id
@@ -683,7 +712,7 @@ class PendingClientsController extends Controller
             ]);
             
             return response()->json([
-                'message' => 'Une erreur est survenue lors de la soumission du client pour approbation.',
+                'message' => 'Une erreur est survenue lors de la mise à jour du client en attente.',
                 'error' => $e->getMessage(),
                 'details' => config('app.debug') ? [
                     'file' => $e->getFile(),

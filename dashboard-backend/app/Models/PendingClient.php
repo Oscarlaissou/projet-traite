@@ -30,7 +30,8 @@ class PendingClient extends Model
         'etablissement',
         'service',
         'nom_signataire',
-        'created_by'
+        'created_by',
+        'status'
     ];
 
     protected $casts = [
@@ -59,8 +60,9 @@ class PendingClient extends Model
         // Obtenir le dernier numéro de compte de la table tiers
         $lastTier = \App\Models\Tier::orderBy('id', 'desc')->first();
         
-        // Obtenir le dernier numéro de compte de la table pending_clients
-        $lastPendingClient = static::orderBy('id', 'desc')->first();
+        // Obtenir le dernier numéro de compte attribué parmi les clients en attente (pending, approved, ou rejected)
+        // On récupère tous les numéros de compte existants dans la table pending_clients
+        $maxPendingNumber = static::max('numero_compte');
         
         // Déterminer le dernier ID utilisé
         $lastId = 0;
@@ -72,9 +74,9 @@ class PendingClient extends Model
             }
         }
         
-        if ($lastPendingClient && $lastPendingClient->numero_compte) {
+        if ($maxPendingNumber) {
             // Essayer d'extraire le numéro du compte existant
-            $pendingNumber = intval($lastPendingClient->numero_compte);
+            $pendingNumber = intval($maxPendingNumber);
             if ($pendingNumber > 0) {
                 $lastId = max($lastId, $pendingNumber);
             }
@@ -85,6 +87,25 @@ class PendingClient extends Model
         
         // Formater le numéro de compte avec un padding de 4 chiffres (0001, 0002, etc.)
         $numero = str_pad($nextId, 4, '0', STR_PAD_LEFT);
+        
+        // Vérifier si ce numéro existe déjà dans les deux tables
+        $attempts = 0;
+        $maxAttempts = 10; // Limiter les tentatives pour éviter une boucle infinie
+        
+        while ($attempts < $maxAttempts) {
+            $existsInTiers = \App\Models\Tier::where('numero_compte', $numero)->exists();
+            $existsInPending = static::where('numero_compte', $numero)->exists();
+            
+            if (!$existsInTiers && !$existsInPending) {
+                // Numéro disponible, on peut l'utiliser
+                break;
+            }
+            
+            // Numéro déjà utilisé, on passe au suivant
+            $nextId++;
+            $numero = str_pad($nextId, 4, '0', STR_PAD_LEFT);
+            $attempts++;
+        }
         
         return $numero;
     }
