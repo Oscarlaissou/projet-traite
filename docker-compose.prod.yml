@@ -29,7 +29,7 @@ services:
       DB_DATABASE: traite
       DB_USERNAME: root
       DB_PASSWORD: 
-      APP_KEY: ${APP_KEY:-base64:your-app-key-here}
+      APP_KEY: ${APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=}
     ports:
       - "8000:80"
     networks:
