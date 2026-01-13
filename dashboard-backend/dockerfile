@@ -1,19 +1,20 @@
 FROM php:8.2-fpm-alpine
 
-# Installer les extensions PHP nécessaires directement
+# Installer les dépendances système
 RUN apk add --no-cache \
-    freetype-dev \
-    libjpeg-turbo-dev \
-    libpng-dev \
+    git \
+    zip \
+    unzip \
     libzip-dev \
     oniguruma-dev \
     libxml2-dev \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
     && docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg \
     && docker-php-ext-install mysqli pdo pdo_mysql zip gd bcmath xml \
-    && docker-php-ext-enable opcache
-
-# ... après tes installations d'extensions
-RUN echo "default_charset = 'UTF-8'" > /usr/local/etc/php/conf.d/charset.ini
+    && apk del --no-cache \
+    && rm -rf /tmp/*
 
 # Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -25,15 +26,9 @@ COPY . .
 # Installer les dépendances PHP
 RUN composer install --no-dev --optimize-autoloader
 
-# Créer les dossiers de stockage et définir les permissions
-RUN mkdir -p storage bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html/storage \
-    && chown -R www-data:www-data /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage \
-    && chmod -R 775 /var/www/html/bootstrap/cache
-
-# Configurer PHP-FPM pour écouter sur le port 9000
-RUN echo "listen = 0.0.0.0:9000" >> /usr/local/etc/php-fpm.d/zz-docker.conf
+# Donner les droits d'écriture au dossier de stockage
+RUN chown -R www-data:www-data /var/www/html/storage \
+    && chown -R www-data:www-data /var/www/html/bootstrap/cache
 
 EXPOSE 9000
 

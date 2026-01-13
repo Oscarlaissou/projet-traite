@@ -2,7 +2,6 @@ services:
   db:
     image: mysql:8.0
     container_name: projet-traite-db
-    # AJOUTE CETTE LIGNE "command" :
     command: [
       "--character-set-server=utf8mb4",
       "--collation-server=utf8mb4_unicode_ci",
@@ -55,28 +54,39 @@ services:
         # Copier le fichier .env s'il n'existe pas
         if [ ! -f .env ]; then cp .env.example .env; fi &&
         
-        # Mettre à jour les variables d'environnement
+        # --- DESACTIVATION DE REDIS ET MISE A JOUR DES DRIVERS ---
+        sed -i \"s|^SESSION_DRIVER=.*|SESSION_DRIVER=cookie|\" .env || echo 'SESSION_DRIVER=cookie' >> .env &&
+        sed -i \"s|^CACHE_STORE=.*|CACHE_STORE=database|\" .env || echo 'CACHE_STORE=database' >> .env &&
+        sed -i \"s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=database|\" .env || echo 'QUEUE_CONNECTION=database' >> .env &&
+        # --------------------------------------------------------
+
+        # Mettre à jour les autres variables d'environnement
         sed -i \"s|^APP_KEY=.*|APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=|\" .env &&
         sed -i \"s|^DB_HOST=.*|DB_HOST=db|\" .env &&
         sed -i \"s|^DB_PORT=.*|DB_PORT=3306|\" .env &&
         sed -i \"s|^DB_DATABASE=.*|DB_DATABASE=traite|\" .env &&
         sed -i \"s|^DB_USERNAME=.*|DB_USERNAME=root|\" .env &&
         sed -i \"s|^DB_PASSWORD=.*|DB_PASSWORD=root_password|\" .env &&
-        sed -i \"s|^DB_CHARSET=.*|DB_CHARSET=utf8mb4|\" .env ||
-        echo 'DB_CHARSET=utf8mb4' >> .env &&
-        sed -i \"s|^DB_COLLATION=.*|DB_COLLATION=utf8mb4_unicode_ci|\" .env ||
-        echo 'DB_COLLATION=utf8mb4_unicode_ci' >> .env &&
-        sed -i \"s|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|\" .env ||
-        echo 'FRONTEND_URL=http://localhost:3000' >> .env &&
+        sed -i \"s|^DB_CHARSET=.*|DB_CHARSET=utf8mb4|\" .env || echo 'DB_CHARSET=utf8mb4' >> .env &&
+        sed -i \"s|^DB_COLLATION=.*|DB_COLLATION=utf8mb4_unicode_ci|\" .env || echo 'DB_COLLATION=utf8mb4_unicode_ci' >> .env &&
+        sed -i \"s|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|\" .env || echo 'FRONTEND_URL=http://localhost:3000' >> .env &&
         
-        # S'assurer que les dossiers de cache ont les bonnes permissions
+        # Créer les dossiers framework s'ils manquent
+        mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache &&
+
+        # S'assurer que les dossiers ont les bonnes permissions
         chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache &&
         chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache &&
         
-        # Générer la clé de l'application et nettoyer la configuration
-        php artisan key:generate --force &&
+        # Nettoyer TOUS les caches pour forcer la prise en compte du nouveau .env
         php artisan config:clear &&
-        php artisan config:cache &&
+        php artisan cache:clear &&
+        php artisan view:clear &&
+        php artisan route:clear &&
+
+        # Générer la clé de l'application (si nécessaire) et lien storage
+        php artisan key:generate --force &&
+        php artisan storage:link --force &&
         
         # Démarrer PHP-FPM
         exec php-fpm
