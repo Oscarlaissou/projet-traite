@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\Kernel as HttpKernel;
 class Kernel extends HttpKernel
 {
     protected $middleware = [
-        \Illuminate\Http\Middleware\HandleCors::class, // Middleware CORS global
+        \App\Http\Middleware\HandleCorsForSanctum::class, // Middleware CORS spécifique pour Sanctum
         \App\Http\Middleware\TrustProxies::class,
         \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Http\Middleware\TrimStrings::class,

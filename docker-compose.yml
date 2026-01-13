@@ -2,19 +2,26 @@ services:
   db:
     image: mysql:8.0
     container_name: projet-traite-db
+    # AJOUTE CETTE LIGNE "command" :
+    command: [
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci",
+      "--skip-character-set-client-handshake" 
+    ]
     restart: always
     environment:
-      MYSQL_DATABASE: traite
-      MYSQL_USER: root
-      MYSQL_PASSWORD: ""
       MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: traite
     ports:
-      - "3306:3306"  # Changé de 3306 à 3307 pour éviter le conflit
+      - "3307:3306"
     volumes:
       - db_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - projet-traite-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
   backend:
     build:
@@ -23,31 +30,57 @@ services:
     container_name: projet-traite-backend
     restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       DB_HOST: db
       DB_PORT: 3306
       DB_DATABASE: traite
       DB_USERNAME: root
-      DB_PASSWORD: ""
+      DB_PASSWORD: root_password
+      DB_CHARSET: utf8mb4
+      DB_COLLATION: utf8mb4_unicode_ci
       APP_KEY: base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=
+      FRONTEND_URL: http://localhost:3000
     networks:
       - projet-traite-network
     volumes:
       - ./dashboard-backend:/var/www/html
-      - ./storage:/var/www/html/storage
+      - ./dashboard-backend/storage:/var/www/html/storage
     command: >
-      sh -c "if [ ! -f .env ]; then cp .env.example .env; fi &&
-              sed -i \"s|^APP_KEY=.*|APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=|\" .env &&
-              sed -i \"s|^DB_HOST=.*|DB_HOST=db|\" .env &&
-              sed -i \"s|^DB_PORT=.*|DB_PORT=3306|\" .env &&
-              sed -i \"s|^DB_DATABASE=.*|DB_DATABASE=traite|\" .env &&
-              sed -i \"s|^DB_USERNAME=.*|DB_USERNAME=root|\" .env &&
-              sed -i \"s|^DB_PASSWORD=.*|DB_PASSWORD=|\" .env &&
-              php artisan key:generate --force &&
-              php artisan config:cache &&
-              php artisan migrate --force &&
-              php-fpm"
+      sh -c "
+        # Attendre que la base de données soit prête
+        sleep 10 &&
+        
+        # Copier le fichier .env s'il n'existe pas
+        if [ ! -f .env ]; then cp .env.example .env; fi &&
+        
+        # Mettre à jour les variables d'environnement
+        sed -i \"s|^APP_KEY=.*|APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=|\" .env &&
+        sed -i \"s|^DB_HOST=.*|DB_HOST=db|\" .env &&
+        sed -i \"s|^DB_PORT=.*|DB_PORT=3306|\" .env &&
+        sed -i \"s|^DB_DATABASE=.*|DB_DATABASE=traite|\" .env &&
+        sed -i \"s|^DB_USERNAME=.*|DB_USERNAME=root|\" .env &&
+        sed -i \"s|^DB_PASSWORD=.*|DB_PASSWORD=root_password|\" .env &&
+        sed -i \"s|^DB_CHARSET=.*|DB_CHARSET=utf8mb4|\" .env ||
+        echo 'DB_CHARSET=utf8mb4' >> .env &&
+        sed -i \"s|^DB_COLLATION=.*|DB_COLLATION=utf8mb4_unicode_ci|\" .env ||
+        echo 'DB_COLLATION=utf8mb4_unicode_ci' >> .env &&
+        sed -i \"s|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|\" .env ||
+        echo 'FRONTEND_URL=http://localhost:3000' >> .env &&
+        
+        # S'assurer que les dossiers de cache ont les bonnes permissions
+        chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache &&
+        chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache &&
+        
+        # Générer la clé de l'application et nettoyer la configuration
+        php artisan key:generate --force &&
+        php artisan config:clear &&
+        php artisan config:cache &&
+        
+        # Démarrer PHP-FPM
+        exec php-fpm
+      "
 
   web:
     image: nginx:alpine
@@ -59,6 +92,7 @@ services:
       - "8000:80"
     volumes:
       - ./dashboard-backend:/var/www/html
+      - ./dashboard-backend/storage:/var/www/html/storage
       - ./dashboard-backend/docker/nginx-site.conf:/etc/nginx/conf.d/default.conf
     networks:
       - projet-traite-network
