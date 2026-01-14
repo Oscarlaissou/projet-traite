@@ -12,7 +12,8 @@ services:
       MYSQL_ROOT_PASSWORD: root_password
       MYSQL_DATABASE: traite
     ports:
-      - "3307:3306"
+      # PORT CACHÉ : Accessible uniquement depuis la VM Ubuntu, pas depuis Windows
+      - "127.0.0.1:3307:3306"
     volumes:
       - db_data:/var/lib/mysql
     networks:
@@ -28,6 +29,8 @@ services:
       dockerfile: Dockerfile
     container_name: projet-traite-backend
     restart: always
+    extra_hosts:
+      - "ad-server:10.68.5.129"
     depends_on:
       db:
         condition: service_healthy
@@ -37,10 +40,7 @@ services:
       DB_DATABASE: traite
       DB_USERNAME: root
       DB_PASSWORD: root_password
-      DB_CHARSET: utf8mb4
-      DB_COLLATION: utf8mb4_unicode_ci
       APP_KEY: base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=
-      FRONTEND_URL: http://localhost:3000
     networks:
       - projet-traite-network
     volumes:
@@ -48,47 +48,37 @@ services:
       - ./dashboard-backend/storage:/var/www/html/storage
     command: >
       sh -c "
-        # Attendre que la base de données soit prête
         sleep 10 &&
-        
-        # Copier le fichier .env s'il n'existe pas
         if [ ! -f .env ]; then cp .env.example .env; fi &&
         
-        # --- DESACTIVATION DE REDIS ET MISE A JOUR DES DRIVERS ---
-        sed -i \"s|^SESSION_DRIVER=.*|SESSION_DRIVER=cookie|\" .env || echo 'SESSION_DRIVER=cookie' >> .env &&
-        sed -i \"s|^CACHE_STORE=.*|CACHE_STORE=database|\" .env || echo 'CACHE_STORE=database' >> .env &&
-        sed -i \"s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=database|\" .env || echo 'QUEUE_CONNECTION=database' >> .env &&
-        # --------------------------------------------------------
+        # CONFIGURATION SANS REDIS (COOKIES)
+        sed -i \"s|^SESSION_DRIVER=.*|SESSION_DRIVER=cookie|\" .env &&
+        sed -i \"s|^CACHE_STORE=.*|CACHE_STORE=database|\" .env &&
+        sed -i \"s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=database|\" .env &&
 
-        # Mettre à jour les autres variables d'environnement
-        sed -i \"s|^APP_KEY=.*|APP_KEY=base64:REwknq/OCULg8owvGnCITDJlJdr/JPFrgvWigTIGZsw=|\" .env &&
+        # CONFIGURATION RÉSEAU POUR ACCÈS DEPUIS WINDOWS
+        # Remplacez VOTRE_IP_UBUNTU par l'IP trouvée avec hostname -I
+        sed -i \"s|^APP_URL=.*|APP_URL=http://192.168.10.158:8000|\" .env &&
+        sed -i \"s|^FRONTEND_URL=.*|FRONTEND_URL=http://192.168.10.158:3000|\" .env &&
+        sed -i \"s|^SANCTUM_STATEFUL_DOMAINS=.*|SANCTUM_STATEFUL_DOMAINS=192.168.10.158:3000|\" .env &&
+        sed -i \"s|^SESSION_DOMAIN=.*|SESSION_DOMAIN=192.168.10.158|\" .env &&
+        
+        # CONFIGURATION BASE DE DONNÉES
         sed -i \"s|^DB_HOST=.*|DB_HOST=db|\" .env &&
         sed -i \"s|^DB_PORT=.*|DB_PORT=3306|\" .env &&
         sed -i \"s|^DB_DATABASE=.*|DB_DATABASE=traite|\" .env &&
         sed -i \"s|^DB_USERNAME=.*|DB_USERNAME=root|\" .env &&
         sed -i \"s|^DB_PASSWORD=.*|DB_PASSWORD=root_password|\" .env &&
-        sed -i \"s|^DB_CHARSET=.*|DB_CHARSET=utf8mb4|\" .env || echo 'DB_CHARSET=utf8mb4' >> .env &&
-        sed -i \"s|^DB_COLLATION=.*|DB_COLLATION=utf8mb4_unicode_ci|\" .env || echo 'DB_COLLATION=utf8mb4_unicode_ci' >> .env &&
-        sed -i \"s|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|\" .env || echo 'FRONTEND_URL=http://localhost:3000' >> .env &&
         
-        # Créer les dossiers framework s'ils manquent
+        # PERMISSIONS ET CACHE
         mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache &&
-
-        # S'assurer que les dossiers ont les bonnes permissions
         chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache &&
         chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache &&
         
-        # Nettoyer TOUS les caches pour forcer la prise en compte du nouveau .env
         php artisan config:clear &&
         php artisan cache:clear &&
-        php artisan view:clear &&
-        php artisan route:clear &&
-
-        # Générer la clé de l'application (si nécessaire) et lien storage
-        php artisan key:generate --force &&
         php artisan storage:link --force &&
         
-        # Démarrer PHP-FPM
         exec php-fpm
       "
 
@@ -99,6 +89,7 @@ services:
     depends_on:
       - backend
     ports:
+      # PORT OUVERT : Pour que le navigateur Windows puisse contacter l'API Laravel
       - "8000:80"
     volumes:
       - ./dashboard-backend:/var/www/html
@@ -116,9 +107,11 @@ services:
     depends_on:
       - web
     ports:
+      # PORT OUVERT : Pour accéder à l'interface React depuis Windows
       - "3000:80"
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      # React doit contacter l'IP de la VM pour l'API
+      - REACT_APP_API_URL=http://192.168.10.158:8000
     networks:
       - projet-traite-network
 

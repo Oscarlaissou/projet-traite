@@ -1,7 +1,8 @@
 FROM php:8.2-fpm-alpine
 
 # Installer les dépendances système
-RUN apk add --no-cache \
+# Ajout de 'apk update' pour s'assurer d'avoir les derniers index
+RUN apk update && apk add --no-cache \
     git \
     zip \
     unzip \
@@ -11,8 +12,9 @@ RUN apk add --no-cache \
     libpng-dev \
     libjpeg-turbo-dev \
     freetype-dev \
+    openldap-dev \
     && docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg \
-    && docker-php-ext-install mysqli pdo pdo_mysql zip gd bcmath xml \
+    && docker-php-ext-install mysqli pdo pdo_mysql zip gd bcmath xml ldap \
     && apk del --no-cache \
     && rm -rf /tmp/*
 
